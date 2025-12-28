@@ -2,9 +2,21 @@
   <div class="dashboard-layout">
     <!-- 左栏 -->
     <div class="left-column">
-      <ViewA />
-      <ViewB />
-      <ViewC />
+      <!-- 
+        1. 推荐用flex-grow来精确分配高度，占比3:3:4。
+        2. 推荐写法如下：
+      -->
+      <div style="display: flex; flex-direction: column; height: 100%; gap: 10px;">
+        <div style="flex: 3; min-height: 0;">
+          <ViewA style="height: 100%;"/>
+        </div>
+        <div style="flex: 3; min-height: 0;">
+          <ViewB style="height: 100%;"/>
+        </div>
+        <div style="flex: 4; min-height: 0;">
+          <ViewC style="height: 100%;"/>
+        </div>
+      </div>
     </div>
 
     <!-- 中栏 -->

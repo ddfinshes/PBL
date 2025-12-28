@@ -1,20 +1,64 @@
-"""PBL2.backend.server
+"""PBL.backend.server
 使用 FastAPI 和 WebSocket 提供后端服务。
 """
 import asyncio
 import uvicorn
 import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Dict
+
 from langchain_core.messages import HumanMessage
 
 from .graph import app, GraphState
+# 从 agents 模块导入 student_personas 字典
+from .agents import student_personas
+
+# --- Pydantic 模型定义 ---
+class Persona(BaseModel):
+    reasoning_path: str
+    knowledge_integration: str
+    core_biases: List[str]
+    sensitivity: int
+    proficiency: int
+
+class UpdatePersonasRequest(BaseModel):
+    student_analyst: Persona
+    student_observer: Persona
+    student_skeptic: Persona
 
 # 创建 FastAPI 应用实例
 app_fastapi = FastAPI()
 
+# --- CORS 中间件配置 ---
+# 允许所有来源，这在开发中很方便。
+# 在生产环境中，应限制为前端的实际域。
+app_fastapi.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有来源
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有方法
+    allow_headers=["*"],  # 允许所有头
+)
+
+
 @app_fastapi.get("/")
 def read_root():
     return {"message": "PBL Backend is running."}
+
+@app_fastapi.post("/update_personas")
+async def update_personas(request: UpdatePersonasRequest):
+    """接收前端发送的 persona 配置并更新。"""
+    new_personas = request.dict()
+    for agent_id, persona_data in new_personas.items():
+        if agent_id in student_personas:
+            student_personas[agent_id] = persona_data
+            print(f"Updated persona for {agent_id}: {persona_data}")
+        else:
+            print(f"Warning: Agent ID '{agent_id}' not found.")
+    return {"status": "success", "message": "Personas updated successfully."}
+
 
 @app_fastapi.websocket("/ws/pbl/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
@@ -91,5 +135,5 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 # 运行服务器的入口
 if __name__ == "__main__":
     # 建议在终端中使用 uvicorn 命令启动，便于调试和热重载
-    # uvicorn PBL2.backend.server:app_fastapi --reload
+    # uvicorn PBL.backend.server:app_fastapi --reload
     uvicorn.run(app_fastapi, host="0.0.0.0", port=8000)

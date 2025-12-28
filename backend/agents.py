@@ -38,11 +38,49 @@ SUM_LLM = _build_llm(temperature=0.2)
 # -------------------------------------------------------
 
 
+# --------- Agent Persona --------- 
+# 存储每个学生 agent 的 persona，可由 API 动态更新
+student_personas = {
+  "student_analyst": {
+    "reasoning_path": "线性简化",
+    "knowledge_integration": "系统化",
+    "core_biases": ["锚定偏差"],
+    "sensitivity": 7,
+    "proficiency": 8,
+  },
+  "student_observer": {
+    "reasoning_path": "多线并行",
+    "knowledge_integration": "碎片化",
+    "core_biases": [],
+    "sensitivity": 8,
+    "proficiency": 6,
+  },
+  "student_skeptic": {
+    "reasoning_path": "线性简化",
+    "knowledge_integration": "系统化",
+    "core_biases": ["代表性启发"],
+    "sensitivity": 5,
+    "proficiency": 7,
+  },
+}
+
+def format_persona_to_string(persona: Dict) -> str:
+    """将 persona 字典格式化为字符串，注入到 prompt 中。"""
+    biases = ", ".join(persona['core_biases']) if persona['core_biases'] else '无'
+    return (
+        f"- 推理路径: {persona['reasoning_path']}\n"
+        f"- 知识整合: {persona['knowledge_integration']}\n"
+        f"- 核心偏误: {biases}\n"
+        f"- 关键点敏度: {persona['sensitivity']}/10\n"
+        f"- 知识熟练程度: {persona['proficiency']}/10"
+    )
+
+
 # --------- 通用学生 Prompt ---------
 _STUDENT_SYS_TEMPLATE = (
     "你是一名医学生，正在小组讨论一个病例：\n"
     "【病例摘要】54岁男性，突发胸痛 2 小时，目前处于检查计划阶段。\n\n"
-    "【角色设定】你的人格特点：{persona}。请保持该人格的思考方式。\n"
+    "【角色设定】你的人格特点如下：\n{persona}\n请严格保持该人格的思考方式。\n"
     "【思维框架】请优先按照 SBAR（Situation, Background, Assessment, Recommendation）或 SOAP（Subjective, Objective, Assessment, Plan）进行结构化表达，每一次发言尽量涵盖该结构的关键要素。\n"
     "【讨论原则】\n"
     "1. 禁止给出过于确定的最终诊断；可用“可能”“需要进一步确认”等表述。\n"
@@ -64,7 +102,7 @@ STUDENT_PROMPT = ChatPromptTemplate.from_messages(
 
 # --------- 创建学生可调用节点 ---------
 
-def _student_node_fn(persona: str):
+def _student_node_fn(agent_id: str):
     """返回可在 LangGraph 中调用的学生节点函数。"""
 
     async def _node(state: Dict) -> Dict:
@@ -72,8 +110,12 @@ def _student_node_fn(persona: str):
         messages: List[BaseMessage] = state["messages"]
         discussion_stage: str = state["discussion_stage"]
 
+        # 从全局字典获取 persona 并格式化
+        persona_dict = student_personas[agent_id]
+        persona_str = format_persona_to_string(persona_dict)
+
         prompt = STUDENT_PROMPT.format_messages(
-            persona=persona,
+            persona=persona_str,
             discussion_stage=discussion_stage,
             messages=messages,
         )
@@ -91,9 +133,9 @@ def _student_node_fn(persona: str):
 
 
 # --------- 具体 3 名学生 ---------
-STUDENT_ANALYST = _student_node_fn("逻辑严密的分析者，擅长病理生理分析，推理缜密")
-STUDENT_OBSERVER = _student_node_fn("关注病史细节的观察者，善于捕捉细枝末节")
-STUDENT_SKEPTIC = _student_node_fn("提出批判性怀疑的挑战者，喜欢质疑并提出 alternative 诊断")
+STUDENT_ANALYST = _student_node_fn("student_analyst")
+STUDENT_OBSERVER = _student_node_fn("student_observer")
+STUDENT_SKEPTIC = _student_node_fn("student_skeptic")
 
 
 # --------- 老师指令处理节点 ---------
@@ -190,4 +232,3 @@ async def router_node(state: Dict) -> Dict:
     }
 
     return {"next_speaker": mapping[choice]}
-
