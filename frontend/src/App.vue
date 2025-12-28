@@ -1,18 +1,18 @@
 <template>
-  <div class="app-container">
-    <DashboardLayout />
-  </div>
+  <DashboardLayout />
 </template>
 
 <script setup>
-import DashboardLayout from './components/DashboardLayout.vue'
+import DashboardLayout from './DashboardLayout.vue';
 </script>
 
-<style scoped>
-.app-container {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+<style>
+/* Global styles can remain here if needed, but component-specific styles are in their own files. */
+/* We ensure the app takes up the full screen and has no default margin/padding */
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
 }
 </style>
-
