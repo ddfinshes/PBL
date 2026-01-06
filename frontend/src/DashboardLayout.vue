@@ -1,31 +1,30 @@
 <template>
   <div class="dashboard-layout">
-    <!-- 左栏：A + B -->
+    <!-- 左栏 -->
     <div class="left-column">
-      <div class="view-wrapper" style="flex: 192px 0 0;">
-        <ViewA class="view-container"/>
-      </div>
-      <div class="view-wrapper" style="flex: 1; min-height: 0;">
-        <ViewB class="view-container"/>
+      <!-- 
+        1. 推荐用flex-grow来精确分配高度，占比3:3:4。
+        2. 推荐写法如下：
+      -->
+      <div style="display: flex; flex-direction: column; height: 100%; gap: 10px;">
+        <div style="flex: 3; min-height: 0;">
+          <ViewA style="height: 100%;"/>
+        </div>
+        <div style="flex: 7; min-height: 0;">
+          <ViewB style="height: 100%;"/>
+        </div>
       </div>
     </div>
 
-    <!-- 中栏：C + D + E -->
+    <!-- 中栏 -->
     <div class="center-column">
-      <div class="view-wrapper" style="flex: 365px 0 0;">
-        <ViewC class="view-container"/>
-      </div>
-      <div class="view-wrapper" style="flex: 392px 0 0;">
-        <ViewD class="view-container"/>
-      </div>
-      <div class="view-wrapper" style="flex: 1; min-height: 0;">
-        <ViewE class="view-container"/>
-      </div>
+      <ViewD class="h-1/5" />
+      <ViewE class="h-4/5 min-h-0" />
     </div>
 
-    <!-- 右栏：F -->
+    <!-- 右栏 -->
     <div class="right-column">
-      <ViewF class="view-container"/>
+      <ViewF />
     </div>
   </div>
 </template>
@@ -33,7 +32,6 @@
 <script setup>
 import ViewA from './views/ViewA.vue'
 import ViewB from './views/ViewB.vue'
-import ViewC from './views/ViewC.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'
 import ViewF from './views/ViewF.vue'
@@ -46,46 +44,27 @@ import ViewF from './views/ViewF.vue'
   height: 100vh;
   gap: 10px;
   padding: 10px;
-  background: #0C0E27;
+  background: #0a0e27;
 }
 
-/* 左栏：宽度比例约 22.3% */
 .left-column {
-  width: 22.3%;
+  width: 25%;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-width: 0;
 }
 
-/* 中栏：宽度比例约 45.7% */
 .center-column {
-  width: 45.7%;
+  width: 45%;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-width: 0;
 }
 
-/* 右栏：宽度比例约 31.9% */
 .right-column {
-  width: 31.9%;
+  width: 30%;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-width: 0;
-}
-
-.view-wrapper {
-  background: #1B1F3A;
-  border-radius: 5px;
-  box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
-  display: flex;
-  overflow: hidden;
-}
-
-.view-container {
-  width: 100%;
-  height: 100%;
 }
 </style>

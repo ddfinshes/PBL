@@ -56,7 +56,8 @@ async def update_personas(request: UpdatePersonasRequest):
             student_personas[agent_id] = persona_data
             print(f"Updated persona for {agent_id}: {persona_data}")
         else:
-            print(f"Warning: Agent ID '{agent_id}' not found.")
+            student_personas[agent_id] = persona_data
+            print(f"Added persona for {agent_id}: {persona_data}")
     return {"status": "success", "message": "Personas updated successfully."}
 
 
