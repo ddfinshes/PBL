@@ -31,7 +31,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       
       if (data.node && data.content) {
         messages.value.push({
-          id: Date.now() + Math.random(), // 简单的唯一ID
+          id: sessionId + Math.random(), // 简单的唯一ID
           agent: data.node,
           text: data.content,
         });
@@ -85,7 +85,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     if (socket && isConnected.value) {
       // 为即时反馈，直接将老师的消息添加到聊天中
       messages.value.push({
-        id: Date.now(),
+        id: sessionId,
         agent: 'teacher',
         text: interventionText,
       });
