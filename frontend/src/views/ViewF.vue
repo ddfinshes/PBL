@@ -77,14 +77,14 @@ const {
   sendTeacherIntervention,
 } = usePBLSocket(sessionId, scrollToBottom)
 
-const initialCaseText =
-  '患者：男，45岁，因“突发胸痛2小时”入院。既往有高血压病史5年，吸烟史20年。查体：血压150/90mmHg，心率110次/分，双肺呼吸音清。心电图提示V1-V5导联ST段抬高。请各位同学开始讨论。'
+const initialCaseText = '开始讨论'
 
 const handleStartDiscussion = () => {
   startDiscussion(initialCaseText)
 }
 
 const handleTeacherIntervention = (messageText) => {
+  console.log('handleTeacherIntervention called with:', messageText)
   sendTeacherIntervention(messageText)
 }
 </script>

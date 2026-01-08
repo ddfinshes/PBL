@@ -1,13 +1,24 @@
 <template>
   <div class="border-t border-gray-600 p-4 w-full">
-    <input
+    <div class="relative flex items-center">
+      <input
       type="text"
       v-model="inputText"
       @keydown.enter="handleSend"
       :placeholder="placeholderText"
       :disabled="!isSocketConnected"
-      class="w-full px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow duration-200"
-    />
+      class="w-full px-4 py-3 border border-gray-300 rounded-l-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow duration-200"
+      />
+      
+      <button
+        @click="handleSend"
+        :disabled="!isSocketConnected || !inputText.trim()"
+        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-r-full shadow-md hover:bg-indigo-700 focus:outline-none disabled:bg-gray-400 transition-colors duration-200"
+      >
+        发送
+      </button>
+    </div>
+
   </div>
 </template>
 
@@ -19,9 +30,11 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  onSendMessage: {
+    type: Function,
+    required: true,
+  },
 })
-
-const emit = defineEmits(['send-message'])
 
 const inputText = ref('')
 
@@ -31,7 +44,7 @@ const placeholderText = computed(() =>
 
 const handleSend = () => {
   if (inputText.value.trim() && props.isSocketConnected) {
-    emit('send-message', inputText.value.trim())
+    props.onSendMessage(inputText.value.trim())
     inputText.value = '' // 清空输入框
   }
 }

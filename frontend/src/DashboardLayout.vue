@@ -35,6 +35,9 @@ import ViewB from './views/ViewB.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'
 import ViewF from './views/ViewF.vue'
+import { provide} from 'vue';
+const sessionId = `pbl-session-${Date.now()}`   // 只生成一次
+provide('sessionId', sessionId)
 </script>
 
 <style scoped>
