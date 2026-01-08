@@ -40,6 +40,10 @@
       <div style="flex: 4; min-height: 0;">
         <ViewE style="height: 100%;" />
       </div>
+=======
+      <ViewD class="h-1/5" />
+      <ViewE class="h-4/5 min-h-0" />
+>>>>>>> 3831c8b (框架修改)
     </div>
 
     <!-- 右栏 -->
@@ -52,7 +56,6 @@
 <script setup>
 import { ref } from 'vue'
 import ViewA from './views/ViewA.vue'
-import ViewB from './views/ViewB.vue'
 import ViewC from './views/ViewC.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'

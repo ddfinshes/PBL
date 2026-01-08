@@ -367,7 +367,15 @@ async def update_personas(request: UpdatePersonasRequest):
     for agent_id, persona_data in new_personas.items():
         if agent_id in student_personas:
             student_personas[agent_id] = persona_data
+<<<<<<< HEAD
     return {"status": "success"}
+=======
+            print(f"Updated persona for {agent_id}: {persona_data}")
+        else:
+            student_personas[agent_id] = persona_data
+            print(f"Added persona for {agent_id}: {persona_data}")
+    return {"status": "success", "message": "Personas updated successfully."}
+>>>>>>> 3831c8b (框架修改)
 
 
 @app_fastapi.websocket("/ws/pbl/{session_id}")
