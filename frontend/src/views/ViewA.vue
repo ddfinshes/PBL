@@ -86,7 +86,6 @@
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
         <p class="drag-text">拖拽PDF文件到此处</p>
-        <p class="or-text">或</p>
         <button class="browse-btn" @click="openFileDialog">浏览文件</button>
       </div>
     </div>
