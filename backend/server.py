@@ -28,7 +28,6 @@ from . import graph  # 导入 graph 模块以访问和修改 app
 from .agents import register_student_agent, student_nodes, student_personas
 from .graph_builder import build_graph, GraphState
 from .graph import app, GraphState
-from .agents import student_personas
 # 导入解析函数
 from .pdf_parser import parse_pbl_to_json, get_raw_pdf_images
 from .schema import PBLCaseStructure
@@ -350,6 +349,83 @@ async def update_personas(request: Dict[str, Dict]):
     print("Cleared existing agent configurations.")
 
     # 2. 根据请求注册新的 agent
+    request = {
+        "Alice": {     
+            "name": "Alice",
+            "age": 22,
+            "major": "female",
+            "knowledge background": {
+                "high": ["hypertension"],
+                "medium": ["haemodynamics"],
+                "low": ["diabete"] 
+                },
+            "cognitive orientation": 
+                {
+                    "attentional anchor":[
+                        "patient events",
+                        "symptoms",
+                        "social cues",
+                    ],
+                    "reasoning entry": ["mechanism"],
+                    "causal structure": ["linear causality"]
+                },
+            "social interaction style": {
+                "verbal confidence": "high",
+                "language register": "medium",
+                "interaction role": "leader"     
+                 },    
+            "learning adaptivity": "high"
+        },
+        "Bob": {     
+            "name": "Bob",
+            "age": 23,
+            "major": "male",
+            "knowledge background": {
+                "high": ["hypertension"],
+                "medium": ["haemodynamics"],
+                "low": ["diabete"] 
+                },
+            "cognitive orientation": 
+                {
+                    "attentional anchor":[
+                        "symptoms",
+                        "social cues",
+                    ],
+                    "reasoning entry": ["externel factors"],
+                    "causal structure": ["linear causality", "multi-concurrent"]
+                },
+            "social interaction style": {
+                "verbal confidence": "low",
+                "language register": "low",
+                "interaction role": "follower"     
+                 },    
+            "learning adaptivity": "medium"
+        },
+        "Lily": {     
+            "name": "Lily",
+            "age": 22,
+            "major": "female",
+            "knowledge background": {
+                "high": ["hypertension"],
+                "medium": ["haemodynamics"],
+                "low": ["diabete"] 
+                },
+            "cognitive orientation": 
+                {
+                    "attentional anchor":[
+                        "social cues",
+                    ],
+                    "reasoning entry": ["externel factors"],
+                    "causal structure": ["multi-concurrent"]
+                },
+            "social interaction style": {
+                "verbal confidence": "high",
+                "language register": "high",
+                "interaction role": "follower"     
+                 },    
+            "learning adaptivity": "medium"
+        },
+    }
     for agent_id, persona_data in request.items():
         register_student_agent(agent_id, persona_data)
 
@@ -367,7 +443,11 @@ async def update_personas(request: UpdatePersonasRequest):
     for agent_id, persona_data in new_personas.items():
         if agent_id in student_personas:
             student_personas[agent_id] = persona_data
-    return {"status": "success"}
+            print(f"Updated persona for {agent_id}: {persona_data}")
+        else:
+            student_personas[agent_id] = persona_data
+            print(f"Added persona for {agent_id}: {persona_data}")
+    return {"status": "success", "message": "Personas updated successfully."}
 
 
 @app_fastapi.websocket("/ws/pbl/{session_id}")

@@ -35,16 +35,62 @@ SUM_LLM = _build_llm(temperature=0.2)
 student_personas: Dict[str, Dict] = {}
 student_nodes: Dict[str, Callable] = {}
 
+# def format_persona_to_string(persona: Dict) -> str:
+#     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
+#     biases = ", ".join(persona.get('core_biases', [])) or '无'
+#     return (
+#         f"- 推理路径: {persona.get('reasoning_path', '未定义')}\n"
+#         f"- 知识整合: {persona.get('knowledge_integration', '未定义')}\n"
+#         f"- 核心偏误: {biases}\n"
+#         f"- 关键点敏度: {persona.get('sensitivity', 'N/A')}/10\n"
+#         f"- 知识熟练程度: {persona.get('proficiency', 'N/A')}/10"
+#     )
+
 def format_persona_to_string(persona: Dict) -> str:
     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
-    biases = ", ".join(persona.get('core_biases', [])) or '无'
-    return (
-        f"- 推理路径: {persona.get('reasoning_path', '未定义')}\n"
-        f"- 知识整合: {persona.get('knowledge_integration', '未定义')}\n"
-        f"- 核心偏误: {biases}\n"
-        f"- 关键点敏度: {persona.get('sensitivity', 'N/A')}/10\n"
-        f"- 知识熟练程度: {persona.get('proficiency', 'N/A')}/10"
-    )
+    verbal_confidence = {
+        "high": "语气肯定，容易主导甚至误导",
+        "medium": "语气平缓，实事求是",
+        "low": "频繁使用不确定表达，即使观点正确"
+    }
+    language_register = {
+        "high": "发言使用医学术语（如，水肿、乏力）",
+        "medium": "发言中有时使用医学术语（如，水肿、乏力），有时使用日常口语表达（如，腿胀、没劲）",
+        "low": "发言中总是使用日常口语表达（如，腿胀、没劲）"
+    }
+    interaction_role = {
+        "leader": "领导同学间的讨论，擅长总结发言和推进讨论",
+        "follower": "附和前面同学的发言，习惯附和、支持他人",
+        "critical": "质疑者其他同学的发言/观点，习惯于提出反对与质疑"
+    }
+    learning_adaptivity = {
+        "low": "即使被提示也坚持原观点",
+        "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
+        "high": "能根据新线索快速修正"
+    }
+    return (f"""
+    - 姓名：{persona.get('name', '')} \n
+    - 年龄：{persona.get('age', 22)} \n
+    - 性别：{persona.get('major', 'male')} \n
+    - 领域知识深度：
+        - 教科书级理解：{persona.get('knowledge background').get('high')} \n
+            表现：能给出 {persona.get('knowledge background').get('high')} 的标准解释，但可能不敏感于罕见/关键细节。\n
+        - 知道术语但理解松散：{persona.get('knowledge background').get('mmedium')}。 \n
+            表现：能提 {persona.get('knowledge background').get('mmedium')} 名词，但机制模糊或泛化。\n
+        - 仅生活常识：{persona.get('knowledge background').get('low')}。\n
+            表现：只用日常因果解释这些知识或者现象 {persona.get('knowledge background').get('low')}（如“吃多了对身体不好”）。\n
+
+    - 认知维度（作用：决定 agent“从哪里开始想、怎么想”）：\n
+        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{persona.get('cognitive orientation').get('attentional anchor')}。 \n
+        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{persona.get('cognitive orientation').get('reasoning entry')}。\n
+        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{persona.get('cognitive orientation').get('causal structure')}。\n
+    - 社会行为维度（作用：决定 agent“怎么说、怎么影响他人”）\n
+        - 发言风格: {verbal_confidence[persona.get('social interaction style').get('verbal confidence')]} \n
+        - 发言专业用语情况：{language_register[persona.get('social interaction style').get('language register')]} \n
+        - 与其他同学互动特点：{interaction_role[persona.get('social interaction style').get('interaction role')]} \n
+    - 动态学习维度（作用：决定在讨论中吸收知识的速度，“能否被教会”）
+        - 随着讨论的深度思维的转变情况：{learning_adaptivity[persona.get('learning adaptivity')]}
+    """)
 
 # --------- 通用学生 Prompt ---------
 _STUDENT_SYS_TEMPLATE_STR = '''你是一名医学生，正在小组讨论一个病例：
