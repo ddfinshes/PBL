@@ -2,15 +2,20 @@
   <div class="dashboard-layout">
     <!-- 左栏 -->
     <div class="left-column">
-      <!-- 
-        1. 推荐用flex-grow来精确分配高度，占比3:3:4。
-        2. 推荐写法如下：
-      -->
       <div style="display: flex; flex-direction: column; height: 100%; gap: 10px;">
-        <div style="flex: 3; min-height: 0;">
-          <ViewA style="height: 100%;"/>
+        <!-- 
+          ViewA 区域 (上传与解析)
+          修改点 1: 监听 @analysis-complete 事件，接收 ViewA 传出来的解析结果 
+        -->
+        <div style="flex: 2; min-height: 0;">
+          <ViewA 
+            style="height: 100%;" 
+            @analysis-complete="handleDataReady"
+          />
         </div>
-        <div style="flex: 7; min-height: 0;">
+        
+        <!-- ViewB 区域 (角色配置) -->
+        <div style="flex: 8; min-height: 0;">
           <ViewB style="height: 100%;"/>
         </div>
       </div>
@@ -18,8 +23,23 @@
 
     <!-- 中栏 -->
     <div class="center-column">
-      <ViewD class="h-1/5" />
-      <ViewE class="h-4/5 min-h-0" />
+      <div style="flex: 3; min-height: 0; overflow: hidden;">
+        <ViewC 
+          style="height: 100%;"
+          :case-data="caseResult" 
+          :raw-pdf-data="imagesResult" 
+        />
+      </div>
+
+      <!-- ViewD 区域 -->
+      <div style="flex: 3; min-height: 0;">
+        <ViewD style="height: 100%;" />
+      </div>
+
+      <!-- ViewE 区域 (聊天/主交互区) -->
+      <div style="flex: 4; min-height: 0;">
+        <ViewE style="height: 100%;" />
+      </div>
     </div>
 
     <!-- 右栏 -->
@@ -30,11 +50,31 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import ViewA from './views/ViewA.vue'
 import ViewB from './views/ViewB.vue'
+import ViewC from './views/ViewC.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'
 import ViewF from './views/ViewF.vue'
+
+// --- 修改点 3: 定义响应式变量存储数据 ---
+const caseResult = ref(null)   // 存放结构化教案数据
+const imagesResult = ref(null) // 存放图片数据
+
+// --- 修改点 4: 处理数据回调 ---
+const handleDataReady = (payload) => {
+  console.log('父组件收到数据:', payload)
+  
+  if (payload) {
+    caseResult.value = payload.structure
+    imagesResult.value = payload.raw_images
+  } else {
+    // 如果 ViewA 发出的是移除文件的信号
+    caseResult.value = null
+    imagesResult.value = null
+  }
+}
 </script>
 
 <style scoped>
@@ -67,4 +107,12 @@ import ViewF from './views/ViewF.vue'
   flex-direction: column;
   gap: 10px;
 }
+
+/* 
+  额外建议：
+  如果你的项目中没有配置 Tailwind CSS，
+  之前代码里的 class="h-1/5" 是不起作用的。
+  所以我上面用了 flex: 2; flex: 6; 这样的写法来替代，
+  确保布局高度分配正确。
+*/
 </style>
