@@ -68,6 +68,24 @@ def format_persona_to_string(persona: Dict) -> str:
         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
         "high": "能根据新线索快速修正"
     }
+    attentional_anchor = {
+        "patient_events": '',
+        "sysmptoms": '',
+        "social_cues": '',
+        "symptoms": ''
+    }
+    reasoning_entry = {
+        "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
+        "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
+        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
+        "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
+    }
+    causal_strucure = {
+        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
+        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
+        "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
+        "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
+    }
     return (f"""
     - 姓名：{persona.get('name', '')} \n
     - 年龄：{persona.get('age', 22)} \n
@@ -80,15 +98,17 @@ def format_persona_to_string(persona: Dict) -> str:
         - 仅生活常识：{persona.get('knowledge background').get('low')}。\n
             表现：只用日常因果解释这些知识或者现象 {persona.get('knowledge background').get('low')}（如“吃多了对身体不好”）。\n
 
-    - 认知维度（作用：决定 agent“从哪里开始想、怎么想”）：\n
-        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{persona.get('cognitive orientation').get('attentional anchor')}。 \n
-        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{persona.get('cognitive orientation').get('reasoning entry')}。\n
-        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{persona.get('cognitive orientation').get('causal structure')}。\n
+    - 认知维度（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
+        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{attentional_anchor[persona.get('cognitive orientation').get('attentional anchor')]}。 \n
+        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{reasoning_entry[persona.get('cognitive orientation').get('reasoning entry')]}。\n
+        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{causal_strucure[persona.get('cognitive orientation').get('causal structure')]}。\n
+
     - 社会行为维度（作用：决定 agent“怎么说、怎么影响他人”）\n
         - 发言风格: {verbal_confidence[persona.get('social interaction style').get('verbal confidence')]} \n
         - 发言专业用语情况：{language_register[persona.get('social interaction style').get('language register')]} \n
         - 与其他同学互动特点：{interaction_role[persona.get('social interaction style').get('interaction role')]} \n
-    - 动态学习维度（作用：决定在讨论中吸收知识的速度，“能否被教会”）
+
+    - 动态学习维度（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
         - 随着讨论的深度思维的转变情况：{learning_adaptivity[persona.get('learning adaptivity')]}
     """)
 
