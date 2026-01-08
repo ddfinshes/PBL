@@ -619,7 +619,7 @@ watch(() => props.caseData, () => {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 2px 5px;
   border-radius: 4px;
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.3);
@@ -670,7 +670,7 @@ watch(() => props.caseData, () => {
 
 /* 底部导航 */
 .scene-footer {
-  padding: 16px 20px;
+  padding: 5px 10px;
   background: rgba(0, 0, 0, 0.3);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
@@ -689,6 +689,7 @@ watch(() => props.caseData, () => {
   color: white;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 10px;
 }
 .nav-btn:hover:not(:disabled) {
   background: #6366f1;

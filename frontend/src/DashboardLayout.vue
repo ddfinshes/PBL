@@ -23,7 +23,7 @@
 
     <!-- 中栏 -->
     <div class="center-column">
-      <div style="flex: 3; min-height: 0; overflow: hidden;">
+      <div style="flex: 4; min-height: 0; overflow: hidden;">
         <ViewC 
           style="height: 100%;"
           :case-data="caseResult" 
@@ -32,7 +32,7 @@
       </div>
 
       <!-- ViewD 区域 -->
-      <div style="flex: 3; min-height: 0;">
+      <div style="flex: 2; min-height: 0;">
         <ViewD style="height: 100%;" />
       </div>
 
