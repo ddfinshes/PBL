@@ -76,7 +76,9 @@ class Scene(BaseModel):
 class PBLCaseStructure(BaseModel):
     """完整的 PBL 案例结构"""
     case_title: str = Field(description="案例标题")
-    summary: str = Field(description="案例摘要")
+    theoretical_knowledge_points: List[str] = Field(
+        description="【核心知识点】学习这个案例需要具备的背景知识、理论基础或临床学习要点。如果没有直接说明，请根据内容进行总结。"
+    )
 
     learning_objectives: List[BackgroundKnowledge] = Field(
         description="总体学习目的"

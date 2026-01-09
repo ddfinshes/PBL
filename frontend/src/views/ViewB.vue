@@ -1,132 +1,206 @@
 <template>
-  <div class="p-4 bg-transparent h-screen overflow-y-auto">
-    <div class="max-w-3xl mx-auto">
-      <div class="flex flex-col gap-6">
-        <el-card v-for="(persona, agentId) in agentPersonas" :key="agentId" class="agent-card">
-          <template #header>
-            <div class="card-header">
-              <span>{{ agentNames[agentId] }}</span>
-            </div>
-          </template>
-          <el-form :model="persona" label-position="left">
-            <el-form-item value="推理路径">
-              <el-radio-group v-model="persona.reasoning_path">
-                <el-radio value="线性简化">线性简化</el-radio>
-                <el-radio value="多线并行">多线并行</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item value="知识整合">
-              <el-radio-group v-model="persona.knowledge_integration">
-                <el-radio value="碎片化">碎片化</el-radio>
-                <el-radio value="系统化">系统化</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item value="核心偏误">
-              <el-checkbox-group v-model="persona.core_biases">
-                <el-checkbox value="锚定偏差">锚定偏差</el-checkbox>
-                <el-checkbox value="代表性启发">代表性启发</el-checkbox>
-              </el-checkbox-group>
-            </el-form-item>
-            <el-form-item value="关键点敏度">
-              <el-slider v-model="persona.sensitivity" :min="0" :max="10" :step="1"></el-slider>
-            </el-form-item>
-            <el-form-item value="知识熟练程度">
-              <el-slider v-model="persona.proficiency" :min="0" :max="10" :step="1"></el-slider>
-            </el-form-item>
-          </el-form>
-        </el-card>
+  <div class="view-b-container p-4 bg-transparent h-screen overflow-y-auto" @mousedown="handleGlobalMouseDown">
+    <div class="view-b-content-wrapper w-full">
+      <div class="agent-list flex flex-col gap-12 items-center p-4 w-full">
+        
+        <!-- Individual Agent Cards -->
+        <AgentCard 
+          v-for="(agent, index) in agents" 
+          :key="agent.id"
+          ref="cardRefs"
+          v-model="agents[index]"
+          :cognitive-options="cognitiveOptions"
+          :interaction-roles="interactionRoles"
+          @delete="deleteAgent(index)"
+        />
+
+        <!-- Add Agent Action Area -->
+        <div class="add-agent-section flex flex-row items-center justify-center cursor-pointer hover:bg-[#CEDCFB]/60 transition-all flex-shrink-0 gap-4"
+          @click="addAgent"
+        >
+          <div class="plus-icon text-[48px] text-[#84A7D8] font-light">+</div>
+          <div class="add-text text-[18px] text-[#2d3748] font-bold">Add New Agent Template</div>
+        </div>
+
+        <!-- Global Save Action -->
+        <div class="global-actions mt-4 text-center pb-20">
+          <el-button type="primary" size="large" @click="syncPersona" class="save-button px-20 py-6 rounded-full text-lg shadow-xl">
+            保存所有 Agent 配置
+          </el-button>
+        </div>
       </div>
-    </div>
-    <div class="mt-8 text-center">
-      <el-button type="primary" size="large" @click="syncPersona">保存配置</el-button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
+import AgentCard from '../components/AgentCard.vue';
 
-const agentNames = {
-  student_analyst: '分析者 (Analyst)',
-  student_observer: '观察者 (Observer)',
-  student_skeptic: '怀疑者 (Skeptic)',
+const props = defineProps({
+  theoreticalKnowledge: {
+    type: Array,
+    default: () => []
+  }
+});
+
+// Refs for individual cards to handle global events like "cancelling edit"
+const cardRefs = ref([]);
+
+const cognitiveOptions = {
+  0: ['Patient Events', 'Symptoms', 'Social Cues'],
+  1: ['Mechanism', 'External Factors', 'Risk Perception', 'Familiarity Driven'],
+  2: ['Linear Causality', 'Multi-Concurrent', 'Cues-Driven', 'Undefined']
 };
 
-const agentPersonas = ref({
-  student_analyst: {
-    reasoning_path: '线性简化',
-    knowledge_integration: '系统化',
-    core_biases: ['锚定偏差'],
-    sensitivity: 7,
-    proficiency: 8,
+const interactionRoles = [
+  { name: '负责人', value: 'leader', icon: 'image.png' },
+  { name: '观察者', value: 'follower', icon: 'image.png' },
+  { name: '质疑者', value: 'critical', icon: 'image.png' }
+];
+
+const createDefaultAgent = () => ({
+  id: 'agent-' + Date.now(),
+  name: '',
+  age: '',
+  major: '',
+  // 待分类知识点：优先使用 PDF 提取的内容
+  unclassifiedKnowledge: props.theoreticalKnowledge.length > 0 
+    ? [...props.theoreticalKnowledge] 
+    : [], 
+  // 已分类知识点，对应三个档次
+  classifiedKnowledge: {
+    competent: [], // Good
+    novice: [],    // Medium
+    layman: []     // Bad
   },
-  student_observer: {
-    reasoning_path: '多线并行',
-    knowledge_integration: '碎片化',
-    core_biases: [],
-    sensitivity: 8,
-    proficiency: 6,
+  cognitive: {
+    0: [],
+    1: [],
+    2: []
   },
-  student_skeptic: {
-    reasoning_path: '线性简化',
-    knowledge_integration: '系统化',
-    core_biases: ['代表性启发'],
-    sensitivity: 5,
-    proficiency: 7,
+  social: {
+    confidence: 'medium',
+    register: 'medium',
+    role: 'leader'
   },
+  plasticity: 'medium'
 });
+
+const agents = ref([createDefaultAgent()]);
+
+// 监听背景知识变化：当新 PDF 解析完成后，自动更新所有 Agent 的待分类知识点
+watch(() => props.theoreticalKnowledge, (newPoints) => {
+  if (newPoints && newPoints.length > 0) {
+    agents.value.forEach(agent => {
+      // 只有当 agent 的待分类知识点是默认值或为空时才自动覆盖
+      // 或者您可以选择直接覆盖，取决于业务逻辑。这里我们采取“有新数据就更新”的策略
+      agent.unclassifiedKnowledge = [...newPoints];
+      
+      // 同时清空已分类的，因为新案例的知识点完全不同
+      agent.classifiedKnowledge = {
+        competent: [],
+        novice: [],
+        layman: []
+      };
+    });
+    ElMessage.success('已根据教案更新 Agent 知识背景库');
+  }
+}, { immediate: true });
+
+const addAgent = () => {
+  agents.value.push(createDefaultAgent());
+};
+
+const deleteAgent = (index) => {
+  if (agents.value.length > 1) {
+    agents.value.splice(index, 1);
+  } else {
+    ElMessage.warning('请至少保留一个 Agent');
+  }
+};
+
+const handleGlobalMouseDown = (e) => {
+  if (!e.target.closest('input') && !e.target.closest('.cursor-text')) {
+    cardRefs.value.forEach(card => {
+      if (card && card.resetEditing) card.resetEditing();
+    });
+  }
+};
 
 const syncPersona = async () => {
   try {
-    const response = await axios.post('http://127.0.0.1:8000/update_personas', agentPersonas.value);
+    const formatPersonaForBackend = (agent) => {
+      // 映射级别为数值或原始字符串，取决于后端需求
+      // 这里根据 server.py 的期望进行转换
+      const levelMap = { low: 3, medium: 6, high: 9 };
+      
+      return {
+        reasoning_path: Array.isArray(agent.cognitive[2]) ? agent.cognitive[2].join(', ') : (agent.cognitive[2] || 'Linear Causality'),
+        knowledge_integration: agent.plasticity === 'high' ? '系统化' : '碎片化',
+        core_biases: [],
+        sensitivity: levelMap[agent.social.confidence] || 5,
+        proficiency: levelMap[agent.social.register] || 5,
+        // 额外字段
+        interaction_role: agent.social.role,
+        learning_adaptivity: agent.plasticity
+      };
+    };
+
+    const payload = {};
+    agents.value.forEach((agent, idx) => {
+      const key = agent.name || `Student_${idx}`;
+      payload[key] = {
+        name: agent.name,
+        age: agent.age,
+        major: agent.major,
+        "knowledge background": {
+           high: agent.classifiedKnowledge.competent,
+           medium: agent.classifiedKnowledge.novice,
+           low: agent.classifiedKnowledge.layman
+        },
+        "cognitive orientation": {
+           "attentional anchor": agent.cognitive[0],
+           "reasoning entry": agent.cognitive[1],
+           "causal structure": agent.cognitive[2]
+        },
+        "social interaction style": {
+           "verbal confidence": agent.social.confidence,
+           "language register": agent.social.register,
+           "interaction role": agent.social.role
+        },
+        "learning adaptivity": agent.plasticity
+      };
+    });
+
+    const response = await axios.post('http://127.0.0.1:8000/update_personas', payload);
     if (response.status === 200) {
       ElMessage.success('配置保存成功！');
-    } else {
-      ElMessage.error('配置保存失败。');
     }
   } catch (error) {
     console.error('Error saving personas:', error);
-    ElMessage.error('配置保存失败，请检查后端服务是否可用。');
+    ElMessage.error('配置保存失败');
   }
 };
 </script>
 
 <style scoped>
-.agent-card {
-  background-color: #2d3748; /* 深灰蓝色背景 */
-  border: 1px solid #4a5568;
+.view-b-container::-webkit-scrollbar {
+  width: 6px;
+}
+.view-b-container::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.1);
+  border-radius: 10px;
 }
 
-.card-header {
-  font-weight: bold;
-  color: #ffffff;
-  font-size: 1rem;
-}
-
-/* 使用 :deep() 来穿透组件样式 */
-:deep(.el-form-item__label) {
-  color: #e2e8f0; /* 浅灰色标签 */
-  font-weight: 400;
-}
-
-:deep(.el-radio__label),
-:deep(.el-checkbox__label) {
-  color: #cbd5e0; /* 更浅的灰色用于选项文本 */
-}
-
-:deep(.el-radio__input.is-checked .el-radio__inner),
-:deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background-color: #4299e1; /* Element Plus 蓝色主题色 */
-  border-color: #4299e1;
-}
-
-:deep(.el-slider__bar) {
-  background-color: #4299e1;
-}
-
-:deep(.el-card__header) {
-  border-bottom: 1px solid #4a5568;
+.add-agent-section {
+  width: 100%;
+  max-width: 1200px;
+  height: 120px;
+  background-color: rgba(206, 220, 251, 0.4);
+  border: 2px dashed #84A7D8;
+  border-radius: 20px;
 }
 </style>

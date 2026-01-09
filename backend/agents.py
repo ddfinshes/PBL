@@ -65,55 +65,76 @@ def format_persona_to_string(persona: Dict) -> str:
     interaction_role = {
         "leader": "领导同学间的讨论，擅长总结发言和推进讨论",
         "follower": "附和前面同学的发言，习惯附和、支持他人",
-        "critical": "质疑者其他同学的发言/观点，习惯于提出反对与质疑"
+        "critical": "质疑者其他同学的发言/观点，习惯于提出反对与质疑",
     }
     learning_adaptivity = {
         "low": "即使被提示也坚持原观点",
         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
-        "high": "能根据新线索快速修正"
+        "high": "能根据新线索快速修正",
     }
-    attentional_anchor = {
-        "patient_events": '',
-        "sysmptoms": '',
-        "social_cues": '',
-        "symptoms": ''
+
+    # 认知维度映射 (Key 为前端传递的英文, Value 为 Prompt 中使用的中文描述)
+    attentional_anchor_map = {
+        "patient_events": '案例中的关键事件',
+        "symptoms": '临床症状表现',
+        "social_cues": '社交与环境线索'
     }
-    reasoning_entry = {
+    reasoning_entry_map = {
         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
         "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
         "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
         "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
     }
-    causal_strucure = {
+    causal_structure_map = {
         "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
         "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
         "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
         "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
     }
+
+    def process_cog(dim_key, mapping):
+        vals = persona.get('cognitive orientation', {}).get(dim_key, [])
+        if not vals:
+            return "无明确偏好"
+        if isinstance(vals, str):
+            vals = [vals]
+        res = []
+        for v in vals:
+            k = v.lower().replace(' ', '_').replace('-', '_')
+            desc = mapping.get(k, v)
+            if desc:
+                res.append(desc if desc else v)
+            else:
+                res.append(v)
+        return " -> ".join(res) + " (按优先级排序)"
+
+    kb = persona.get('knowledge background', {}) or {}
+    social = persona.get('social interaction style', {}) or {}
+
     return (f"""
-    - 姓名：{persona.get('name', '')} \n
+    - 姓名：{persona.get('name', '匿名')} \n
     - 年龄：{persona.get('age', 22)} \n
-    - 性别：{persona.get('major', 'male')} \n
+    - 性别/专业：{persona.get('major', '医学')} \n
     - 领域知识深度：
-        - 教科书级理解：{persona.get('knowledge background').get('high')} \n
-            表现：能给出 {persona.get('knowledge background').get('high')} 的标准解释，但可能不敏感于罕见/关键细节。\n
-        - 知道术语但理解松散：{persona.get('knowledge background').get('mmedium')}。 \n
-            表现：能提 {persona.get('knowledge background').get('mmedium')} 名词，但机制模糊或泛化。\n
-        - 仅生活常识：{persona.get('knowledge background').get('low')}。\n
-            表现：只用日常因果解释这些知识或者现象 {persona.get('knowledge background').get('low')}（如“吃多了对身体不好”）。\n
+        - 教科书级理解：{', '.join(kb.get('high', []))} \n
+            表现：能给出标准解释，但可能不敏感于关键细节。\n
+        - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
+            表现：能提名词，但机制模糊或泛化。\n
+        - 仅生活常识：{', '.join(kb.get('low', []))} \n
+            表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
 
     - 认知维度（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
-        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{attentional_anchor[persona.get('cognitive orientation').get('attentional anchor')]}。 \n
-        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{reasoning_entry[persona.get('cognitive orientation').get('reasoning entry')]}。\n
-        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{causal_strucure[persona.get('cognitive orientation').get('causal structure')]}。\n
+        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional anchor', attentional_anchor_map)}。 \n
+        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning entry', reasoning_entry_map)}。\n
+        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal structure', causal_structure_map)}。\n
 
     - 社会行为维度（作用：决定 agent“怎么说、怎么影响他人”）\n
-        - 发言风格: {verbal_confidence[persona.get('social interaction style').get('verbal confidence')]} \n
-        - 发言专业用语情况：{language_register[persona.get('social interaction style').get('language register')]} \n
-        - 与其他同学互动特点：{interaction_role[persona.get('social interaction style').get('interaction role')]} \n
+        - 发言风格: {verbal_confidence.get(social.get('verbal confidence'), "平稳")} \n
+        - 发言专业用语情况：{language_register.get(social.get('language register'), "灵活切换")} \n
+        - 与其他同学互动特点：{interaction_role.get(social.get('interaction role'), "参与讨论")} \n
 
     - 动态学习维度（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
-        - 随着讨论的深度思维的转变情况：{learning_adaptivity[persona.get('learning adaptivity')]}
+        - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning adaptivity'), "中等稳定")}
     """)
 
 

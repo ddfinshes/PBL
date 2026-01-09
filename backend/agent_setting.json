@@ -1,0 +1,79 @@
+{
+  "徐源松": {
+    "name": "徐源松",
+    "age": "100",
+    "major": "计算机",
+    "knowledge background": {
+      "high": [
+        "医学伦理学"
+      ],
+      "medium": [
+        "诊断学"
+      ],
+      "low": [
+        "药理学",
+        "病理生理学",
+        "内科学",
+        "生理学",
+        "病理学"
+      ]
+    },
+    "cognitive orientation": {
+      "attentional anchor": [
+        "Patient Events"
+      ],
+      "reasoning entry": [
+        "Familiarity Driven"
+      ],
+      "causal structure": [
+        "Cues-Driven"
+      ]
+    },
+    "social interaction style": {
+      "verbal confidence": "medium",
+      "language register": "medium",
+      "interaction role": "critical"
+    },
+    "learning adaptivity": "high"
+  },
+  "大权": {
+    "name": "大权",
+    "age": "200",
+    "major": "人机交互",
+    "knowledge background": {
+      "high": [
+        "药理学",
+        "病理生理学",
+        "内科学",
+        "医学伦理学",
+        "诊断学",
+        "生理学",
+        "病理学"
+      ],
+      "medium": [],
+      "low": []
+    },
+    "cognitive orientation": {
+      "attentional anchor": [
+        "Patient Events",
+        "Social Cues"
+      ],
+      "reasoning entry": [
+        "Familiarity Driven",
+        "External Factors",
+        "Risk Perception"
+      ],
+      "causal structure": [
+        "Cues-Driven",
+        "Multi-Concurrent",
+        "Undefined"
+      ]
+    },
+    "social interaction style": {
+      "verbal confidence": "high",
+      "language register": "high",
+      "interaction role": "follower"
+    },
+    "learning adaptivity": "high"
+  }
+}
