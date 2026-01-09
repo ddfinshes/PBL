@@ -354,78 +354,79 @@ async def update_personas(request: Dict[str, Dict]):
             "name": "Alice",
             "age": 22,
             "major": "female",
-            "knowledge background": {
+            "knowledge_background": {
                 "high": ["hypertension"],
                 "medium": ["haemodynamics"],
                 "low": ["diabete"] 
                 },
-            "cognitive orientation": 
+            "cognitive_orientation": 
                 {
-                    "attentional anchor":[
-                        "patient events",
+                    "attentional_anchor":[
+                        "patient_events",
                         "symptoms",
-                        "social cues",
+                        "social_cues",
                     ],
-                    "reasoning entry": ["mechanism"],
-                    "causal structure": ["linear causality"]
+                    "reasoning_entry": ["mechanism"],
+                    "causal_structure": ["linear_causality"]
                 },
-            "social interaction style": {
-                "verbal confidence": "high",
-                "language register": "medium",
-                "interaction role": "leader"     
+            "social_interaction_style": {
+                "verbal_confidence": "high",
+                "language_register": "medium",
+                "interaction_role": "leader"     
                  },    
-            "learning adaptivity": "high"
+            "learning_adaptivity": "high"
         },
         "Bob": {     
             "name": "Bob",
             "age": 23,
             "major": "male",
-            "knowledge background": {
+            "knowledge_background": {
                 "high": ["hypertension"],
                 "medium": ["haemodynamics"],
                 "low": ["diabete"] 
                 },
-            "cognitive orientation": 
+            "cognitive_orientation": 
                 {
-                    "attentional anchor":[
+                    "attentional_anchor":[
                         "symptoms",
-                        "social cues",
+                        "social_cues",
                     ],
-                    "reasoning entry": ["externel factors"],
-                    "causal structure": ["linear causality", "multi-concurrent"]
+                    "reasoning_entry": ["external_factors"],
+                    "causal_structure": ["linear_causality", "multi_concurrent"]
                 },
-            "social interaction style": {
-                "verbal confidence": "low",
-                "language register": "low",
-                "interaction role": "follower"     
+            "social_interaction_style": {
+                "verbal_confidence": "low",
+                "language_register": "low",
+                "interaction_role": "follower"     
                  },    
-            "learning adaptivity": "medium"
+            "learning_adaptivity": "medium"
         },
         "Lily": {     
             "name": "Lily",
             "age": 22,
             "major": "female",
-            "knowledge background": {
+            "knowledge_background": {
                 "high": ["hypertension"],
                 "medium": ["haemodynamics"],
                 "low": ["diabete"] 
                 },
-            "cognitive orientation": 
+            "cognitive_orientation": 
                 {
-                    "attentional anchor":[
-                        "social cues",
+                    "attentional_anchor":[
+                        "social_cues",
                     ],
-                    "reasoning entry": ["externel factors"],
-                    "causal structure": ["multi-concurrent"]
+                    "reasoning_entry": ["external_factors"],
+                    "causal_structure": ["multi_concurrent"]
                 },
-            "social interaction style": {
-                "verbal confidence": "high",
-                "language register": "high",
-                "interaction role": "follower"     
+            "social_interaction_style": {
+                "verbal_confidence": "high",
+                "language_register": "high",
+                "interaction_role": "follower"     
                  },    
-            "learning adaptivity": "medium"
+            "learning_adaptivity": "medium"
         },
     }
+
     for agent_id, persona_data in request.items():
         register_student_agent(agent_id, persona_data)
 
