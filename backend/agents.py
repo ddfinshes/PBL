@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Callable
 
-from .pbl_info import pbl_story, pbl_triger_questions
+from . import pbl_info
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
@@ -13,6 +13,8 @@ from langchain_openai import ChatOpenAI
 from .config import DASHSCOPE_API_KEY, BASE_URL, LLM_MODEL_NAME, EXTRA_BODY, MODEL_KWARGS
 
 # -------------------- 公共 LLM 实例 --------------------
+
+
 def _build_llm(temperature: float = 0.7) -> ChatOpenAI:
     """创建一个 ChatOpenAI（兼容 DashScope）实例。"""
     return ChatOpenAI(
@@ -23,6 +25,7 @@ def _build_llm(temperature: float = 0.7) -> ChatOpenAI:
         extra_body=EXTRA_BODY,
         **MODEL_KWARGS,
     )
+
 
 STUDENT_LLM = _build_llm(temperature=0.8)
 HOST_LLM = _build_llm(temperature=0.3)
@@ -45,6 +48,7 @@ student_nodes: Dict[str, Callable] = {}
 #         f"- 关键点敏度: {persona.get('sensitivity', 'N/A')}/10\n"
 #         f"- 知识熟练程度: {persona.get('proficiency', 'N/A')}/10"
 #     )
+
 
 def format_persona_to_string(persona: Dict) -> str:
     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
@@ -112,6 +116,7 @@ def format_persona_to_string(persona: Dict) -> str:
         - 随着讨论的深度思维的转变情况：{learning_adaptivity[persona.get('learning adaptivity')]}
     """)
 
+
 # --------- 通用学生 Prompt ---------
 _STUDENT_SYS_TEMPLATE_STR = '''你是一名医学生，正在小组讨论一个病例：
 【病例摘要】{pbl_story}
@@ -140,28 +145,43 @@ STUDENT_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 # --------- 创建和注册学生的工厂 ---------
+
+
 def _student_node_fn(agent_id: str):
     """返回可在 LangGraph 中调用的学生节点函数。"""
     async def _node(state: Dict) -> Dict:
+        print(f"DEBUG: [Agent Node] {agent_id} is running...")
         messages: List[BaseMessage] = state["messages"]
-        persona_dict = student_personas[agent_id]
+        persona_dict = student_personas.get(agent_id)
+        if not persona_dict:
+            print(
+                f"ERROR: Persona for {agent_id} not found in student_personas.")
+            return {"messages": [AIMessage(content="[System Error] Persona not found.", name=agent_id)], "next_speaker": "router"}
+
         persona_str = format_persona_to_string(persona_dict)
 
         prompt = STUDENT_PROMPT.invoke(
             {
-                "persona": persona_str, 
-                "pbl_story": pbl_story,
-                "pbl_triger_questions": pbl_triger_questions,
+                "persona": persona_str,
+                "pbl_story": pbl_info.pbl_story,
+                "pbl_triger_questions": "\n".join(pbl_info.pbl_triger_questions),
                 "messages": messages
-                }
+            }
         )
-        result = await STUDENT_LLM.ainvoke(prompt)
 
-        # **关键修改**: 创建带有发言者名称的 AIMessage
-        ai_msg_with_name = AIMessage(content=result.content, name=agent_id)
+        try:
+            print(f"DEBUG: [Agent Node] {agent_id} calling LLM...")
+            result = await STUDENT_LLM.ainvoke(prompt)
+            print(f"DEBUG: [Agent Node] {agent_id} LLM response received.")
+            # **关键修改**: 创建带有发言者名称的 AIMessage
+            ai_msg_with_name = AIMessage(content=result.content, name=agent_id)
+            return {"messages": [ai_msg_with_name], "next_speaker": "router"}
+        except Exception as e:
+            print(f"ERROR: [Agent Node] {agent_id} LLM call failed: {e}")
+            return {"messages": [AIMessage(content="我正在思考，请稍等。", name=agent_id)], "next_speaker": "router"}
 
-        return {"messages": [ai_msg_with_name], "next_speaker": "router"}
     return _node
+
 
 def register_student_agent(agent_id: str, persona: dict):
     """动态注册一个新的学生 agent 或更新一个已有的。"""
@@ -170,6 +190,8 @@ def register_student_agent(agent_id: str, persona: dict):
     print(f"Agent '{agent_id}' has been registered/updated.")
 
 # --------- 辅助节点 ---------
+
+
 async def teacher_handler_node(state: Dict) -> Dict:
     """当老师插话后，让系统回复老师并重置标志。"""
     messages: List[BaseMessage] = state["messages"]
@@ -179,6 +201,7 @@ async def teacher_handler_node(state: Dict) -> Dict:
     ]).invoke({"messages": messages})
     result = await HOST_LLM.ainvoke(prompt)
     return {"messages": [result], "is_teacher_interrupted": False}
+
 
 async def summarizer_node(state: Dict) -> Dict:
     """当消息过多时，压缩为医学要点摘要并清空旧消息。"""
@@ -192,13 +215,19 @@ async def summarizer_node(state: Dict) -> Dict:
     return {"summary": previous_summary + "\n" + result.content, "messages": []}
 
 # --------- 动态路由器节点 ---------
+
+
 async def router_node(state: Dict) -> Dict:
     """根据上下文动态选择下一个节点。"""
+    print("DEBUG: [Router Node] started...")
     messages: List[BaseMessage] = state["messages"]
 
     if state.get("is_teacher_interrupted"):
+        print(
+            "DEBUG: [Router Node] teacher interrupted, routing to teacher_handler")
         return {"next_speaker": "teacher_handler"}
-    if len(messages) > 10:
+    if len(messages) > 15:
+        print("DEBUG: [Router Node] too many messages, routing to summarizer")
         return {"next_speaker": "summarizer"}
 
     agent_ids = list(student_nodes.keys())
@@ -225,8 +254,15 @@ async def router_node(state: Dict) -> Dict:
         MessagesPlaceholder(variable_name="messages"),
     ]).invoke({"messages": messages})
 
-    result = await HOST_LLM.ainvoke(prompt)
-    choice = result.content.strip()
+    try:
+        print(
+            f"DEBUG: [Router Node] Calling HOST_LLM for decision (options: {options_str}, last: {last_speaker})...")
+        result = await HOST_LLM.ainvoke(prompt)
+        choice = result.content.strip()
+        print(f"DEBUG: [Router Node] HOST_LLM choice: '{choice}'")
+    except Exception as e:
+        print(f"ERROR: [Router Node] HOST_LLM call failed: {e}")
+        choice = "FALLBACK"
 
     if choice in agent_ids:
         next_speaker = choice
@@ -236,8 +272,9 @@ async def router_node(state: Dict) -> Dict:
         # 如果 LLM 的选择无效，则选择一个与上一位不同的发言者作为回退
         fallback_options = [aid for aid in agent_ids if aid != last_speaker]
         if not fallback_options:
-            fallback_options = agent_ids # 如果只有一个 agent，只能选他自己
+            fallback_options = agent_ids  # 如果只有一个 agent，只能选他自己
         next_speaker = fallback_options[0]
-        print(f"Router: Invalid choice '{choice}', falling back to '{next_speaker}'.")
+        print(
+            f"Router: Using fallback '{next_speaker}' (choice was '{choice}')")
 
     return {"next_speaker": next_speaker}

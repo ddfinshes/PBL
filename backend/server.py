@@ -53,6 +53,11 @@ class UpdatePersonasRequest(BaseModel):
     student_skeptic: Persona
 
 
+class ActiveSceneRequest(BaseModel):
+    story: str
+    trigger_questions: List[str]
+
+
 app_fastapi = FastAPI()
 
 # --- CORS 中间件配置 ---
@@ -123,6 +128,62 @@ def process_response_urls(result_dict: dict) -> dict:
     return result_dict
 
 # --- API 路由 ---
+
+@app_fastapi.on_event("startup")
+async def startup_event():
+    """服务器启动时，初始化默认的 Hardcoded Agents 并构建图。"""
+    print("Initializing default hardcoded agents...")
+    default_personas = {
+        "Alice": {
+            "name": "Alice",
+            "age": 22,
+            "major": "female",
+            "knowledge background": {
+                "high": ["hypertension"],
+                "medium": ["haemodynamics"],
+                "low": ["diabete"]
+            },
+            "cognitive orientation": {
+                "attentional anchor": "symptoms",
+                "reasoning entry": "mechanism",
+                "causal structure": "linear_causality"
+            },
+            "social interaction style": {
+                "verbal confidence": "high",
+                "language register": "medium",
+                "interaction role": "leader"
+            },
+            "learning adaptivity": "high"
+        },
+        "Bob": {
+            "name": "Bob",
+            "age": 23,
+            "major": "male",
+            "knowledge background": {
+                "high": ["nephropathy"],
+                "medium": ["biochemistry"],
+                "low": ["surgery"]
+            },
+            "cognitive orientation": {
+                "attentional anchor": "patient_events",
+                "reasoning entry": "risk_perception",
+                "causal structure": "multi_concurrent"
+            },
+            "social interaction style": {
+                "verbal confidence": "medium",
+                "language register": "medium",
+                "interaction role": "critical"
+            },
+            "learning adaptivity": "medium"
+        }
+    }
+    
+    for agent_id, persona in default_personas.items():
+        register_student_agent(agent_id, persona)
+    
+    agent_ids = list(student_nodes.keys())
+    graph.app = build_graph(agent_ids)
+    print(f"✓ Startup: Graph built with agents: {agent_ids}")
 
 
 @app_fastapi.get("/")
@@ -257,6 +318,13 @@ def api_get_case_by_name(case_name: str):
         return {"detail": str(e)}, 500
 
 
+@app_fastapi.post("/api/set-active-scene")
+async def set_active_scene(request: ActiveSceneRequest):
+    from .pbl_info import update_pbl_info
+    update_pbl_info(request.story, request.trigger_questions)
+    return {"status": "success", "message": "Global PBL info updated."}
+
+
 # 5. 【新增】保存编辑后的case数据
 @app_fastapi.post("/api/save-case")
 async def api_save_case(request_data: dict):
@@ -341,88 +409,88 @@ async def api_save_case(request_data: dict):
 
 
 @app_fastapi.post("/update_personas")
-async def update_personas(request: Dict[str, Dict]):
-    """接收前端配置，清空、注册所有 agent，并重新编译图。"""
+async def update_personas_v1(request: Dict[str, Dict]):
+    """接收前端配置，清空、注册所有 agent，并重新编译图 (Hardcoded 模拟版)。"""
     # 1. 清空现有的 agent 配置
     student_personas.clear()
     student_nodes.clear()
-    print("Cleared existing agent configurations.")
+    logger.info("Cleared existing agent configurations.")
 
-    # 2. 根据请求注册新的 agent
-    request = {
-        "Alice": {     
+    # 2. 目前采用硬编码模拟
+    simulation_request = {
+        "Alice": {
             "name": "Alice",
             "age": 22,
             "major": "female",
             "knowledge background": {
                 "high": ["hypertension"],
                 "medium": ["haemodynamics"],
-                "low": ["diabete"] 
-                },
-            "cognitive orientation": 
+                "low": ["diabete"]
+            },
+            "cognitive orientation":
                 {
-                    "attentional anchor":[
+                    "attentional anchor": [
                         "patient events",
                         "symptoms",
                         "social cues",
                     ],
                     "reasoning entry": ["mechanism"],
                     "causal structure": ["linear causality"]
-                },
+            },
             "social interaction style": {
                 "verbal confidence": "high",
                 "language register": "medium",
-                "interaction role": "leader"     
-                 },    
+                "interaction role": "leader"
+            },
             "learning adaptivity": "high"
         },
-        "Bob": {     
+        "Bob": {
             "name": "Bob",
             "age": 23,
             "major": "male",
             "knowledge background": {
                 "high": ["hypertension"],
                 "medium": ["haemodynamics"],
-                "low": ["diabete"] 
-                },
-            "cognitive orientation": 
+                "low": ["diabete"]
+            },
+            "cognitive orientation":
                 {
-                    "attentional anchor":[
+                    "attentional anchor": [
                         "symptoms",
                         "social cues",
                     ],
                     "reasoning entry": ["externel factors"],
                     "causal structure": ["linear causality", "multi-concurrent"]
-                },
+            },
             "social interaction style": {
                 "verbal confidence": "low",
                 "language register": "low",
-                "interaction role": "follower"     
-                 },    
+                "interaction role": "follower"
+            },
             "learning adaptivity": "medium"
         },
-        "Lily": {     
+        "Lily": {
             "name": "Lily",
             "age": 22,
             "major": "female",
             "knowledge background": {
                 "high": ["hypertension"],
                 "medium": ["haemodynamics"],
-                "low": ["diabete"] 
-                },
-            "cognitive orientation": 
+                "low": ["diabete"]
+            },
+            "cognitive orientation":
                 {
-                    "attentional anchor":[
+                    "attentional anchor": [
                         "social cues",
                     ],
                     "reasoning entry": ["externel factors"],
                     "causal structure": ["multi-concurrent"]
-                },
+            },
             "social interaction style": {
                 "verbal confidence": "high",
                 "language register": "high",
-                "interaction role": "follower"     
-                 },    
+                "interaction role": "follower"
+            },
             "learning adaptivity": "medium"
         },
     }
@@ -431,13 +499,12 @@ async def update_personas(request: Dict[str, Dict]):
 
     # 3. 重新编译 LangGraph
     agent_ids = list(student_nodes.keys())
-    if not agent_ids:
-        print("Warning: No agents provided. The graph will be empty.")
-    
     graph.app = build_graph(agent_ids)
-    print(f"Successfully rebuilt graph with agents: {agent_ids}")
+    logger.info(f"Successfully rebuilt graph with agents: {agent_ids}")
 
     return {"status": "success", "message": f"Personas updated and graph rebuilt for {len(agent_ids)} agents."}
+
+
 async def update_personas(request: UpdatePersonasRequest):
     new_personas = request.dict()
     for agent_id, persona_data in new_personas.items():
@@ -453,7 +520,7 @@ async def update_personas(request: UpdatePersonasRequest):
 @app_fastapi.websocket("/ws/pbl/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
-    print(f"WebSocket connection established for session: {session_id}")
+    logger.info(f"WebSocket connection established for session: {session_id}")
 
     config = {"configurable": {"thread_id": session_id}}
     try:
@@ -461,46 +528,68 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             data = await websocket.receive_text()
             message = json.loads(data)
             action = message.get("action")
-            print('-----------', action)
+            logger.info(f"Action received: {action}")
 
+            if not graph.app:
+                # 再次尝试初始化，如果 startup 没跑成
+                logger.warning("Graph not initialized. Initializing with default agents...")
+                await startup_event()
+                
             if not graph.app:
                 await websocket.send_json({"error": "Graph not initialized. Please configure agents first."})
                 continue
 
             if action == "start_discussion":
-                print(f"[{session_id}] Starting new discussion.")
+                logger.info(f"[{session_id}] Starting new discussion.")
                 initial_case = message.get("initial_case", "")
                 initial_message = HumanMessage(
                     content=initial_case, name="case_introduction")
+                
                 initial_state: GraphState = {
                     "messages": [initial_message],
                     "summary": "",
                     "next_speaker": "router",
                     "is_teacher_interrupted": False,
                 }
-                async for event in graph.app.astream(initial_state, config=config):
-                    for node_name, output in event.items():
-                        if "messages" in output and output['messages']:
-                            for msg in output['messages']:
-                                if hasattr(msg, 'content'):
-                                    await websocket.send_json({"node": node_name, "content": msg.content})
+                
+                try:
+                    async for event in graph.app.astream(initial_state, config=config, stream_mode="updates"):
+                        logger.info(f"DEBUG: Graph Event: {event}")
+                        for node_name, output in event.items():
+                            if "messages" in output and output['messages']:
+                                for msg in output['messages']:
+                                    if hasattr(msg, 'content'):
+                                        logger.info(f"Sending message from node: {node_name}")
+                                        await websocket.send_json({"node": node_name, "content": msg.content})
+                except Exception as e:
+                    logger.error(f"Error in astream: {e}")
+                    await websocket.send_json({"error": str(e)})
 
             elif action == "teacher_intervention":
                 teacher_message_content = message.get("content", "")
-                print(f"[{session_id}] Teacher intervention: {teacher_message_content}")
-                teacher_message = HumanMessage(content=teacher_message_content, name="teacher")
-                
+                print(
+                    f"[{session_id}] Teacher intervention: {teacher_message_content}")
+                teacher_message = HumanMessage(
+                    content=teacher_message_content, name="teacher")
+
                 graph.app.update_state(
                     config,
-                    {"messages": [teacher_message], "is_teacher_interrupted": True},
+                    {"messages": [teacher_message],
+                        "is_teacher_interrupted": True},
                 )
                 # 使用 {} 作为输入来继续图的执行
-                async for event in graph.app.astream({}, config=config):
-                    for node_name, output in event.items():
-                        if "messages" in output and output['messages']:
-                            for msg in output['messages']:
-                                if hasattr(msg, 'content'):
-                                    await websocket.send_json({"node": node_name, "content": msg.content})
+                try:
+                    async for event in graph.app.astream({}, config=config, stream_mode="updates"):
+                        logger.info(f"DEBUG: Teacher Intervention Graph Event: {event}")
+                        for node_name, output in event.items():
+                            if "messages" in output and output['messages']:
+                                for msg in output['messages']:
+                                    if hasattr(msg, 'content'):
+                                        logger.info(f"Sending message from node: {node_name}")
+                                        await websocket.send_json({"node": node_name, "content": msg.content})
+                except Exception as e:
+                    logger.error(f"Error in astream (teacher_intervention): {e}")
+                    await websocket.send_json({"error": str(e)})
 
     except WebSocketDisconnect:
         print(f"WebSocket connection closed for session: {session_id}")
