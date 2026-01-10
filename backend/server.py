@@ -12,6 +12,7 @@ from typing import Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import logging
+import asyncio
 import re
 from pathlib import Path
 from datetime import datetime
@@ -37,20 +38,6 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 # --- Pydantic 模型 ---
-
-
-class Persona(BaseModel):
-    reasoning_path: str
-    knowledge_integration: str
-    core_biases: List[str]
-    sensitivity: int
-    proficiency: int
-
-
-class UpdatePersonasRequest(BaseModel):
-    student_analyst: Persona
-    student_observer: Persona
-    student_skeptic: Persona
 
 
 app_fastapi = FastAPI()
@@ -439,76 +426,139 @@ async def update_personas(request: Dict[str, Dict]):
     print(f"Successfully rebuilt graph with agents: {agent_ids}")
 
     return {"status": "success", "message": f"Personas updated and graph rebuilt for {len(agent_ids)} agents."}
-async def update_personas(request: UpdatePersonasRequest):
-    new_personas = request.dict()
-    for agent_id, persona_data in new_personas.items():
-        if agent_id in student_personas:
-            student_personas[agent_id] = persona_data
-            print(f"Updated persona for {agent_id}: {persona_data}")
-        else:
-            student_personas[agent_id] = persona_data
-            print(f"Added persona for {agent_id}: {persona_data}")
-    return {"status": "success", "message": "Personas updated successfully."}
+
+# 存储每个 session 的后台任务，用于处理 LangGraph 流输出
+session_tasks = {}
 
 
 @app_fastapi.websocket("/ws/pbl/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+async def ws_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
-    print(f"WebSocket connection established for session: {session_id}")
-
     config = {"configurable": {"thread_id": session_id}}
+    
+    # 状态管理
+    current_state = None
+    graph_task = None
+    output_queue = asyncio.Queue()
+    
+    async def stream_langgraph(state):
+        """后台流式输出任务"""
+        try:
+            async for event in graph.app.astream(state, config=config):
+                # 将输出放入队列，避免阻塞 astream
+                await output_queue.put(event)
+        except asyncio.CancelledError:
+            # 正常任务取消
+            pass
+        except Exception as e:
+            # 发送错误信息到前端
+            await websocket.send_json({"error": str(e)})
+    
+    async def output_processor():
+        """处理输出队列的任务"""
+        while True:
+            try:
+                event = await output_queue.get()
+                for node, out in event.items():
+                    if "messages" in out:
+                        for m in out["messages"]:
+                            await websocket.send_json({
+                                "node": node, 
+                                "content": m.content,
+                                "type": "agent_output"
+                            })
+                output_queue.task_done()
+            except asyncio.CancelledError:
+                break
+    
+    output_task = None
+    
     try:
         while True:
+            # 主循环只负责接收消息
             data = await websocket.receive_text()
-            message = json.loads(data)
-            action = message.get("action")
-            print('-----------', action)
-
-            if not graph.app:
-                await websocket.send_json({"error": "Graph not initialized. Please configure agents first."})
-                continue
-
+            msg = json.loads(data)
+            action = msg.get("action")
+            
             if action == "start_discussion":
-                print(f"[{session_id}] Starting new discussion.")
-                initial_case = message.get("initial_case", "")
-                initial_message = HumanMessage(
-                    content=initial_case, name="case_introduction")
-                initial_state: GraphState = {
-                    "messages": [initial_message],
+                # 初始化状态
+                initial_case = msg.get("initial_case", "")
+                current_state = {
+                    "messages": [HumanMessage(content=initial_case, name="case_introduction")],
                     "summary": "",
                     "next_speaker": "router",
                     "is_teacher_interrupted": False,
+                    "discussion_active": True,  # 显式初始化讨论状态
                 }
-                async for event in graph.app.astream(initial_state, config=config):
-                    for node_name, output in event.items():
-                        if "messages" in output and output['messages']:
-                            for msg in output['messages']:
-                                if hasattr(msg, 'content'):
-                                    await websocket.send_json({"node": node_name, "content": msg.content})
-
-            elif action == "teacher_intervention":
-                teacher_message_content = message.get("content", "")
-                print(f"[{session_id}] Teacher intervention: {teacher_message_content}")
-                teacher_message = HumanMessage(content=teacher_message_content, name="teacher")
                 
-                graph.app.update_state(
-                    config,
-                    {"messages": [teacher_message], "is_teacher_interrupted": True},
-                )
-                # 使用 {} 作为输入来继续图的执行
-                async for event in graph.app.astream({}, config=config):
-                    for node_name, output in event.items():
-                        if "messages" in output and output['messages']:
-                            for msg in output['messages']:
-                                if hasattr(msg, 'content'):
-                                    await websocket.send_json({"node": node_name, "content": msg.content})
+                # 取消旧任务
+                if graph_task:
+                    graph_task.cancel()
+                if output_task:
+                    output_task.cancel()
+                
+                # 启动新任务
+                graph_task = asyncio.create_task(stream_langgraph(current_state))
+                output_task = asyncio.create_task(output_processor())
+                
+            elif action == "teacher_intervention":
+                teacher_content = msg.get("content", "")
+                print(f"teacher_content: {teacher_content}")
+                teacher_msg = HumanMessage(content=teacher_content, name="teacher")
+                print(f"current_state: {current_state}")
+                # 更新状态以触发干预
+                if current_state:
+                    # 检查教师指令并相应地更新状态
+                    update_payload = {"messages": [teacher_msg]}
+                    # 教师希望终止讨论的关键字列表，可以根据需要扩展
+                    stop_keywords = ["停止讨论", "结束讨论", "stop", "end"]
+                    if any(kw in teacher_content for kw in stop_keywords):
+                        logger.info("教师指令：停止讨论。更新状态以终止图。")
+                        update_payload["discussion_active"] = False
+                        update_payload["next_speaker"] = "END"  # 直接终止图，避免 KeyError
+                        # 先更新状态，然后取消后台任务，防止学生继续发言
+                        graph.app.update_state(config, update_payload)
+                        if graph_task:
+                            graph_task.cancel()
+                        if output_task:
+                            output_task.cancel()
+                        # 更新状态后无需再次调用 update_state
+                        continue  # 跳过后续统一的 update_state 调用
+                    else:
+                        logger.info("教师干预：常规消息。")
+                        update_payload["is_teacher_interrupted"] = True
+                        update_payload["next_speaker"] = "teacher_handler"
 
+                    # graph.app.update_state(config, update_payload)
+                    # 1) 立即写入 LangGraph 状态
+                    graph.app.update_state(config, update_payload)
+                    # 2) 更新本地 current_state（让后续 restart 用最新值）
+                    current_state["messages"].append(teacher_msg)
+                    current_state["is_teacher_interrupted"] = True
+                    current_state["next_speaker"] = "teacher_handler"
+
+                    # 3) 抢占：重启流任务
+                    if graph_task:
+                        graph_task.cancel()
+                    if output_task:
+                        output_task.cancel()
+
+                    graph_task  = asyncio.create_task(stream_langgraph(current_state))
+                    output_task = asyncio.create_task(output_processor())
+                    
+                    
+                    # 通知前端教师干预已接收
+                    await websocket.send_json({
+                        "type": "teacher_intervention_ack",
+                        "content": teacher_content
+                    })
+                
     except WebSocketDisconnect:
-        print(f"WebSocket connection closed for session: {session_id}")
-    except Exception as e:
-        print(f"An error occurred in session {session_id}: {e}")
-        await websocket.close(code=1011, reason=str(e))
-
+        # 清理资源
+        if graph_task:
+            graph_task.cancel()
+        if output_task:
+            output_task.cancel()
 
 if __name__ == "__main__":
     uvicorn.run(app_fastapi, host="0.0.0.0", port=8000)

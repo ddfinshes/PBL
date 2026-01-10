@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from typing import Dict, List, Callable
+import time
 
 from .pbl_info import pbl_story, pbl_triger_questions
 from langchain_core.messages import BaseMessage, AIMessage
@@ -182,6 +183,9 @@ def register_student_agent(agent_id: str, persona: dict):
 async def teacher_handler_node(state: Dict) -> Dict:
     """当老师插话后，让系统回复老师并重置标志。"""
     messages: List[BaseMessage] = state["messages"]
+    print(f"messages: {messages}")
+
+    # messages = '停止讨论'
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是一名讨论主持人，请用简洁专业的医疗语言对老师的指示做出回应，并引导学生继续讨论。",),
         MessagesPlaceholder(variable_name="messages"),
@@ -203,6 +207,10 @@ async def summarizer_node(state: Dict) -> Dict:
 # --------- 动态路由器节点 ---------
 async def router_node(state: Dict) -> Dict:
     """根据上下文动态选择下一个节点。"""
+    # **关键修复**: 检查讨论是否已被教师停止
+    if not state.get("discussion_active", True):  # 默认为 True 以保持兼容
+        return {"next_speaker": "END"}
+        
     messages: List[BaseMessage] = state["messages"]
 
     if state.get("is_teacher_interrupted"):
@@ -226,13 +234,16 @@ async def router_node(state: Dict) -> Dict:
         f"1. **可用选项**: {options_str}, END\n"
         f"2. **上一位发言者是**: {last_speaker}\n"
         f"3. **规则**: 请尽量选择一位与上一位不同的发言人，以促进讨论轮转。\n\n"
-        f"4. **停止**: 学生已经初步得出结论、讨论无法进行、老师叫停讨论，选择 `END`选项停止讨论。"
+        f"4. **停止**: 学生已经初步得出结论、讨论无法进行或者老师叫停讨论，选择 `END`选项停止讨论。"
         f"请直接输出你选择的选项名称，不要添加任何其他文字。"
     )
     prompt = ChatPromptTemplate.from_messages([
         ("system", router_prompt_str),
         MessagesPlaceholder(variable_name="messages"),
     ]).invoke({"messages": messages})
+
+    time.sleep(5)
+    print(f"等待 {last_speaker} 发言")
 
     result = await HOST_LLM.ainvoke(prompt)
     choice = result.content.strip()

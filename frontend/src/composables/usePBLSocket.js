@@ -82,6 +82,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
    * @param {string} interventionText - 来自老师的消息。
    */
   const sendTeacherIntervention = (interventionText) => {
+    console.log('sendTeacherIntervention', socket , isConnected.value)
     if (socket && isConnected.value) {
       // 为即时反馈，直接将老师的消息添加到聊天中
       messages.value.push({

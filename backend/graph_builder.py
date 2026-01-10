@@ -26,6 +26,7 @@ class GraphState(TypedDict):
     summary: str
     next_speaker: str
     is_teacher_interrupted: bool
+    discussion_active: bool
 
 def build_graph(agent_ids: List[str]):
     """根据提供的 agent_ids 列表，动态构建并编译一个 LangGraph。"""
