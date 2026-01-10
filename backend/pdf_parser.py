@@ -80,6 +80,13 @@ class PBLFastParser:
             system_prompt = """
             你是一个医学PBL教案解析专家。请将Markdown教案解析为结构化数据。
             
+            【核心题目】从Markdown中提取教案的标题。
+            
+            【背景知识提取】请提取或总结“学习这个案例需要有那些临床学习的背景知识”。
+            - 优先寻找教案中明确列出的“背景知识”、“前置课程”或“预备知识”。
+            - 如果没有明确说明，请根据教案涉及的解剖、生理、病理、临床表现等内容，总结出3-8个核心理论的最高层的知识科目，比如病理学、生理学、药理学等。
+            - 结果请存放在 theoretical_knowledge_points 列表中。
+
             【场景拆分】请根据剧情推进（如"第一页"、"第二页"）将教案拆分为细粒度的 Scene。
             每个Scene对应教案中的一个独立病情阶段或检查阶段。
             
@@ -155,7 +162,7 @@ class PBLFastParser:
 
             return {
                 "case_title": result.case_title,
-                "summary": result.summary,
+                "theoretical_knowledge_points": result.theoretical_knowledge_points,
                 "learning_objectives": [obj.model_dump() for obj in result.learning_objectives],
                 "total_scenes": len(final_scenes),
                 "scenes": final_scenes,

@@ -16,7 +16,10 @@
         
         <!-- ViewB 区域 (角色配置) -->
         <div style="flex: 8; min-height: 0;">
-          <ViewB style="height: 100%;"/>
+          <ViewB 
+            style="height: 100%;"
+            :theoretical-knowledge="caseResult?.theoretical_knowledge_points || []"
+          />
         </div>
       </div>
     </div>
@@ -91,21 +94,21 @@ const handleDataReady = (payload) => {
 }
 
 .left-column {
-  width: 25%;
+  width: 30%;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .center-column {
-  width: 45%;
+  width: 40%;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .right-column {
-  width: 30%;
+  width: 25%;
   display: flex;
   flex-direction: column;
   gap: 10px;

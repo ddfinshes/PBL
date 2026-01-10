@@ -84,6 +84,7 @@
                         <div class="q-actions">
                           <button 
                             class="inspect-btn" 
+                            :class="{ 'active-inspect': activeQuestionInfo.sceneIdx === currentIndex && activeQuestionInfo.qIdx === qIdx }"
                             @click.stop="onInspectQuestion(q, qIdx)"
                             title="查看详细解析或关联位置"
                           >
@@ -197,6 +198,7 @@ const emit = defineEmits(['inspect-question'])
 
 // --- 状态管理 ---
 const currentIndex = ref(0)
+const activeQuestionInfo = ref({ sceneIdx: -1, qIdx: -1 })
 const showTeacherGuide = ref(true)
 const failedImages = ref(new Set())
 // 编辑状态：{ sceneIdx, qIdx, text }
@@ -255,9 +257,37 @@ const handleImageError = (imgIdx, sceneIdx) => {
 /**
  * 【新增方法】处理点击查看问题标识
  */
-const onInspectQuestion = (questionObj, qIdx) => {
-  console.log('Inspect Question:', questionObj)
-  // 触发事件，发送当前幕索引、问题索引及问题对象内容
+const onInspectQuestion = async (questionObj, qIdx) => {
+  const activeStory = currentScene.value.story_content;
+  const activeQuestion = questionObj.question;
+
+  // 更新当前激活的问题索引，用于 UI 高亮
+  activeQuestionInfo.value = { sceneIdx: currentIndex.value, qIdx };
+
+  console.log('--- Agent Context Updated ---');
+  console.log('Scene:', currentScene.value.title);
+  console.log('Story Segment:', activeStory.substring(0, 100) + '...');
+  console.log('Trigger Question:', activeQuestion);
+  console.log('------------------------------');
+
+  // 1. 调用后端更新当前的 PBL 状态，以便 Agent 使用
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/set-active-scene`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        story: activeStory,
+        trigger_questions: [activeQuestion] // 重点：传入当前点击的这一个问题
+      })
+    })
+    if (response.ok) {
+      console.log('✓ Backend PBL (Story & Question) successfully synced with clicked item.');
+    }
+  } catch (error) {
+    console.error('Failed to update backend PBL background:', error)
+  }
+
+  // 2. 触发事件，用于 UI 同步或通知
   emit('inspect-question', {
     sceneIndex: currentIndex.value,
     questionIndex: qIdx,
@@ -323,9 +353,30 @@ const saveQuestion = async (qIdx) => {
   }
 }
 
-watch(() => props.caseData, () => {
-  currentIndex.value = 0
-  failedImages.value.clear()
+watch(() => props.caseData, (newData) => {
+  console.log('Case Data Changed, resetting scene to 0.');
+  currentIndex.value = 0;
+  failedImages.value.clear();
+  
+  // 如果新数据存在，手动触发第一幕第一个问题的激活
+  if (newData?.scenes?.[0]?.trigger_questions?.[0]) {
+    setTimeout(() => {
+      onInspectQuestion(newData.scenes[0].trigger_questions[0], 0);
+    }, 500);
+  }
+})
+
+/**
+ * 监听幕次切换，自动高亮并同步当前幕的第一个问题
+ */
+watch(currentIndex, (newIdx) => {
+  console.log('Current Index Changed to:', newIdx);
+  if (props.caseData?.scenes?.[newIdx]?.trigger_questions?.[0]) {
+    const firstQuestion = props.caseData.scenes[newIdx].trigger_questions[0];
+    setTimeout(() => {
+      onInspectQuestion(firstQuestion, 0);
+    }, 300);
+  }
 })
 </script>
 
@@ -635,6 +686,14 @@ watch(() => props.caseData, () => {
   color: #fff;
   border-color: #10b981;
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.inspect-btn.active-inspect {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+  font-weight: bold;
 }
 
 /* 图片堆栈 */

@@ -40,6 +40,25 @@ logger = logging.getLogger(__name__)
 # --- Pydantic 模型 ---
 
 
+class Persona(BaseModel):
+    reasoning_path: str
+    knowledge_integration: str
+    core_biases: List[str]
+    sensitivity: int
+    proficiency: int
+
+
+class UpdatePersonasRequest(BaseModel):
+    student_analyst: Persona
+    student_observer: Persona
+    student_skeptic: Persona
+
+
+class ActiveSceneRequest(BaseModel):
+    story: str
+    trigger_questions: List[str]
+
+
 app_fastapi = FastAPI()
 
 # --- CORS 中间件配置 ---
@@ -53,6 +72,8 @@ CASE_STORAGE_DIR.mkdir(exist_ok=True)
 
 CASES_DATA_DIR = BASE_DIR / "cases_img"
 CASES_DATA_DIR.mkdir(exist_ok=True)
+
+AGENT_SETTING_PATH = BASE_DIR / "agent_setting.json"
 
 # 挂载静态资源
 app_fastapi.mount(
@@ -110,6 +131,28 @@ def process_response_urls(result_dict: dict) -> dict:
     return result_dict
 
 # --- API 路由 ---
+
+@app_fastapi.on_event("startup")
+async def startup_event():
+    """服务器启动时，从配置文件加载 Agents 并构建图。"""
+    print("Initializing agents from agent_setting.json...")
+    
+    if not AGENT_SETTING_PATH.exists():
+        print("✗ Startup: agent_setting.json not found. No agents loaded.")
+        return
+
+    try:
+        with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
+            personas = json.load(f)
+        
+        for agent_id, persona in personas.items():
+            register_student_agent(agent_id, persona)
+        
+        agent_ids = list(student_nodes.keys())
+        graph.app = build_graph(agent_ids)
+        print(f"✓ Startup: Graph built with agents: {agent_ids}")
+    except Exception as e:
+        print(f"✗ Startup: Error loading agents: {e}")
 
 
 @app_fastapi.get("/")
@@ -244,6 +287,13 @@ def api_get_case_by_name(case_name: str):
         return {"detail": str(e)}, 500
 
 
+@app_fastapi.post("/api/set-active-scene")
+async def set_active_scene(request: ActiveSceneRequest):
+    from .pbl_info import update_pbl_info
+    update_pbl_info(request.story, request.trigger_questions)
+    return {"status": "success", "message": "Global PBL info updated."}
+
+
 # 5. 【新增】保存编辑后的case数据
 @app_fastapi.post("/api/save-case")
 async def api_save_case(request_data: dict):
@@ -328,112 +378,143 @@ async def api_save_case(request_data: dict):
 
 
 @app_fastapi.post("/update_personas")
-async def update_personas(request: Dict[str, Dict]):
-    """接收前端配置，清空、注册所有 agent，并重新编译图。"""
-    # 1. 清空现有的 agent 配置
-    student_personas.clear()
-    student_nodes.clear()
-    print("Cleared existing agent configurations.")
+# async def update_personas(request: Dict[str, Dict]):
+#     """接收前端配置，清空、注册所有 agent，并重新编译图。"""
+#     # 1. 清空现有的 agent 配置
+#     student_personas.clear()
+#     student_nodes.clear()
+#     print("Cleared existing agent configurations.")
 
-    # 2. 根据请求注册新的 agent
-    request = {
-        "Alice": {     
-            "name": "Alice",
-            "age": 22,
-            "major": "female",
-            "knowledge_background": {
-                "high": ["hypertension"],
-                "medium": ["haemodynamics"],
-                "low": ["diabete"] 
-                },
-            "cognitive_orientation": 
-                {
-                    "attentional_anchor":[
-                        "patient_events",
-                        "symptoms",
-                        "social_cues",
-                    ],
-                    "reasoning_entry": ["mechanism"],
-                    "causal_structure": ["linear_causality"]
-                },
-            "social_interaction_style": {
-                "verbal_confidence": "high",
-                "language_register": "medium",
-                "interaction_role": "leader"     
-                 },    
-            "learning_adaptivity": "high"
-        },
-        "Bob": {     
-            "name": "Bob",
-            "age": 23,
-            "major": "male",
-            "knowledge_background": {
-                "high": ["hypertension"],
-                "medium": ["haemodynamics"],
-                "low": ["diabete"] 
-                },
-            "cognitive_orientation": 
-                {
-                    "attentional_anchor":[
-                        "symptoms",
-                        "social_cues",
-                    ],
-                    "reasoning_entry": ["external_factors"],
-                    "causal_structure": ["linear_causality", "multi_concurrent"]
-                },
-            "social_interaction_style": {
-                "verbal_confidence": "low",
-                "language_register": "low",
-                "interaction_role": "follower"     
-                 },    
-            "learning_adaptivity": "medium"
-        },
-        "Lily": {     
-            "name": "Lily",
-            "age": 22,
-            "major": "female",
-            "knowledge_background": {
-                "high": ["hypertension"],
-                "medium": ["haemodynamics"],
-                "low": ["diabete"] 
-                },
-            "cognitive_orientation": 
-                {
-                    "attentional_anchor":[
-                        "social_cues",
-                    ],
-                    "reasoning_entry": ["external_factors"],
-                    "causal_structure": ["multi_concurrent"]
-                },
-            "social_interaction_style": {
-                "verbal_confidence": "high",
-                "language_register": "high",
-                "interaction_role": "follower"     
-                 },    
-            "learning_adaptivity": "medium"
-        },
-    }
+#     # 2. 根据请求注册新的 agent
+#     request = {
+#         "Alice": {     
+#             "name": "Alice",
+#             "age": 22,
+#             "major": "female",
+#             "knowledge_background": {
+#                 "high": ["hypertension"],
+#                 "medium": ["haemodynamics"],
+#                 "low": ["diabete"] 
+#                 },
+#             "cognitive_orientation": 
+#                 {
+#                     "attentional_anchor":[
+#                         "patient_events",
+#                         "symptoms",
+#                         "social_cues",
+#                     ],
+#                     "reasoning_entry": ["mechanism"],
+#                     "causal_structure": ["linear_causality"]
+#                 },
+#             "social_interaction_style": {
+#                 "verbal_confidence": "high",
+#                 "language_register": "medium",
+#                 "interaction_role": "leader"     
+#                  },    
+#             "learning_adaptivity": "high"
+#         },
+#         "Bob": {     
+#             "name": "Bob",
+#             "age": 23,
+#             "major": "male",
+#             "knowledge_background": {
+#                 "high": ["hypertension"],
+#                 "medium": ["haemodynamics"],
+#                 "low": ["diabete"] 
+#                 },
+#             "cognitive_orientation": 
+#                 {
+#                     "attentional_anchor":[
+#                         "symptoms",
+#                         "social_cues",
+#                     ],
+#                     "reasoning_entry": ["external_factors"],
+#                     "causal_structure": ["linear_causality", "multi_concurrent"]
+#                 },
+#             "social_interaction_style": {
+#                 "verbal_confidence": "low",
+#                 "language_register": "low",
+#                 "interaction_role": "follower"     
+#                  },    
+#             "learning_adaptivity": "medium"
+#         },
+#         "Lily": {     
+#             "name": "Lily",
+#             "age": 22,
+#             "major": "female",
+#             "knowledge_background": {
+#                 "high": ["hypertension"],
+#                 "medium": ["haemodynamics"],
+#                 "low": ["diabete"] 
+#                 },
+#             "cognitive_orientation": 
+#                 {
+#                     "attentional_anchor":[
+#                         "social_cues",
+#                     ],
+#                     "reasoning_entry": ["external_factors"],
+#                     "causal_structure": ["multi_concurrent"]
+#                 },
+#             "social_interaction_style": {
+#                 "verbal_confidence": "high",
+#                 "language_register": "high",
+#                 "interaction_role": "follower"     
+#                  },    
+#             "learning_adaptivity": "medium"
+#         },
+#     }
 
-    for agent_id, persona_data in request.items():
-        register_student_agent(agent_id, persona_data)
+#     for agent_id, persona_data in request.items():
+#         register_student_agent(agent_id, persona_data)
 
-    # 3. 重新编译 LangGraph
-    agent_ids = list(student_nodes.keys())
-    if not agent_ids:
-        print("Warning: No agents provided. The graph will be empty.")
-    
-    graph.app = build_graph(agent_ids)
-    print(f"Successfully rebuilt graph with agents: {agent_ids}")
+#     return {"status": "success", "message": f"Personas updated and graph rebuilt for {len(agent_ids)} agents."}
 
-    return {"status": "success", "message": f"Personas updated and graph rebuilt for {len(agent_ids)} agents."}
+async def update_personas_v1(request: Dict[str, Dict]):
+    """接收前端配置，保存到 JSON 文件，清空并重新注册所有 agent，并重新构建图。"""
+    try:
+        # 1. 保存到 agent_setting.json
+        with open(AGENT_SETTING_PATH, 'w', encoding='utf-8') as f:
+            json.dump(request, f, ensure_ascii=False, indent=2)
+        logger.info(f"Saved personas to {AGENT_SETTING_PATH}")
 
+        # 2. 清空现有的 agent 配置
+        student_personas.clear()
+        student_nodes.clear()
+        logger.info("Cleared existing agent configurations.")
+
+        # 3. 注册新的 agent
+        for agent_id, persona_data in request.items():
+            register_student_agent(agent_id, persona_data)
+
+        # 4. 重新编译 LangGraph
+        agent_ids = list(student_nodes.keys())
+        graph.app = build_graph(agent_ids)
+        logger.info(f"Successfully rebuilt graph with agents: {agent_ids}")
+
+        return {"status": "success", "message": f"Personas updated, saved to file, and graph rebuilt for {len(agent_ids)} agents."}
+    except Exception as e:
+        logger.error(f"Failed to update personas: {e}")
+        return {"status": "error", "detail": str(e)}, 500
+        
 # 存储每个 session 的后台任务，用于处理 LangGraph 流输出
 session_tasks = {}
+async def update_personas(request: UpdatePersonasRequest):
+    new_personas = request.dict()
+    for agent_id, persona_data in new_personas.items():
+        if agent_id in student_personas:
+            student_personas[agent_id] = persona_data
+            print(f"Updated persona for {agent_id}: {persona_data}")
+        else:
+            student_personas[agent_id] = persona_data
+            print(f"Added persona for {agent_id}: {persona_data}")
+    return {"status": "success", "message": "Personas updated successfully."}
 
 
 @app_fastapi.websocket("/ws/pbl/{session_id}")
 async def ws_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
+    logger.info(f"WebSocket connection established for session: {session_id}")
+
     config = {"configurable": {"thread_id": session_id}}
     
     # 状态管理
