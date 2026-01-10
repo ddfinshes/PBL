@@ -1,12 +1,37 @@
 <template>
-  <div class="agent-card">
+  <div class="agent-card" :style="{ '--base-card-color': cardColor }">
     <!-- 核心卡片背景 -->
-    <div class="agent-card-bg"></div>
+    <div class="agent-card-bg" :style="{ backgroundColor: 'var(--base-card-color)' }"></div>
 
     <!-- 顶部身份信息区域 -->
     <header class="identity-header">
       <div class="identity-info-left">
-        <div class="avatar-icon"></div>
+        <!-- 头像选择区域 -->
+        <el-popover
+          placement="bottom"
+          :width="160"
+          trigger="click"
+          popper-style="background-color: #DFE9FF; border-radius: 12px; border: 1px solid #B0C4DE; padding: 10px;"
+        >
+          <template #reference>
+            <div 
+              class="avatar-icon cursor-pointer hover:scale-105 transition-transform shadow-sm" 
+              :style="{ backgroundImage: `url('/avatar/${modelValue.avatar || 'avatar1.png'}')` }"
+              title="点击更换头像"
+            ></div>
+          </template>
+          <div class="avatar-selector-grid">
+            <div 
+              v-for="i in 4" 
+              :key="i" 
+              class="avatar-option"
+              :class="{ 'is-active': modelValue.avatar === `avatar${i}.png` }"
+              @click="modelValue.avatar = `avatar${i}.png`"
+            >
+              <img :src="`/avatar/avatar${i}.png`" class="avatar-option-img" />
+            </div>
+          </div>
+        </el-popover>
         
         <!-- 姓名交互区域 -->
         <div class="name-interactive-area">
@@ -43,7 +68,7 @@
         </div>
 
         <div class="meta-item-box" @click.stop="editingField = 'major'">
-          <span class="meta-label">性别/专业:</span>
+          <span class="meta-label">专业:</span>
           <div v-if="editingField !== 'major'" class="meta-value" :class="{'is-empty': !modelValue.major}">
             {{ modelValue.major || '请输入' }}
           </div>
@@ -225,7 +250,7 @@
         <div class="combined-content-row">
           <!-- 左侧：社交属性 (2/3) -->
           <div class="social-side-column">
-            <h3 class="panel-title mb-4">社交属性</h3>
+            <h3 class="panel-title mb-1">社交属性</h3>
             <div class="social-side-body">
               <div class="sliders-sub-column">
                 <!-- 言语自信度 -->
@@ -241,7 +266,7 @@
                    </div>
                 </div>
                 <!-- 语言正式度 -->
-                <div class="level-select-group mt-3">
+                <div class="level-select-group mt-1">
                    <div class="level-title">语言正式度</div>
                    <div class="level-options">
                      <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
@@ -273,7 +298,7 @@
 
           <!-- 右侧：学习可塑性 (1/3) -->
           <div class="learning-side-column">
-            <h3 class="panel-title mb-4">学习可塑性</h3>
+            <h3 class="panel-title mb-1">学习可塑性</h3>
             <div class="plasticity-vertical-options">
                <div v-for="lv in ['low', 'medium', 'high']" 
                     :key="lv"
@@ -296,7 +321,8 @@ import { ref } from 'vue';
 const props = defineProps({
   modelValue: { type: Object, required: true },
   cognitiveOptions: { type: Object, required: true },
-  interactionRoles: { type: Array, required: true }
+  interactionRoles: { type: Array, required: true },
+  cardColor: { type: String, default: '#CEDCFB' }
 });
 
 const emit = defineEmits(['update:modelValue', 'delete']);
@@ -307,21 +333,22 @@ const dragOverField = ref(null);
 // --- 认知倾向：中文翻译与 archetypes 字典 ---
 const cognitiveLabels = {
   0: '注意力锚点',
-  1: '推理入口',
+  1: '推理起点',
   2: '因果结构'
 };
 
 const subDimensionTranslations = {
   'Patient Events': '患者事件',
   'Symptoms': '临床症状',
-  'Social Cues': '社交线索',
-  'Mechanism': '生理机制',
+  'Social Cues': '社会线索',
+  'Status': '患者状态',
+  'Mechanism': '机制推演',
   'External Factors': '外部因素',
   'Risk Perception': '风险感知',
-  'Familiarity Driven': '经验驱动',
+  'Familiarity Driven': '自身经验驱动',
   'Linear Causality': '线性因果',
   'Multi-Concurrent': '多重并发',
-  'Cues-Driven': '线索驱动',
+  'Cues-Driven': '心理-社会-环境',
   'Undefined': '未定义'
 };
 
@@ -363,7 +390,7 @@ const getOptionColor = (opt) => {
       return archetypes[name].color;
     }
   }
-  return "#84A7D8"; // 默认蓝色
+  return "#8095CA"; // 统一蓝色
 };
 
 const selectedArchetype = ref(null);
@@ -530,12 +557,14 @@ defineExpose({ resetEditing });
    ========================================= */
 .agent-card {
   position: relative;
-  width: 800px;
-  max-width: 1200px;
-  height: 1080px;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 900px;
   flex-shrink: 0;
   transition: all 0.3s ease;
   user-select: none;
+  margin-bottom: 20px;
 }
 
 .agent-card-bg {
@@ -576,12 +605,47 @@ defineExpose({ resetEditing });
   gap: 1.5rem; /* gap-6 */
 }
 
+.avatar-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 5px;
+}
+
+.avatar-option {
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 2px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-option:hover {
+  background-color: rgba(99, 85, 191, 0.1);
+  transform: scale(1.05);
+}
+
+.avatar-option.is-active {
+  border-color: #8095CA;
+  background-color: rgba(128, 149, 202, 0.2);
+}
+
+.avatar-option-img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+
 .avatar-icon {
   width: 45px;
   height: 45px;
-  background-image: url('/student.png');
   background-size: contain;
   background-repeat: no-repeat;
+  border-radius: 50%; /* 圆形头像 */
+  background-color: white;
 }
 
 .name-interactive-area {
@@ -627,13 +691,13 @@ defineExpose({ resetEditing });
 }
 
 .meta-item-box {
-  width: 160px;
+  width: 140px; /* 缩小宽度 */
   height: 28px;
-  background-color: #F2F4F7;
+  background-color: rgba(255, 255, 255, 0.35);
   border-radius: 14px;
   display: flex;
   align-items: center;
-  padding: 0 1rem;
+  padding: 0 0.75rem;
   cursor: text;
 }
 
@@ -664,32 +728,42 @@ defineExpose({ resetEditing });
   border: none;
   font-size: 13px;
   outline: none;
+  color: #6C6565; /* 确保输入文字可见 */
 }
 
 /* =========================================
    3. 通用面板组件 (Panel Section)
    ========================================= */
 .panel-section {
-  background-color: #DFE9FF;
-  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+  background-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.15);
   border-radius: 20px;
-  padding: 1.5rem;
-  flex-shrink: 0;
+  padding: 0.2rem 0rem 0.3rem; /* 更加紧凑的内边距 */
+  display: flex;
+  flex-direction: column;
+}
+.panel-section > * + * {
+  margin-top: 2px; /* 极小间距，消除标题与内容间的空隙 */
 }
 
 .panel-title {
-  text-align: center;
-  font-weight: bold;
+  margin: 0;
+  padding: 0;
   font-size: 16px;
-  color: black;
+  font-weight: bold;
+  text-align: center;
+  line-height: 1.2;
+  color: #000;
+  margin-bottom: 0px;
 }
+
 
 .panel-body.row-layout {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 2rem; /* gap-8 */
+  gap: 1rem; /* 减小间距以适应窄屏 */
 }
 
 /* =========================================
@@ -718,18 +792,18 @@ defineExpose({ resetEditing });
   border-radius: 2px;
 }
 
-.legend-dot.good   { background-color: #E57373; }
+.legend-dot.good   { background-color: #7fbf4c; }
 .legend-dot.medium { background-color: #FFB74D; }
-.legend-dot.bad    { background-color: #FFF176; }
+.legend-dot.bad    { background-color: #fc8d59; }
 
 .legend-text {
   font-size: 12px;
 }
 
 .theoretical-tags-container {
-  width: 400px;
+  flex: 1.2;
   height: 280px;
-  background-color: #F5F5F5;
+  background-color: rgba(255, 255, 255, 0.4);
   border-radius: 12px;
   padding: 0.75rem;
   display: flex;
@@ -737,15 +811,16 @@ defineExpose({ resetEditing });
   align-content: flex-start;
   gap: 0.75rem;
   overflow-y: auto;
-  border: 1px dashed #A5A8AC;
+  border: 1px dashed rgba(0, 0, 0, 0.1);
 }
 
 .theory-tag {
-  background-color: #D9D9D9;
+  background-color: #717171;
   border: 1px solid #A5A8AC;
   padding: 0.5rem 1rem;
   border-radius: 9999px;
   font-size: 13px;
+  color: #fff;
   cursor: move;
   transition: background-color 0.2s;
   white-space: nowrap;
@@ -770,14 +845,15 @@ defineExpose({ resetEditing });
 
 .drop-zone {
   height: 85px;
-  border: 2px dashed rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border: none;                  /* 去掉边框 */
+  border-radius: 14px;           /* 更像 card，而不是框 */
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s;
+  transition: background-color 0.15s ease, transform 0.15s ease;
   overflow: hidden;
 }
+
 
 .zone-label {
   font-size: 11px;
@@ -796,35 +872,66 @@ defineExpose({ resetEditing });
 }
 
 /* 分类框色彩变体 */
-.good-zone   { background-color: rgba(229, 115, 115, 0.1); border-color: rgba(229, 115, 115, 0.3); }
-.medium-zone { background-color: rgba(255, 183, 77, 0.1);  border-color: rgba(255, 183, 77, 0.3); }
-.bad-zone    { background-color: rgba(255, 241, 118, 0.1);  border-color: rgba(255, 241, 118, 0.3); }
+/* 分类框色彩变体 - 重构配色 */
 
-.good-zone.is-dragging   { background-color: rgba(229, 115, 115, 0.2); border-color: #E57373; }
-.medium-zone.is-dragging { background-color: rgba(255, 183, 77, 0.2);  border-color: #FFB74D; }
-.bad-zone.is-dragging    { background-color: rgba(255, 241, 118, 0.2);  border-color: #FFF176; }
+/* 分类框色彩变体（最终版） */
 
-.good-text   { color: #D32F2F; }
-.medium-text { color: #E67E22; }
-.bad-text    { color: #F1C40F; }
+.good-zone {
+  background-color: #7fbf4c;
+}
+
+.medium-zone {
+  background-color: #ffffbf;
+}
+
+.bad-zone {
+  background-color: #fc8d59;
+}
+
+
+.good-zone.is-dragging {
+  background-color: #6da241; /* slightly darker */
+}
+
+.medium-zone.is-dragging {
+  background-color: #f2f2a6;
+}
+
+.bad-zone.is-dragging {
+  background-color: #e57e4f;
+}
+
+
+.good-text {
+  color: #000000;   /* 浅绿偏白 */
+}
+
+.medium-text {
+  color: #7a7a3a;   /* 暗金黄，避免白色不清晰 */
+}
+
+.bad-text {
+  color: #ffffff;   /* 浅橘白 */
+}
+
+
 
 .mini-item {
-  color: white;
   font-size: 11px;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  background-color: rgba(255, 255, 255, 0.35);
+  color: rgba(0, 0, 0, 0.75);
 }
 
-.good-bg   { background-color: #E57373; }
-.medium-bg { background-color: #FFB74D; }
-.bad-bg    { background-color: #FFF176; color: #7F8C8D; }
+
+.good-bg   { background-color: #c4f19f; color: #000000;}
+.medium-bg { background-color: #f2f2a6; color: #000000;}
+.bad-bg    { background-color: #ffbfa1; color: #000; }
 
 /* =========================================
    5. 认知倾向部分 (Cognitive Orientation)
@@ -832,35 +939,8 @@ defineExpose({ resetEditing });
 .cognitive-panel {
   height: 360px;
   position: relative;
-}
-
-.reset-selection-btn {
-  position: absolute;
-  right: 2rem;
-  top: 1.5rem;
-  width: 1.25rem;
-  height: 1.25rem;
-  background-image: url('/删除.png');
-  background-size: contain;
-  background-repeat: no-repeat;
-  cursor: pointer;
-  border: none;
-  background-color: transparent;
-  transition: all 0.2s;
-}
-
-.reset-selection-btn.is-active {
-  filter: drop-shadow(0 0 5px #E57373);
-  transform: scale(1.2);
-}
-
-.delete-mode-hint {
-  position: absolute;
-  right: 4rem;
-  top: 1.6rem;
-  font-size: 12px;
-  color: #E57373;
-  font-weight: bold;
+  margin-bottom: 0.2rem;
+  margin-top: 0;
 }
 
 .animate-pulse {
@@ -875,22 +955,23 @@ defineExpose({ resetEditing });
 .orientation-labels {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  column-gap: 3rem;
-  margin-top: 1.5rem;
-  padding: 0 1rem;
+  column-gap: 1rem;
+  margin-top: 5px; /* 紧凑排列 */
+  padding: 0 0.5rem;
 }
 
 .label-text {
   text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: bold;
+  color: #4A4A4A;
 }
 
 .options-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-  margin-top: 1.5rem;
+  gap: 1rem;
+  margin-top: 5px; /* 紧凑排列 */
   height: 200px;
   padding: 0 1rem;
 }
@@ -902,7 +983,7 @@ defineExpose({ resetEditing });
 }
 
 .selectable-box {
-  background-color: #D3D6DF;
+  background-color: rgba(255, 255, 255, 0.45);
   border-radius: 8px;
   min-height: 32px;
   font-size: 12px;
@@ -913,6 +994,7 @@ defineExpose({ resetEditing });
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .selectable-box:hover {
@@ -920,7 +1002,7 @@ defineExpose({ resetEditing });
 }
 
 .selectable-box.is-active {
-  background-color: #84A7D8;
+  background-color: #8095CA;
   color: white;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   font-weight: bold;
@@ -968,13 +1050,13 @@ defineExpose({ resetEditing });
   color: #E67E22;
 }
 
-/* 考古/组合类型样式 */
+/* 组合类型样式 */
 .archetypes-container {
-  margin-top: 1rem;
+  margin-top: 2rem;
   padding: 0 1rem;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .archetype-label {
@@ -1064,7 +1146,7 @@ defineExpose({ resetEditing });
 }
 
 .close-modal-btn {
-  background-color: #84A7D8;
+  background-color: #8095CA;
   color: white;
   border: none;
   padding: 0.6rem;
@@ -1127,8 +1209,8 @@ defineExpose({ resetEditing });
 
 .level-options {
   display: flex;
-  background-color: white;
-  border: 1px solid #B0C4DE;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 20px;
   padding: 2px;
   width: fit-content;
@@ -1144,7 +1226,7 @@ defineExpose({ resetEditing });
 }
 
 .level-btn.is-active {
-  background-color: #6355BF;
+  background-color: #8095CA;
   color: white;
   font-weight: bold;
 }
@@ -1167,11 +1249,15 @@ defineExpose({ resetEditing });
   flex-direction: column;
   align-items: center;
   cursor: pointer;
+  width: 50px;
+  height: 90px;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
 .role-illus {
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2rem;
+  height: 2rem;
   background-size: contain;
   background-repeat: no-repeat;
   margin-bottom: 0.4rem;
@@ -1200,7 +1286,7 @@ defineExpose({ resetEditing });
 }
 
 .mini-checkbox.is-checked {
-  background-color: #6355BF;
+  background-color: #8095CA;
   border-color: transparent;
 }
 
@@ -1236,8 +1322,8 @@ defineExpose({ resetEditing });
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: white;
-  border: 1px solid #B0C4DE;
+  background-color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
   font-size: 12px;
   color: #7F8C8D;
@@ -1246,11 +1332,11 @@ defineExpose({ resetEditing });
 }
 
 .p-level-card.is-active {
-  background-color: #6355BF;
-  border-color: #6355BF;
+  background-color: #8095CA;
+  border-color: #8095CA;
   color: white;
   font-weight: bold;
-  box-shadow: 0 2px 4px rgba(99, 85, 191, 0.3);
+  box-shadow: 0 2px 4px rgba(128, 149, 202, 0.3);
 }
 
 .p-level-card:hover:not(.is-active) {

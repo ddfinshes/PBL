@@ -435,7 +435,7 @@ watch(currentIndex, (newIdx) => {
   gap: 12px;
 }
 .badge-index {
-  background: #6366f1;
+  background: #8095CA;
   color: white;
   padding: 4px 10px;
   border-radius: 4px;
@@ -514,13 +514,13 @@ watch(currentIndex, (newIdx) => {
 
 /* 教师指引与问题列表 */
 .teacher-section {
-  border-left: 3px solid #10b981;
-  background: rgba(16, 185, 129, 0.05);
+  border-left: 3px solid #8095CA;
+  background: rgba(128, 149, 202, 0.05);
 }
 
 .label {
   font-size: 12px;
-  color: #34d399;
+  color: #8095CA;
   font-weight: 600;
   margin-bottom: 8px;
 }
@@ -546,8 +546,8 @@ watch(currentIndex, (newIdx) => {
 }
 
 .question-item:hover {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .q-main {
@@ -558,7 +558,7 @@ watch(currentIndex, (newIdx) => {
 }
 
 .q-marker {
-  color: #10b981;
+  color: #8095CA;
   font-weight: bold;
   flex-shrink: 0;
 }
@@ -589,7 +589,7 @@ watch(currentIndex, (newIdx) => {
   width: 100%;
   min-height: 80px;
   padding: 10px;
-  border: 1px solid rgba(16, 185, 129, 0.5);
+  border: 1px solid rgba(128, 149, 202, 0.5);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.3);
   color: #d1d5db;
@@ -601,8 +601,8 @@ watch(currentIndex, (newIdx) => {
 
 .edit-textarea:focus {
   outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+  border-color: #8095CA;
+  box-shadow: 0 0 8px rgba(128, 149, 202, 0.3);
 }
 
 .edit-actions {
@@ -621,25 +621,25 @@ watch(currentIndex, (newIdx) => {
 }
 
 .edit-btn.save {
-  background: #10b981;
+  background: #8095CA;
   color: white;
-  border-color: #10b981;
+  border-color: #8095CA;
 }
 
 .edit-btn.save:hover {
-  background: #059669;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  background: #6678a4;
+  box-shadow: 0 0 8px rgba(128, 149, 202, 0.4);
 }
 
 .edit-btn.cancel {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: rgba(252, 141, 89, 0.1);
+  border-color: rgba(252, 141, 89, 0.3);
+  color: #fc8d59;
 }
 
 .edit-btn.cancel:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(252, 141, 89, 0.2);
+  border-color: rgba(252, 141, 89, 0.5);
 }
 
 /* 编辑图标按钮 */
@@ -651,17 +651,17 @@ watch(currentIndex, (newIdx) => {
   width: 28px;
   height: 28px;
   border-radius: 4px;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  color: #818cf8;
+  background: rgba(128, 149, 202, 0.1);
+  border: 1px solid rgba(128, 149, 202, 0.3);
+  color: #8095CA;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .edit-icon-btn:hover {
-  background: #6366f1;
+  background: #8095CA;
   color: white;
-  border-color: #6366f1;
+  border-color: #8095CA;
 }
 
 /* 查看标识按钮 */
@@ -672,9 +672,9 @@ watch(currentIndex, (newIdx) => {
   gap: 4px;
   padding: 2px 5px;
   border-radius: 4px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #34d399;
+  background: rgba(127, 191, 76, 0.15);
+  border: 1px solid rgba(127, 191, 76, 0.3);
+  color: #ffffff;
   font-size: 11px;
   cursor: pointer;
   transition: all 0.2s;
@@ -682,24 +682,23 @@ watch(currentIndex, (newIdx) => {
 }
 
 .inspect-btn:hover {
-  background: #10b981;
+  background: #37581c;
   color: #fff;
-  border-color: #10b981;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  border-color: #37581c;
+  box-shadow: 0 0 10px rgba(127, 191, 76, 0.3);
 }
 
 .inspect-btn.active-inspect {
-  background: #10b981;
+  background: #37581c;
   color: white;
-  border-color: #10b981;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+  border-color: #37581c;
   font-weight: bold;
 }
 
 /* 图片堆栈 */
 .images-section {
-  border-left: 3px solid #8b5cf6;
-  background: rgba(139, 92, 246, 0.05);
+  border-left: 3px solid #8095CA;
+  background: rgba(128, 149, 202, 0.05);
 }
 .image-stack {
   display: flex;
@@ -751,8 +750,8 @@ watch(currentIndex, (newIdx) => {
   font-size: 10px;
 }
 .nav-btn:hover:not(:disabled) {
-  background: #6366f1;
-  border-color: #6366f1;
+  background: #8095CA;
+  border-color: #8095CA;
 }
 .nav-btn:disabled {
   opacity: 0.3;
@@ -771,7 +770,7 @@ watch(currentIndex, (newIdx) => {
   cursor: pointer;
 }
 .dot.active {
-  background: #6366f1;
+  background: #8095CA;
   transform: scale(1.2);
 }
 
