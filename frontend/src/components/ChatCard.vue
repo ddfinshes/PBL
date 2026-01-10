@@ -1,5 +1,5 @@
 <template>
-  <div class="flex items-start space-x-4 p-4 my-2 rounded-lg shadow-sm">
+  <div v-if="message.agent !== 'teacher_handler'" class="flex items-start space-x-4 p-4 my-2 rounded-lg shadow-sm">
     <!-- Avatar -->
     <div 
       :class="['flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold', avatarColor]"
@@ -65,6 +65,6 @@ const getAgentStyle = (agentKey) => {
 const agentName = computed(() => getAgentStyle(props.message.agent).name);
 const avatarInitial = computed(() => getAgentStyle(props.message.agent).initial);
 const avatarColor = computed(() => getAgentStyle(props.message.agent).color);
-
+console.log(props.message)
 </script>
 

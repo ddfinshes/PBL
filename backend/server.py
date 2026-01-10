@@ -529,22 +529,22 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         update_payload["is_teacher_interrupted"] = True
                         update_payload["next_speaker"] = "teacher_handler"
 
-                    # graph.app.update_state(config, update_payload)
-                    # 1) 立即写入 LangGraph 状态
-                    graph.app.update_state(config, update_payload)
-                    # 2) 更新本地 current_state（让后续 restart 用最新值）
-                    current_state["messages"].append(teacher_msg)
-                    current_state["is_teacher_interrupted"] = True
-                    current_state["next_speaker"] = "teacher_handler"
+                        # graph.app.update_state(config, update_payload)
+                        # 1) 立即写入 LangGraph 状态
+                        graph.app.update_state(config, update_payload)
+                        # 2) 更新本地 current_state（让后续 restart 用最新值）
+                        current_state["messages"].append(teacher_msg)
+                        current_state["is_teacher_interrupted"] = True
+                        current_state["next_speaker"] = "teacher_handler"
 
-                    # 3) 抢占：重启流任务
-                    if graph_task:
-                        graph_task.cancel()
-                    if output_task:
-                        output_task.cancel()
+                        # 3) 抢占：重启流任务
+                        if graph_task:
+                            graph_task.cancel()
+                        if output_task:
+                            output_task.cancel()
 
-                    graph_task  = asyncio.create_task(stream_langgraph(current_state))
-                    output_task = asyncio.create_task(output_processor())
+                        graph_task  = asyncio.create_task(stream_langgraph(current_state))
+                        output_task = asyncio.create_task(output_processor())
                     
                     
                     # 通知前端教师干预已接收
