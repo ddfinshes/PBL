@@ -81,6 +81,13 @@
                  class="meta-input" />
         </div>
       </div>
+
+      <!-- 删除按钮 -->
+      <button class="delete-agent-btn" @click.stop="$emit('delete')" title="删除此角色">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M18 6L6 18M6 6l12 12"></path>
+        </svg>
+      </button>
     </header>
 
     <!-- 主体内容容器 -->
@@ -597,6 +604,31 @@ defineExpose({ resetEditing });
   justify-content: space-between;
   padding: 0.75rem 2rem 0; /* 减小上方间距，使其更贴近顶端 */
   height: 70px; /* 压缩头部高度 */
+}
+
+.delete-agent-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  color: #6C6565;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 30;
+}
+
+.delete-agent-btn:hover {
+  background: #ff4d4f;
+  color: white;
+  transform: rotate(90deg);
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
 }
 
 .identity-info-left {
