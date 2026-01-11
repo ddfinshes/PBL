@@ -76,9 +76,9 @@ def format_persona_to_string(persona: Dict) -> str:
 
     # 认知维度映射 (Key 为前端传递的英文, Value 为 Prompt 中使用的中文描述)
     attentional_anchor_map = {
-        "patient_events": '案例中的关键事件',
+        "patient_events": '对病人的事件描述高度敏感',
         "symptoms": '临床症状表现',
-        "social_cues": '社交与环境线索'
+        "social_cues": '社交与环境线索',
     }
     reasoning_entry_map = {
         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
@@ -247,7 +247,7 @@ async def router_node(state: Dict) -> Dict:
     # **关键修复**: 检查讨论是否已被教师停止
     if not state.get("discussion_active", True):  # 默认为 True 以保持兼容
         return {"next_speaker": "END"}
-        
+
     print("DEBUG: [Router Node] started...")
     messages: List[BaseMessage] = state["messages"]
 
