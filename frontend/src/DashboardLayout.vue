@@ -54,17 +54,48 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, provide } from 'vue'
 import ViewA from './views/ViewA.vue'
 import ViewB from './views/ViewB.vue'
 import ViewC from './views/ViewC.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'
 import ViewF from './views/ViewF.vue'
-import { provide } from 'vue';
+import { usePBLSocket } from './composables/usePBLSocket.js'
 
 const sessionId = `pbl-session-${Date.now()}`   // 只生成一次
+
+// 初始化 Socket
+const { 
+  messages, 
+  currentTopic, 
+  isConnected, 
+  isPaused, 
+  startDiscussion, 
+  togglePause, 
+  sendTeacherIntervention,
+  activeMessageId,
+  rollbackTo
+} = usePBLSocket(sessionId, () => {
+    // 自动滚动的逻辑交给组件内部处理或通过事件
+});
+
+// 新增：全局选中的主题状态，用于跨视图过滤
+const selectedTopic = ref(null);
+
 provide('sessionId', sessionId)
+provide('pblSocket', {
+  messages,
+  currentTopic,
+  isConnected,
+  isPaused,
+  startDiscussion,
+  togglePause,
+  sendTeacherIntervention,
+  activeMessageId,
+  rollbackTo,
+  selectedTopic // 提供给子组件
+})
 
 // --- 修改点 3: 定义响应式变量存储数据 ---
 const caseResult = ref(null)   // 存放结构化教案数据

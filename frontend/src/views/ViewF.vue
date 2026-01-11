@@ -39,12 +39,24 @@
 
       <!-- Message Stream -->
       <div v-else>
-        <ChatCard
-          v-for="message in messages"
-          :key="message.id"
-          :message="message"
-          :agent-config="getAgentConfig(message.agent)"
-        />
+        <div 
+          v-for="message in filteredMessages" 
+          :key="message.id" 
+          class="relative mb-4 transition-all duration-300"
+          :class="{ 'scale-[1.01] z-10': message.isCurrentTopic }"
+        >
+          <!-- 呼吸边框特效 -->
+          <div 
+            v-if="message.isCurrentTopic" 
+            class="absolute -inset-1 border-2 border-[#60A5FA] rounded-xl pointer-events-none animate-chat-pulse z-[5]"
+          ></div>
+          
+          <ChatCard
+            :message="message"
+            :agent-config="getAgentConfig(message.agent)"
+            class="relative z-10"
+          />
+        </div>
       </div>
     </main>
 
@@ -60,9 +72,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted, inject, watch, nextTick, computed } from 'vue'
 import axios from 'axios'
-import { usePBLSocket } from '../composables/usePBLSocket.js'
 import ChatCard from '../components/ChatCard.vue'
 import TeacherInput from '../components/TeacherInput.vue'
 
@@ -73,12 +84,96 @@ const props = defineProps({
   }
 })
 
-// =====================
-// Refs and Session
-// =====================
 const chatContainer = ref(null)
 const personas = ref({})
-const sessionId = inject('sessionId', `pbl-session-${Date.now()}`)
+const sessionId = inject('sessionId')
+const { 
+  messages, 
+  isConnected, 
+  isPaused, 
+  startDiscussion, 
+  togglePause, 
+  sendTeacherIntervention,
+  selectedTopic,
+  activeMessageId
+} = inject('pblSocket')
+
+// 获取特定消息 ID 向上溯源的所有父节点 ID（即该分支的完整路径）
+const getChainForId = (leafId) => {
+  const chain = new Set();
+  if (!messages.value?.length) return chain;
+
+  let curr = leafId;
+  let safety = 0;
+  while (curr && safety < 1000) {
+    chain.add(curr);
+    const m = messages.value.find(msg => msg.id === curr);
+    const next = m ? m.parent_id : null;
+    if (next === curr) break;
+    curr = next;
+    safety++;
+  }
+  // 补充初始消息 (通常是病例介绍)
+  messages.value.forEach(m => { 
+    if (!m.parent_id) chain.add(m.id); 
+  });
+  return chain;
+};
+
+// 支持根据选中主题进行过滤，同时严格限制在活跃分支或选中的分支路径上
+const filteredMessages = computed(() => {
+  if (!messages.value?.length) return [];
+
+  // 1. 确定我们要观察哪条“路径”的终点
+  let leafId = activeMessageId.value;
+  if (selectedTopic.value) {
+     const topicMsgs = messages.value.filter(m => {
+        let tName = m.topic || (m.agent === 'teacher' ? '教师干预' : '待识别');
+        return `${m.branch_id || 'main'}_${tName}` === selectedTopic.value;
+     });
+     if (topicMsgs.length > 0) leafId = topicMsgs[topicMsgs.length - 1].id;
+  }
+
+  const viewingChain = getChainForId(leafId);
+
+  // 2. 映射消息并标记高亮
+  return messages.value
+    .filter(m => m && viewingChain.has(m.id))
+    .map(m => {
+       const agentName = m.agent;
+       // 教师和案例介绍不参与主题高亮判定
+       if (agentName === 'teacher' || agentName === 'case_introduction' || agentName === 'teacher_handler') {
+         return { ...m, isCurrentTopic: false };
+       }
+       
+       let tName = m.topic || '待识别';
+       const nodeKey = `${m.branch_id || 'main'}_${tName}`;
+       return {
+         ...m,
+         isCurrentTopic: !!(selectedTopic.value && nodeKey === selectedTopic.value)
+       };
+    });
+});
+
+// 当切换选中的主题时，重置滚动位置到顶部
+watch(selectedTopic, () => {
+  nextTick(() => {
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = 0;
+    }
+  });
+});
+
+// 自动滚动逻辑（新消息到达时）
+watch(() => filteredMessages.value.length, () => {
+  nextTick(() => {
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+    }
+  });
+});
+
+const discussionStage = ref('阶段一：初步讨论')
 
 // =====================
 // Fetch Personas (Incoming Feature)
@@ -109,24 +204,11 @@ const getAgentConfig = (agentKey) => {
   return {}
 }
 
-// =====================
-// Socket & Discussion
-// =====================
 const scrollToBottom = () => {
   if (chatContainer.value) {
     chatContainer.value.scrollTop = chatContainer.value.scrollHeight
   }
 }
-
-const {
-  messages,
-  isConnected,
-  isPaused,
-  discussionStage,
-  startDiscussion,
-  togglePause,
-  sendTeacherIntervention,
-} = usePBLSocket(sessionId, scrollToBottom)
 
 // =====================
 // Initial Case Text
@@ -168,5 +250,24 @@ onMounted(() => {
   background: #1a1f3a; 
   color: white;
   border-radius: 12px;
+}
+
+@keyframes chat-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.7);
+    border-color: rgba(96, 165, 250, 1);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(96, 165, 250, 0);
+    border-color: rgba(96, 165, 250, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
+    border-color: rgba(96, 165, 250, 1);
+  }
+}
+
+.animate-chat-pulse {
+  animation: chat-pulse 2s infinite;
 }
 </style>

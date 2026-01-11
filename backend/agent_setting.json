@@ -1,87 +1,124 @@
 {
-  "s": {
-    "name": "s",
+  "徐源松": {
+    "name": "徐源松",
     "age": "100",
-    "major": "",
+    "major": "cs",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
-      "high": [
-        "病理学",
-        "内科学"
-      ],
+      "high": [],
       "medium": [
-        "病理生理学",
-        "医学伦理学"
+        "生理学"
       ],
       "low": [
-        "诊断学",
+        "病理学",
         "药理学",
-        "生理学"
+        "诊断学",
+        "内科学",
+        "医学伦理学",
+        "病理生理学"
       ]
     },
-    "cognitive orientation": {
-      "attentional anchor": [
-        "Patient Events",
-        "Symptoms"
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "Patient Events"
       ],
-      "reasoning entry": [
-        "Familiarity Driven",
-        "Mechanism"
+      "reasoning_entry": [
+        "Familiarity Driven"
       ],
-      "causal structure": [
-        "Cues-Driven",
-        "Linear Causality"
+      "causal_structure": [
+        "Cues-Driven"
       ]
     },
-    "social interaction style": {
-      "verbal confidence": "medium",
-      "language register": "medium",
-      "interaction role": "leader"
+    "social_interaction_style": {
+      "verbal_confidence": "high",
+      "language_register": "high",
+      "interaction_role": "critical"
     },
-    "learning adaptivity": "medium"
+    "learning_adaptivity": "high"
   },
-  "a": {
-    "name": "a",
+  "窦小凤": {
+    "name": "窦小凤",
     "age": "100",
-    "major": "计算机",
+    "major": "cs",
     "avatar": "avatar2.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
     "knowledge_background": {
       "high": [],
-      "medium": [],
-      "low": [
+      "medium": [
+        "生理学",
         "病理生理学",
-        "药理学",
         "诊断学",
         "内科学",
         "医学伦理学",
-        "生理学",
+        "药理学",
         "病理学"
+      ],
+      "low": []
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "Symptoms"
+      ],
+      "reasoning_entry": [
+        "Mechanism"
+      ],
+      "causal_structure": [
+        "Linear Causality"
       ]
     },
-    "cognitive orientation": {
-      "attentional anchor": [
-        "Patient Events",
-        "Social Cues"
+    "social_interaction_style": {
+      "verbal_confidence": "medium",
+      "language_register": "medium",
+      "interaction_role": "leader"
+    },
+    "learning_adaptivity": "medium"
+  },
+  "你超哥": {
+    "name": "你超哥",
+    "age": "100",
+    "major": "针灸学",
+    "avatar": "avatar4.png",
+    "color": "#D2FBCE",
+    "cardColor": "#D2FBCE",
+    "knowledge_background": {
+      "high": [
+        "病理学",
+        "生理学",
+        "病理生理学",
+        "药理学",
+        "诊断学",
+        "医学伦理学",
+        "内科学"
       ],
-      "reasoning entry": [
+      "medium": [],
+      "low": []
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "Symptoms",
+        "Social Cues",
+        "Patient Events"
+      ],
+      "reasoning_entry": [
+        "Mechanism",
+        "Risk Perception",
         "Familiarity Driven",
-        "Risk Perception"
+        "External Factors"
       ],
-      "causal structure": [
-        "Cues-Driven",
-        "Undefined",
-        "Multi-Concurrent"
+      "causal_structure": [
+        "Linear Causality",
+        "Multi-Concurrent",
+        "Cues-Driven"
       ]
     },
-    "social interaction style": {
-      "verbal confidence": "high",
-      "language register": "high",
-      "interaction role": "critical"
+    "social_interaction_style": {
+      "verbal_confidence": "medium",
+      "language_register": "medium",
+      "interaction_role": "leader"
     },
-    "learning adaptivity": "low"
+    "learning_adaptivity": "high"
   }
 }

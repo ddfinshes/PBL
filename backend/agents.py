@@ -33,6 +33,21 @@ STUDENT_LLM = _build_llm(temperature=0.8)
 HOST_LLM = _build_llm(temperature=0.3)
 SUM_LLM = _build_llm(temperature=0.2)
 
+
+async def simplify_message(content: str) -> str:
+    """将一条长消息精简为一句话的核心观点（用于 Storyline 视图）。"""
+    prompt = (
+        f"你是一名医学讨论精简专家。请将以下讨论内容提取为一个极简的医学核心动作或结论（不超过 20 字）。\n"
+        f"要求：保留医学关键词，去除语气词和寒暄，直接输出结论。\n"
+        f"待精简内容：{content}"
+    )
+    try:
+        # 使用 SUM_LLM 进行快速精简
+        result = await SUM_LLM.ainvoke(prompt)
+        return result.content.strip().strip("'").strip("\"")
+    except Exception as e:
+        print(f"DEBUG: simplify_message error: {e}")
+        return content[:30] + "..."
 # -------------------------------------------------------
 
 # --------- Agent Persona (动态) ---------
@@ -240,6 +255,46 @@ async def summarizer_node(state: Dict) -> Dict:
     ]).invoke({"messages": messages})
     result = await SUM_LLM.ainvoke(prompt)
     return {"summary": previous_summary + "\n" + result.content, "messages": []}
+
+# --------- 主题管理节点 ---------
+
+
+async def topic_manager_node(state: Dict) -> Dict:
+    """实时识别当前讨论的主题。"""
+    messages: List[BaseMessage] = state["messages"]
+    if not messages:
+        return {"current_topic": "待识别"}
+
+    current_topic = state.get("current_topic", "待识别")
+
+    # 获取最近的对话内容进行判断
+    # 取最近 3 条消息作为判定上下文
+    recent_context = messages[-3:]
+
+    topic_prompt = (
+        f"你是一名医学 PBL 讨论的标注专家。请识别讨论中当前的**核心医学知识点**。\n"
+        f"当前记录的主题是：'{current_topic}'。\n"
+        f"判断规则：\n"
+        f"1. **必须是具体医学知识点**：如“维C代谢与肾损害”、“糖尿病足合并感染”、“心肌梗死心电图特征”等。\n"
+        f"2. **严禁使用阶段性词汇**：绝对不要返回“案例导入”、“开始讨论”、“继续分析”、“总结阶段”等描述讨论进程的词。\n"
+        f"3. **如果当前主题是'待识别'或非知识点**：请立即根据最近对话概括出一个具体的医学知识点作为新主题。\n"
+        f"4. **字数限制**：4-8个字，简洁专业。\n"
+        f"请直接返回该医学知识点名称，不要有任何多余文字。"
+    )
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", topic_prompt),
+        MessagesPlaceholder(variable_name="messages"),
+    ]).invoke({"messages": recent_context})
+
+    try:
+        result = await SUM_LLM.ainvoke(prompt)
+        new_topic = result.content.strip().strip("'").strip("\"")
+        print(f"DEBUG: [Topic Manager] Detected topic: {new_topic}")
+        return {"current_topic": new_topic}
+    except Exception as e:
+        print(f"ERROR: [Topic Manager] failed: {e}")
+        return {"current_topic": current_topic}
 
 # --------- 动态路由器节点 ---------
 

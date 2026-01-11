@@ -8,6 +8,7 @@
 from os import name
 import uvicorn
 import json
+import uuid
 from typing import Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -26,7 +27,7 @@ from langchain_core.messages import HumanMessage
 
 # 动态 Agent 注册与图构建相关
 from . import graph  # 导入 graph 模块以访问和修改 app
-from .agents import register_student_agent, student_nodes, student_personas
+from .agents import register_student_agent, student_nodes, student_personas, simplify_message
 from .graph_builder import build_graph, GraphState
 from .graph import app, GraphState
 # 导入解析函数
@@ -495,6 +496,9 @@ async def update_personas_v1(request: Dict[str, Dict]):
 
 # 存储每个 session 的后台任务，用于处理 LangGraph 流输出
 session_tasks = {}
+# 存储每个 session 的消息历史（用于分支管理）
+# 结构: { session_id: { "messages": [...], "active_id": "none" } }
+session_histories = {}
 
 
 @app_fastapi.get("/get_personas")
@@ -520,6 +524,17 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
     config = {"configurable": {"thread_id": session_id}}
 
+    # 初始化该 session 的历史记录
+    if session_id not in session_histories:
+        session_histories[session_id] = {
+            "messages_map": {},  # id -> message_data
+            "active_id": None,
+            "current_branch": "main",
+            "branches": {"main": {"parent": None, "messages": []}}
+        }
+
+    sh = session_histories[session_id]
+
     # 状态管理
     current_state = None
     graph_task = None
@@ -527,14 +542,18 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
     async def stream_langgraph(state):
         """后台流式输出任务"""
+        # 动态生成 config 以支持分支和持久化
+        current_config = {"configurable": {
+            "thread_id": f"{session_id}_{sh.get('current_branch', 'main')}"}}
         try:
-            async for event in graph.app.astream(state, config=config):
+            async for event in graph.app.astream(state, config=current_config):
                 # 将输出放入队列，避免阻塞 astream
                 await output_queue.put(event)
         except asyncio.CancelledError:
             # 正常任务取消
             pass
         except Exception as e:
+            logger.error(f"Error in stream_langgraph: {e}")
             # 发送错误信息到前端
             await websocket.send_json({"error": str(e)})
 
@@ -544,16 +563,59 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
             try:
                 event = await output_queue.get()
                 for node, out in event.items():
+                    # 处理消息输出
                     if "messages" in out:
                         for m in out["messages"]:
-                            await websocket.send_json({
-                                "node": node,
+                            # 识别发言者
+                            sender = getattr(m, "name", node)
+
+                            # 分支管理：生成 ID
+                            msg_id = str(uuid.uuid4())[:8]
+                            parent_id = sh["active_id"]
+                            branch_id = sh["current_branch"]
+
+                            # 存储到历史
+                            msg_data = {
+                                "id": msg_id,
+                                "parent_id": parent_id,
+                                "branch_id": branch_id,
+                                "agent": sender,
                                 "content": m.content,
+                                "langchain_msg": m
+                            }
+                            sh["messages_map"][msg_id] = msg_data
+                            sh["active_id"] = msg_id
+
+                            simplified = m.content
+                            # 只有学生 Agent 的长发言才需要精简显示在 Storyline 中
+                            if sender and sender not in ["case_introduction", "teacher", "host", "system"]:
+                                simplified = await simplify_message(m.content)
+
+                            await websocket.send_json({
+                                "id": msg_id,
+                                "parent_id": parent_id,
+                                "branch_id": branch_id,
+                                "node": node,
+                                "agent": sender,
+                                "content": m.content,
+                                "summary": simplified,
                                 "type": "agent_output"
                             })
+
+                    # 处理主题更新
+                    if "current_topic" in out:
+                        # 主题更新通常发生在消息之后，我们也带上当前的 active_id
+                        await websocket.send_json({
+                            "id": sh["active_id"],  # 关联到最后一条消息
+                            "node": node,
+                            "topic": out["current_topic"],
+                            "type": "topic_update"
+                        })
                 output_queue.task_done()
             except asyncio.CancelledError:
                 break
+            except Exception as e:
+                logger.error(f"Error in output_processor: {e}")
 
     output_task = None
 
@@ -566,9 +628,13 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
             if action == "start_discussion":
                 # 初始化状态
+                sh["active_id"] = None
+                sh["current_branch"] = "main"
+                sh["messages_map"] = {}
+
                 initial_case = msg.get("initial_case", "")
 
-                # 同步更新全局 pbl_info，确保 Agent 讨论基于传入的案例
+                # 同步更新全局 pbl_info
                 from .pbl_info import update_pbl_info
                 update_pbl_info(initial_case, [])
 
@@ -577,7 +643,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     "summary": "",
                     "next_speaker": "router",
                     "is_teacher_interrupted": False,
-                    "discussion_active": True,  # 显式初始化讨论状态
+                    "discussion_active": True,
+                    "current_topic": "开始讨论"
                 }
 
                 # 取消旧任务
@@ -591,64 +658,112 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     stream_langgraph(current_state))
                 output_task = asyncio.create_task(output_processor())
 
+            elif action == "rollback_to":
+                target_id = msg.get("target_id")
+                if target_id in sh["messages_map"]:
+                    logger.info(f"Rolling back to message: {target_id}")
+                    sh["active_id"] = target_id
+                    # 同步更新当前分支，确保后续讨论在正确的路径上继续
+                    sh["current_branch"] = sh["messages_map"][target_id].get(
+                        "branch_id", "main")
+                    logger.info(
+                        f"Context switched to branch: {sh['current_branch']}")
+
+                    # 停止当前讨论
+                    if graph_task:
+                        graph_task.cancel()
+                    if output_task:
+                        output_task.cancel()
+
+                    await websocket.send_json({"type": "rollback_ack", "target_id": target_id})
+
             elif action == "teacher_intervention":
                 teacher_content = msg.get("content", "")
-                print(f"teacher_content: {teacher_content}")
+                # 优先使用前端传入的 parent_id，实现点击节点后分支
+                target_parent_id = msg.get("parent_id")
+                if target_parent_id and target_parent_id in sh["messages_map"]:
+                    sh["active_id"] = target_parent_id
+                    # 此处非常关键：切换到点击节点所在的 branch，确保 has_children 判定准确
+                    sh["current_branch"] = sh["messages_map"][target_parent_id].get(
+                        "branch_id", "main")
+                    logger.info(
+                        f"Teacher intervention branching from focus: {target_parent_id} on branch: {sh['current_branch']}")
+
+                # 分支判断：如果当前 active_id 已经有子节点，说明是在开辟新分支
+                has_children = any(m["parent_id"] == sh["active_id"]
+                                   for m in sh["messages_map"].values())
+                if has_children:
+                    new_branch_name = f"branch_{str(uuid.uuid4())[:4]}"
+                    sh["current_branch"] = new_branch_name
+                    logger.info(f"Switching to new branch: {new_branch_name}")
+
+                # 构建回退后的消息列表
+                chain = []
+                curr_ptr = sh["active_id"]
+                while curr_ptr:
+                    m_data = sh["messages_map"][curr_ptr]
+                    chain.append(m_data["langchain_msg"])
+                    curr_ptr = m_data["parent_id"]
+                chain.reverse()
+
                 teacher_msg = HumanMessage(
                     content=teacher_content, name="teacher")
-                print(f"current_state: {current_state}")
-                # 更新状态以触发干预
-                if current_state:
-                    # 检查教师指令并相应地更新状态
-                    update_payload = {"messages": [teacher_msg]}
-                    # 教师希望终止讨论的关键字列表，可以根据需要扩展
-                    stop_keywords = ["停止讨论", "结束讨论", "stop", "end"]
-                    if any(kw in teacher_content for kw in stop_keywords):
-                        logger.info("教师指令：停止讨论。更新状态以终止图。")
-                        update_payload["discussion_active"] = False
-                        # 直接终止图，避免 KeyError
-                        update_payload["next_speaker"] = "END"
-                        # 先更新状态，然后取消后台任务，防止学生继续发言
-                        graph.app.update_state(config, update_payload)
-                        if graph_task:
-                            graph_task.cancel()
-                        if output_task:
-                            output_task.cancel()
-                        # 更新状态后无需再次调用 update_state
-                        continue  # 跳过后续统一的 update_state 调用
-                    else:
-                        logger.info("教师干预：常规消息。")
-                        update_payload["is_teacher_interrupted"] = True
-                        update_payload["next_speaker"] = "teacher_handler"
 
-                        # graph.app.update_state(config, update_payload)
-                        # 1) 立即写入 LangGraph 状态
-                        graph.app.update_state(config, update_payload)
+                # zyc新增：记录教师干预消息到历史图谱中
+                teacher_msg_id = f"teacher_{str(uuid.uuid4())[:6]}"
+                teacher_msg_data = {
+                    "id": teacher_msg_id,
+                    "parent_id": sh["active_id"],
+                    "branch_id": sh["current_branch"],
+                    "agent": "teacher",
+                    "content": teacher_content,
+                    "summary": teacher_content[:30],
+                    "langchain_msg": teacher_msg,
+                    "topic": "教师干预"
+                }
+                sh["messages_map"][teacher_msg_id] = teacher_msg_data
+                sh['active_id'] = teacher_msg_id
 
-                        # 2) 抢占：重启流任务
-                        if graph_task:
-                            graph_task.cancel()
-                        if output_task:
-                            output_task.cancel()
+                # 发送教师消息回显到前端，增加 type 和 node 以便前端直接识别为图节点
+                await websocket.send_json({
+                    "type": "agent_output",
+                    "id": teacher_msg_id,
+                    "parent_id": teacher_msg_data["parent_id"],
+                    "branch_id": teacher_msg_data["branch_id"],
+                    "agent": "teacher",
+                    "node": "teacher",
+                    "content": teacher_content,
+                    "summary": teacher_content[:30],
+                    "topic": "教师干预"
+                })
 
-                        # 清空输出队列
-                        while not output_queue.empty():
-                            try:
-                                output_queue.get_nowait()
-                                output_queue.task_done()
-                            except asyncio.QueueEmpty:
-                                break
+                # 准备更新 Payload
+                update_payload = {
+                    "messages": chain + [teacher_msg],  # 传入完整链条以重置状态
+                    "is_teacher_interrupted": False,    # 设为 False 以跳过主持人干预回复，直接让学生讨论
+                    "next_speaker": "router",           # 直接去路由
+                    "discussion_active": True,
+                    "current_topic": None               # 强制重置主题识别，由 topic_manager 重新生成
+                }
 
-                        # 恢复时传入 None，astream 会自动从刚才 update_state 后的 checkpoint 恢复
-                        graph_task = asyncio.create_task(
-                            stream_langgraph(None))
-                        output_task = asyncio.create_task(output_processor())
+                # 取消旧任务并重新启动讨论流
+                # 这里的 stream_langgraph 现在由于我们之前的修改，会使用包含 branch_id 的新 thread_id
+                if graph_task:
+                    graph_task.cancel()
+                if output_task:
+                    output_task.cancel()
 
-                    # 通知前端教师干预已接收
-                    await websocket.send_json({
-                        "type": "teacher_intervention_ack",
-                        "content": teacher_content
-                    })
+                logger.info(
+                    f"Restarting graph with new branch: {sh['current_branch']}")
+                graph_task = asyncio.create_task(
+                    stream_langgraph(update_payload))
+                output_task = asyncio.create_task(output_processor())
+
+                await websocket.send_json({
+                    "type": "teacher_intervention_ack",
+                    "content": teacher_content,
+                    "topic": None
+                })
 
             elif action == "pause_discussion":
                 logger.info("教师指令：暂停讨论。")

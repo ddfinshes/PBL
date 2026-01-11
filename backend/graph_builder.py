@@ -10,6 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from . import agents
 
+
 class GraphState(TypedDict):
     """
     表示图的状态。
@@ -20,6 +21,7 @@ class GraphState(TypedDict):
         summary: 到目前为止的讨论摘要。
         next_speaker: 预定下一个发言的 Agent。
         is_teacher_interrupted: 标志位，指示老师是否已介入。
+        current_topic: 当前讨论的主题。
     """
     messages: Annotated[List[BaseMessage], operator.add]
     discussion_stage: str
@@ -27,6 +29,8 @@ class GraphState(TypedDict):
     next_speaker: str
     is_teacher_interrupted: bool
     discussion_active: bool
+    current_topic: str
+
 
 def build_graph(agent_ids: List[str]):
     """根据提供的 agent_ids 列表，动态构建并编译一个 LangGraph。"""
@@ -35,14 +39,20 @@ def build_graph(agent_ids: List[str]):
     # 1. 动态添加所有学生节点
     for agent_id in agent_ids:
         wf.add_node(agent_id, agents.student_nodes[agent_id])
-        wf.add_edge(agent_id, "router")
+        wf.add_edge(agent_id, "topic_manager")
 
     # 2. 添加固定的辅助节点
+    wf.add_node("topic_manager", agents.topic_manager_node)
     wf.add_node("teacher_handler", agents.teacher_handler_node)
     wf.add_node("summarizer", agents.summarizer_node)
     wf.add_node("router", agents.router_node)
 
-    # 3. 设置入口点
+    # 3. 设置边关系
+    wf.add_edge("topic_manager", "router")
+    wf.add_edge("teacher_handler", "router")
+    wf.add_edge("summarizer", "router")
+
+    # 4. 设置入口点
     wf.set_entry_point("router")
 
     # 4. 定义条件路由
@@ -62,11 +72,7 @@ def build_graph(agent_ids: List[str]):
         {**dynamic_mapping, **static_mapping},
     )
 
-    # 5. 添加固定节点的边
-    wf.add_edge("teacher_handler", "router")
-    wf.add_edge("summarizer", "router")
-
-    # 6. 编译图并附加检查点
+    # 5. 编译图并附加检查点
     checkpointer = MemorySaver()
     app = wf.compile(checkpointer=checkpointer)
     return app
