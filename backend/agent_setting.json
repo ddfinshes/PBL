@@ -1,68 +1,37 @@
 {
-  "A": {
-    "name": "A",
-    "age": "",
+  "s": {
+    "name": "s",
+    "age": "100",
     "major": "",
-    "knowledge background": {
+    "avatar": "avatar1.png",
+    "color": "#CEDCFB",
+    "cardColor": "#CEDCFB",
+    "knowledge_background": {
       "high": [
         "病理学",
-        "内科学",
-        "诊断学"
+        "内科学"
       ],
       "medium": [
-        "医学伦理学",
-        "生理学"
+        "病理生理学",
+        "医学伦理学"
       ],
       "low": [
-        "病理生理学",
-        "药理学"
+        "诊断学",
+        "药理学",
+        "生理学"
       ]
     },
     "cognitive orientation": {
       "attentional anchor": [
-        "Patient Events"
-      ],
-      "reasoning entry": [
-        "Familiarity Driven"
-      ],
-      "causal structure": [
-        "Cues-Driven"
-      ]
-    },
-    "social interaction style": {
-      "verbal confidence": "medium",
-      "language register": "medium",
-      "interaction role": "leader"
-    },
-    "learning adaptivity": "medium"
-  },
-  "B": {
-    "name": "B",
-    "age": "",
-    "major": "",
-    "knowledge background": {
-      "high": [
-        "病理学",
-        "诊断学"
-      ],
-      "medium": [
-        "医学伦理学",
-        "病理生理学",
-        "生理学"
-      ],
-      "low": [
-        "内科学",
-        "药理学"
-      ]
-    },
-    "cognitive orientation": {
-      "attentional anchor": [
+        "Patient Events",
         "Symptoms"
       ],
       "reasoning entry": [
+        "Familiarity Driven",
         "Mechanism"
       ],
       "causal structure": [
+        "Cues-Driven",
         "Linear Causality"
       ]
     },
@@ -71,14 +40,24 @@
       "language register": "medium",
       "interaction role": "leader"
     },
-    "learning adaptivity": "high"
+    "learning adaptivity": "medium"
   },
-  "C": {
-    "name": "C",
-    "age": "",
-    "major": "",
-    "knowledge background": {
-      "high": [
+  "a": {
+    "name": "a",
+    "age": "100",
+    "major": "计算机",
+    "avatar": "avatar2.png",
+    "color": "#FBCEDC",
+    "cardColor": "#FBCEDC",
+    "knowledge_background": {
+      "high": [],
+      "medium": [],
+      "low": [
+        "病理生理学",
+        "药理学",
+        "诊断学",
+        "内科学",
+        "医学伦理学",
         "生理学",
         "诊断学",
         "医学伦理学"
@@ -87,9 +66,6 @@
         "药理学",
         "病理生理学",
         "病理学"
-      ],
-      "low": [
-        "内科学"
       ]
     },
     "cognitive orientation": {
@@ -97,17 +73,20 @@
         "Social Cues"
       ],
       "reasoning entry": [
+        "Familiarity Driven",
         "Risk Perception"
       ],
       "causal structure": [
+        "Cues-Driven",
+        "Undefined",
         "Multi-Concurrent"
       ]
     },
     "social interaction style": {
       "verbal confidence": "high",
       "language register": "high",
-      "interaction role": "leader"
+      "interaction role": "critical"
     },
-    "learning adaptivity": "medium"
+    "learning adaptivity": "low"
   }
 }

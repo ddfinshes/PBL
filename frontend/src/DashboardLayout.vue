@@ -26,28 +26,29 @@
 
     <!-- 中栏 -->
     <div class="center-column">
-      <div style="flex: 4; min-height: 0; overflow: hidden;">
+      <div style="flex: 2.5; min-height: 0; overflow: hidden;">
         <ViewC 
           style="height: 100%;"
           :case-data="caseResult" 
           :raw-pdf-data="imagesResult" 
+          @inspect-question="handleInspectQuestion"
         />
       </div>
 
-      <!-- ViewD 区域 -->
-      <div style="flex: 2; min-height: 0;">
-        <ViewD style="height: 100%;" />
-      </div>
-
-      <!-- ViewE 区域 (聊天/主交互区) -->
-      <div style="flex: 4; min-height: 0;">
-        <ViewE style="height: 100%;" />
+      <!-- ViewD 和 ViewE 并排区域 -->
+      <div style="flex: 2; min-height: 0; display: flex; gap: 10px;">
+        <div style="flex: 1; min-width: 0;">
+          <ViewD style="height: 100%;" />
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <ViewE style="height: 100%;" />
+        </div>
       </div>
     </div>
 
     <!-- 右栏 -->
     <div class="right-column">
-      <ViewF />
+      <ViewF :active-context="activeContext" />
     </div>
   </div>
 </template>
@@ -60,13 +61,15 @@ import ViewC from './views/ViewC.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'
 import ViewF from './views/ViewF.vue'
-import { provide} from 'vue';
+import { provide } from 'vue';
+
 const sessionId = `pbl-session-${Date.now()}`   // 只生成一次
 provide('sessionId', sessionId)
 
 // --- 修改点 3: 定义响应式变量存储数据 ---
 const caseResult = ref(null)   // 存放结构化教案数据
 const imagesResult = ref(null) // 存放图片数据
+const activeContext = ref(null) // 存放当前激活的场景内容（用于 ViewF 仿真）
 
 // --- 修改点 4: 处理数据回调 ---
 const handleDataReady = (payload) => {
@@ -79,6 +82,19 @@ const handleDataReady = (payload) => {
     // 如果 ViewA 发出的是移除文件的信号
     caseResult.value = null
     imagesResult.value = null
+    activeContext.value = null
+  }
+}
+
+const handleInspectQuestion = (payload) => {
+  console.log('父组件监听到问题查看:', payload)
+  // payload 结构: { sceneIndex, questionIndex, data: questionObj }
+  if (caseResult.value && caseResult.value.scenes[payload.sceneIndex]) {
+    const scene = caseResult.value.scenes[payload.sceneIndex]
+    activeContext.value = {
+      story: scene.story_content,
+      question: payload.data.question
+    }
   }
 }
 </script>
@@ -87,21 +103,21 @@ const handleDataReady = (payload) => {
 .dashboard-layout {
   display: flex;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   gap: 10px;
   padding: 10px;
-  background: #0a0e27;
+  background: #0C0E27;
 }
 
 .left-column {
-  width: 30%;
+  width: 32%; /* 稍微加宽一点左边栏以容纳卡片 */
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .center-column {
-  width: 40%;
+  width: 38%; /* 相应微调中栏 */
   display: flex;
   flex-direction: column;
   gap: 10px;

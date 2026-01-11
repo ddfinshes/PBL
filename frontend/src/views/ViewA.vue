@@ -66,6 +66,7 @@
     <div 
       v-else
       class="upload-area"
+      @click="openFileDialog"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="handleDrop"
@@ -85,8 +86,7 @@
           <polyline points="17 8 12 3 7 8"></polyline>
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
-        <p class="drag-text">拖拽PDF文件到此处</p>
-        <button class="browse-btn" @click="openFileDialog">浏览文件</button>
+        <p class="drag-text">点击或拖拽PDF文件到此处</p>
       </div>
     </div>
 
@@ -117,7 +117,7 @@ const selectedFile = ref(null)
 const uploadedFile = ref(null)
 const isDragging = ref(false)
 const isUploading = ref(false)
-const isParsing = ref(false) // 新增：是否正在解析
+const isParsing = ref(false)
 const uploadProgress = ref(0)
 const errorMessage = ref('')
 
@@ -154,7 +154,7 @@ const validateAndSelectFile = (file) => {
     return
   }
   
-  const maxSize = 50 * 1024 * 1024 // 50MB
+  const maxSize = 100 * 1024 * 1024 // 50MB
   if (file.size > maxSize) {
     errorMessage.value = '文件大小不能超过 50MB'
     return
@@ -298,7 +298,7 @@ const formatFileSize = (bytes) => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: linear-gradient(135deg, #1a1f3a 0%, #252c47 100%);
+  background: #1a1f3a;
   border-radius: 12px;
   padding: 20px;
   gap: 15px;
@@ -338,13 +338,13 @@ const formatFileSize = (bytes) => {
 }
 
 .upload-area:hover {
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.05);
+  border-color: #8095CA;
+  background: rgba(128, 149, 202, 0.05);
 }
 
 .upload-area.is-dragging {
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
+  border-color: #8095CA;
+  background: rgba(128, 149, 202, 0.1);
   transform: scale(1.02);
 }
 
@@ -360,7 +360,7 @@ const formatFileSize = (bytes) => {
 .upload-icon {
   width: 40px;
   height: 40px;
-  color: #6366f1;
+  color: #8095CA;
   margin-bottom: 8px;
 }
 
@@ -377,23 +377,6 @@ const formatFileSize = (bytes) => {
   color: #9ca3af;
 }
 
-.browse-btn {
-  padding: 8px 16px;
-  background: #6366f1;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.browse-btn:hover {
-  background: #4f46e5;
-  transform: translateY(-1px);
-}
-
 /* File Info & Parsing States */
 .file-info, .uploaded-file {
   flex-shrink: 0;
@@ -408,7 +391,7 @@ const formatFileSize = (bytes) => {
 
 .uploaded-file {
   background: rgba(34, 197, 94, 0.1);
-  border-color: #22c55e;
+  border-color: #188941;
 }
 
 .file-item {
@@ -429,7 +412,7 @@ const formatFileSize = (bytes) => {
 .pdf-icon {
   width: 20px;
   height: 20px;
-  color: #ef4444;
+  color: #fc8d59;
   flex-shrink: 0;
 }
 
@@ -464,7 +447,7 @@ const formatFileSize = (bytes) => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  background: #8095CA;
   transition: width 0.3s ease;
   border-radius: 2px;
 }
@@ -489,9 +472,9 @@ const formatFileSize = (bytes) => {
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(99, 102, 241, 0.3);
+  border: 2px solid rgba(128, 149, 202, 0.3);
   border-radius: 50%;
-  border-top-color: #6366f1;
+  border-top-color: #8095CA;
   animation: spin 1s linear infinite;
   flex-shrink: 0;
 }
@@ -521,7 +504,7 @@ const formatFileSize = (bytes) => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #22c55e;
+  color: #7fbf4c;
   font-weight: 500;
 }
 
@@ -549,26 +532,26 @@ const formatFileSize = (bytes) => {
 }
 
 .remove-btn {
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
+  background: rgba(252, 141, 89, 0.1);
+  color: #fc8d59;
 }
 .remove-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(252, 141, 89, 0.2);
 }
 
 .reupload-btn {
-  background: rgba(99, 102, 241, 0.1);
-  color: #818cf8;
+  background: rgba(128, 149, 202, 0.1);
+  color: #8095CA;
 }
 .reupload-btn:hover {
-  background: rgba(99, 102, 241, 0.2);
+  background: rgba(128, 149, 202, 0.2);
 }
 
 /* Error Message */
 .error-message {
   flex-shrink: 0;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #ef4444;
+  background: rgba(252, 141, 89, 0.1);
+  border: 1px solid #fc8d59;
   border-radius: 8px;
   padding: 12px;
   display: flex;
@@ -581,7 +564,7 @@ const formatFileSize = (bytes) => {
 .error-icon {
   width: 24px;
   height: 24px;
-  color: #ef4444;
+  color: #fc8d59;
   flex-shrink: 0;
 }
 
@@ -589,13 +572,13 @@ const formatFileSize = (bytes) => {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #ef4444;
+  color: #fc8d59;
 }
 
 .error-subtitle {
   margin: 3px 0 0 0;
   font-size: 12px;
-  color: #fca5a5;
+  color: #fc8d59;
 }
 
 .close-error {

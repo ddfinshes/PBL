@@ -1,40 +1,55 @@
 <template>
-  <div class="view-b-container p-4 bg-transparent h-screen overflow-y-auto" @mousedown="handleGlobalMouseDown">
-    <div class="view-b-content-wrapper w-full">
-      <div class="agent-list flex flex-col gap-12 items-center p-4 w-full">
-        
-        <!-- Individual Agent Cards -->
-        <AgentCard 
-          v-for="(agent, index) in agents" 
-          :key="agent.id"
-          ref="cardRefs"
-          v-model="agents[index]"
-          :cognitive-options="cognitiveOptions"
-          :interaction-roles="interactionRoles"
-          @delete="deleteAgent(index)"
-        />
+  <div class="view-b-container p-0 h-full flex flex-col" @mousedown="handleGlobalMouseDown">
+    <!-- Scrollable Area for Cards -->
+    <div class="view-b-scroll-area flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <div class="view-b-content-wrapper w-full relative">
+        <!-- 占位元素，用于撑开容器高度，使绝对定位的卡片堆叠有滚动空间 -->
+        <div :style="{ height: stackHeight + 'px' }" class="stack-spacer transition-all duration-500"></div>
 
-        <!-- Add Agent Action Area -->
-        <div class="add-agent-section flex flex-row items-center justify-center cursor-pointer hover:bg-[#CEDCFB]/60 transition-all flex-shrink-0 gap-4"
-          @click="addAgent"
-        >
-          <div class="plus-icon text-[48px] text-[#84A7D8] font-light">+</div>
-          <div class="add-text text-[18px] text-[#2d3748] font-bold">Add New Agent Template</div>
-        </div>
+        <!-- Stacking Agent Cards -->
+        <transition-group name="stack">
+          <div 
+            v-for="(agent, index) in agents" 
+            :key="agent.id"
+            class="agent-card-wrapper"
+            :style="getCardStyle(index)"
+            @click="activeIndex = index"
+          >
+            <AgentCard 
+              ref="cardRefs"
+              v-model="agents[index]"
+              :cognitive-options="cognitiveOptions"
+              :interaction-roles="interactionRoles"
+              :card-color="agents[index].cardColor"
+              @delete="deleteAgent(index)"
+            />
+          </div>
+        </transition-group>
+      </div>
+    </div>
 
-        <!-- Global Save Action -->
-        <div class="global-actions mt-4 text-center pb-20">
-          <el-button type="primary" size="large" @click="syncPersona" class="save-button px-20 py-6 rounded-full text-lg shadow-xl">
-            保存所有 Agent 配置
-          </el-button>
-        </div>
+    <!-- Fixed Actions Area at the Bottom -->
+    <div class="actions-wrapper w-full flex flex-row items-center justify-center gap-12 py-6 px-10 bg-[#1a1f3a]/80 backdrop-blur-md border-t border-[#8095CA]/20 shadow-[0_-10px_30px_rgba(0,0,0,0.3)] z-[300]">
+      <!-- Add Agent Action Area -->
+      <div class="add-agent-section-mini flex flex-row items-center justify-center cursor-pointer hover:bg-[#CEDCFB]/20 transition-all gap-4 px-8 py-3 rounded-full border-2 border-dashed border-[#8095CA]"
+        @click="addAgent"
+      >
+        <div class="plus-icon text-[32px] text-[#8095CA] font-light leading-none">+</div>
+        <div class="add-text text-[16px] text-gray-200 font-bold">Add Agent</div>
+      </div>
+
+      <!-- Global Save Action -->
+      <div class="global-actions">
+        <el-button type="primary" size="large" @click="syncPersona" class="save-button px-10 py-5 rounded-full text-lg shadow-xl">
+          保存所有配置
+        </el-button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import AgentCard from '../components/AgentCard.vue';
@@ -48,24 +63,29 @@ const props = defineProps({
 
 // Refs for individual cards to handle global events like "cancelling edit"
 const cardRefs = ref([]);
+const activeIndex = ref(0);
 
 const cognitiveOptions = {
-  0: ['Patient Events', 'Symptoms', 'Social Cues'],
+  0: ['Patient Events', 'Symptoms', 'Social Cues', 'Status'],
   1: ['Mechanism', 'External Factors', 'Risk Perception', 'Familiarity Driven'],
   2: ['Linear Causality', 'Multi-Concurrent', 'Cues-Driven', 'Undefined']
 };
 
 const interactionRoles = [
-  { name: '负责人', value: 'leader', icon: 'image.png' },
-  { name: '观察者', value: 'follower', icon: 'image.png' },
-  { name: '质疑者', value: 'critical', icon: 'image.png' }
+  { name: '负责人', value: 'leader', icon: 'leader.png' },
+  { name: '观察者', value: 'follower', icon: 'follower.png' },
+  { name: '质疑者', value: 'critical', icon: 'devil.png' }
 ];
 
-const createDefaultAgent = () => ({
-  id: 'agent-' + Date.now(),
+const cardColors = ['#CEDCFB', '#FBCEDC', '#D2FBCE', '#FBE4CE', '#E5CEFB', '#CEFBE2'];
+
+const createDefaultAgent = (index = 0) => ({
+  id: 'agent-' + Date.now() + Math.random(),
   name: '',
   age: '',
   major: '',
+  avatar: 'avatar1.png',
+  cardColor: cardColors[index % cardColors.length],
   // 待分类知识点：优先使用 PDF 提取的内容
   unclassifiedKnowledge: props.theoreticalKnowledge.length > 0 
     ? [...props.theoreticalKnowledge] 
@@ -89,7 +109,76 @@ const createDefaultAgent = () => ({
   plasticity: 'medium'
 });
 
-const agents = ref([createDefaultAgent()]);
+const agents = ref([createDefaultAgent(0)]);
+
+const STACK_HEADER_HEIGHT = 85; 
+const EXPANDED_CARD_HEIGHT = 920; 
+const VISIBLE_GAP_UP = 30;    // 上方堆叠露出的高度
+const VISIBLE_GAP_DOWN = 15;  // 下方堆叠露出的高度（更紧凑）
+
+const stackHeight = computed(() => {
+  const count = agents.value.length;
+  if (count === 0) return 200;
+  
+  if (activeIndex.value === null) {
+    return (count - 1) * STACK_HEADER_HEIGHT + EXPANDED_CARD_HEIGHT;
+  }
+  
+  // 展开模式下：上方占位 + 展开高度 + 下方占位
+  return (count - 1) * VISIBLE_GAP_UP + EXPANDED_CARD_HEIGHT + 50;
+});
+
+const getCardStyle = (index) => {
+  const isSelected = activeIndex.value === index;
+  let translateY = 0;
+  let zIndex = index;
+  let scale = 1;
+  let opacity = 1;
+
+  if (activeIndex.value === null) {
+    // 列表模式：保持等宽间距
+    translateY = index * (STACK_HEADER_HEIGHT + 20);
+    zIndex = index;
+  } else {
+    // 聚焦模式
+    if (index < activeIndex.value) {
+      // 上方卡片：正常向上堆叠
+      translateY = index * VISIBLE_GAP_UP;
+      scale = 0.92 + (index * 0.01);
+      zIndex = index;
+      opacity = 0.8;
+    } else if (index === activeIndex.value) {
+      // 激活卡片：位于视觉中心
+      translateY = activeIndex.value * VISIBLE_GAP_UP + 10;
+      zIndex = 100;
+      scale = 1;
+      opacity = 1;
+    } else {
+      // 下方卡片：紧密堆叠，且由于 zIndex 小于 100 会藏在激活卡片“后面”
+      // 这里的偏移量计算让它们从激活卡片的底缘开始，但间距更小
+      const activeCardTop = activeIndex.value * VISIBLE_GAP_UP + 10;
+      translateY = activeCardTop + (EXPANDED_CARD_HEIGHT - 60) + (index - activeIndex.value - 1) * VISIBLE_GAP_DOWN;
+      zIndex = index;
+      scale = 0.96;
+      opacity = 0.7;
+    }
+  }
+
+  return {
+    transform: `translateX(-50%) translateY(${translateY}px) scale(${scale})`,
+    zIndex: zIndex,
+    opacity: opacity,
+    position: 'absolute',
+    top: '0',
+    left: '50%',
+    width: '100%',
+    maxWidth: '1200px',
+    height: `${EXPANDED_CARD_HEIGHT}px`,
+    transition: 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    cursor: activeIndex.value !== index ? 'pointer' : 'default',
+    transformOrigin: 'top center'
+  };
+};
 
 // 监听背景知识变化：当新 PDF 解析完成后，自动更新所有 Agent 的待分类知识点
 watch(() => props.theoreticalKnowledge, (newPoints) => {
@@ -111,18 +200,34 @@ watch(() => props.theoreticalKnowledge, (newPoints) => {
 }, { immediate: true });
 
 const addAgent = () => {
-  agents.value.push(createDefaultAgent());
+  agents.value.push(createDefaultAgent(agents.value.length));
+  // 抽出新卡片：使其成为 active
+  setTimeout(() => {
+    activeIndex.value = agents.value.length - 1;
+  }, 100);
 };
 
 const deleteAgent = (index) => {
   if (agents.value.length > 1) {
     agents.value.splice(index, 1);
+    if (activeIndex.value >= agents.value.length) {
+      activeIndex.value = Math.max(0, agents.value.length - 1);
+    }
   } else {
     ElMessage.warning('请至少保留一个 Agent');
   }
 };
 
 const handleGlobalMouseDown = (e) => {
+  // 点击背景折叠卡片
+  const isBackground = e.target.classList.contains('view-b-content-wrapper') || 
+                       e.target.classList.contains('view-b-container') ||
+                       e.target.classList.contains('view-b-scroll-area');
+  
+  if (isBackground) {
+    activeIndex.value = null;
+  }
+
   if (!e.target.closest('input') && !e.target.closest('.cursor-text')) {
     cardRefs.value.forEach(card => {
       if (card && card.resetEditing) card.resetEditing();
@@ -156,22 +261,25 @@ const syncPersona = async () => {
         name: agent.name,
         age: agent.age,
         major: agent.major,
-        "knowledge background": {
+        avatar: agent.avatar || 'avatar1.png',
+        color: agent.cardColor,     // 兼容字段 1
+        cardColor: agent.cardColor, // 兼容字段 2
+        knowledge_background: {
            high: agent.classifiedKnowledge.competent,
            medium: agent.classifiedKnowledge.novice,
            low: agent.classifiedKnowledge.layman
         },
-        "cognitive orientation": {
-           "attentional anchor": agent.cognitive[0],
-           "reasoning entry": agent.cognitive[1],
-           "causal structure": agent.cognitive[2]
+        cognitive_orientation: {
+           attentional_anchor: agent.cognitive[0],
+           reasoning_entry: agent.cognitive[1],
+           causal_structure: agent.cognitive[2]
         },
-        "social interaction style": {
-           "verbal confidence": agent.social.confidence,
-           "language register": agent.social.register,
-           "interaction role": agent.social.role
+        social_interaction_style: {
+           verbal_confidence: agent.social.confidence,
+           language_register: agent.social.register,
+           interaction_role: agent.social.role
         },
-        "learning adaptivity": agent.plasticity
+        learning_adaptivity: agent.plasticity
       };
     });
 
@@ -187,20 +295,69 @@ const syncPersona = async () => {
 </script>
 
 <style scoped>
-.view-b-container::-webkit-scrollbar {
-  width: 6px;
-}
-.view-b-container::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.1);
-  border-radius: 10px;
+.view-b-content-wrapper {
+  overflow: visible; /* 允许卡片溢出阴影显示 */
 }
 
-.add-agent-section {
-  width: 100%;
-  max-width: 1200px;
-  height: 120px;
-  background-color: rgba(206, 220, 251, 0.4);
-  border: 2px dashed #84A7D8;
-  border-radius: 20px;
+/* =========================================
+   1. 基础布局 & 卡片容器 (Layout & Base)
+   ========================================= */
+.view-b-container {
+  background: #1a1f3a;
+  color: #e5e7eb;
+  border-radius: 12px;
+  position: relative;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(128, 149, 202, 0.2);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 149, 202, 0.4);
+}
+
+.agent-card-wrapper {
+  transform-origin: center top;
+  will-change: transform, opacity;
+}
+
+/* Stack Transitions */
+.stack-enter-active,
+.stack-leave-active {
+  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.stack-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(200px) scale(0.8) !important;
+}
+
+.stack-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-100px) scale(0.9) !important;
+}
+
+.stack-move {
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.add-agent-section-mini {
+  background-color: rgba(206, 220, 251, 0.1);
+}
+.add-agent-section-mini:hover {
+  background-color: rgba(206, 220, 251, 0.2);
+}
+
+.global-actions .save-button {
+  background-color: #8095CA;
+  border-color: #8095CA;
+}
+.global-actions .save-button:hover {
+  background-color: #6D8DBE;
+  border-color: #6D8DBE;
 }
 </style>

@@ -9,6 +9,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   // --- 响应式状态 ---
   const messages = ref([]);
   const isConnected = ref(false);
+  const isPaused = ref(false); // 新增：记录是否处于持续暂停状态
   const discussionStage = ref('等待开始'); // 初始阶段
 
   let socket = null;
@@ -28,7 +29,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      
+
       if (data.node && data.content) {
         messages.value.push({
           id: sessionId + Math.random(), // 简单的唯一ID
@@ -40,6 +41,12 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         nextTick(() => {
           onScrollToBottom();
         });
+      }
+
+      if (data.type === 'discussion_paused') {
+        isPaused.value = true;
+      } else if (data.type === 'discussion_resumed') {
+        isPaused.value = false;
       }
 
       // 如果后端发送了阶段更新，也可以在这里处理
@@ -66,14 +73,39 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
    */
   const startDiscussion = (initialCase) => {
     if (socket && isConnected.value) {
-      messages.value = []; // 清空之前的消息
+      messages.value = [
+        {
+          id: 'case-intro-' + Date.now(),
+          agent: 'case_introduction',
+          text: initialCase
+        }
+      ]; // 初始化并加入病例
       discussionStage.value = '初步诊断与鉴别诊断';
       socket.send(JSON.stringify({
         action: 'start_discussion',
         initial_case: initialCase,
       }));
+
+      nextTick(() => onScrollToBottom());
     } else {
       console.error('WebSocket 未连接。');
+    }
+  };
+
+  /**
+   * 切换讨论的暂停/继续状态。
+   */
+  const togglePause = () => {
+    if (!socket || !isConnected.value) return;
+
+    if (isPaused.value) {
+      // 如果当前是暂停的，发送继续指令
+      socket.send(JSON.stringify({ action: 'resume_discussion' }));
+      isPaused.value = false;
+    } else {
+      // 如果当前是运行的，发送暂停指令
+      socket.send(JSON.stringify({ action: 'pause_discussion' }));
+      isPaused.value = true;
     }
   };
 
@@ -82,8 +114,11 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
    * @param {string} interventionText - 来自老师的消息。
    */
   const sendTeacherIntervention = (interventionText) => {
-    console.log('sendTeacherIntervention', socket , isConnected.value)
+    console.log('sendTeacherIntervention', socket, isConnected.value)
     if (socket && isConnected.value) {
+      // 干预后，自动取消暂停状态
+      isPaused.value = false;
+
       // 为即时反馈，直接将老师的消息添加到聊天中
       messages.value.push({
         id: sessionId,
@@ -116,8 +151,10 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   return {
     messages,
     isConnected,
+    isPaused,
     discussionStage,
     startDiscussion,
+    togglePause,
     sendTeacherIntervention,
   };
 }
