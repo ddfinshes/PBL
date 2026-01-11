@@ -1,21 +1,21 @@
 {
-  "徐源松": {
-    "name": "徐源松",
-    "age": "100",
-    "major": "计算机",
+  "A": {
+    "name": "A",
+    "age": "",
+    "major": "",
     "knowledge background": {
       "high": [
-        "医学伦理学"
-      ],
-      "medium": [
+        "病理学",
+        "内科学",
         "诊断学"
       ],
+      "medium": [
+        "医学伦理学",
+        "生理学"
+      ],
       "low": [
-        "药理学",
         "病理生理学",
-        "内科学",
-        "生理学",
-        "病理学"
+        "药理学"
       ]
     },
     "cognitive orientation": {
@@ -32,48 +32,82 @@
     "social interaction style": {
       "verbal confidence": "medium",
       "language register": "medium",
-      "interaction role": "critical"
+      "interaction role": "leader"
     },
-    "learning adaptivity": "high"
+    "learning adaptivity": "medium"
   },
-  "大权": {
-    "name": "大权",
-    "age": "200",
-    "major": "人机交互",
+  "B": {
+    "name": "B",
+    "age": "",
+    "major": "",
     "knowledge background": {
       "high": [
-        "药理学",
-        "病理生理学",
-        "内科学",
-        "医学伦理学",
-        "诊断学",
-        "生理学",
-        "病理学"
+        "病理学",
+        "诊断学"
       ],
-      "medium": [],
-      "low": []
+      "medium": [
+        "医学伦理学",
+        "病理生理学",
+        "生理学"
+      ],
+      "low": [
+        "内科学",
+        "药理学"
+      ]
     },
     "cognitive orientation": {
       "attentional anchor": [
-        "Patient Events",
+        "Symptoms"
+      ],
+      "reasoning entry": [
+        "Mechanism"
+      ],
+      "causal structure": [
+        "Linear Causality"
+      ]
+    },
+    "social interaction style": {
+      "verbal confidence": "medium",
+      "language register": "medium",
+      "interaction role": "leader"
+    },
+    "learning adaptivity": "high"
+  },
+  "C": {
+    "name": "C",
+    "age": "",
+    "major": "",
+    "knowledge background": {
+      "high": [
+        "生理学",
+        "诊断学",
+        "医学伦理学"
+      ],
+      "medium": [
+        "药理学",
+        "病理生理学",
+        "病理学"
+      ],
+      "low": [
+        "内科学"
+      ]
+    },
+    "cognitive orientation": {
+      "attentional anchor": [
         "Social Cues"
       ],
       "reasoning entry": [
-        "Familiarity Driven",
-        "External Factors",
         "Risk Perception"
       ],
       "causal structure": [
-        "Cues-Driven",
-        "Multi-Concurrent",
-        "Undefined"
+        "Multi-Concurrent"
       ]
     },
     "social interaction style": {
       "verbal confidence": "high",
       "language register": "high",
-      "interaction role": "follower"
+      "interaction role": "leader"
     },
-    "learning adaptivity": "high"
+    "learning adaptivity": "medium"
   }
 }
