@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Callable
 import time
+import asyncio
 
 from . import pbl_info
 from langchain_core.messages import BaseMessage, AIMessage
@@ -284,7 +285,7 @@ async def router_node(state: Dict) -> Dict:
         MessagesPlaceholder(variable_name="messages"),
     ]).invoke({"messages": messages})
 
-    time.sleep(5)
+    await asyncio.sleep(5)
     print(f"等待 {last_speaker} 发言")
 
     try:

@@ -26,7 +26,7 @@
 
     <!-- 中栏 -->
     <div class="center-column">
-      <div style="flex: 4; min-height: 0; overflow: hidden;">
+      <div style="flex: 2.5; min-height: 0; overflow: hidden;">
         <ViewC 
           style="height: 100%;"
           :case-data="caseResult" 
@@ -35,14 +35,14 @@
         />
       </div>
 
-      <!-- ViewD 区域 -->
-      <div style="flex: 2; min-height: 0;">
-        <ViewD style="height: 100%;" />
-      </div>
-
-      <!-- ViewE 区域 (聊天/主交互区) -->
-      <div style="flex: 4; min-height: 0;">
-        <ViewE style="height: 100%;" />
+      <!-- ViewD 和 ViewE 并排区域 -->
+      <div style="flex: 2; min-height: 0; display: flex; gap: 10px;">
+        <div style="flex: 1; min-width: 0;">
+          <ViewD style="height: 100%;" />
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <ViewE style="height: 100%;" />
+        </div>
       </div>
     </div>
 

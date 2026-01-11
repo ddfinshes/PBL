@@ -6,6 +6,7 @@
         <h1 class="text-lg font-bold text-gray-200">PBL 模拟讨论</h1>
         <div class="flex items-center space-x-2">
           <span class="text-sm font-medium text-gray-300">阶段: {{ discussionStage }}</span>
+          
           <div class="flex items-center space-x-1">
             <span class="relative flex h-3 w-3">
               <span
@@ -50,7 +51,10 @@
     <!-- Teacher Input -->
     <TeacherInput
       :is-socket-connected="isConnected"
+      :is-paused="isPaused"
+      :has-messages="messages.length > 0"
       @send-message="handleTeacherIntervention"
+      @toggle-pause="togglePause"
     />
   </div>
 </template>
@@ -117,8 +121,10 @@ const scrollToBottom = () => {
 const {
   messages,
   isConnected,
+  isPaused,
   discussionStage,
   startDiscussion,
+  togglePause,
   sendTeacherIntervention,
 } = usePBLSocket(sessionId, scrollToBottom)
 

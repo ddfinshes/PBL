@@ -624,19 +624,24 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         # graph.app.update_state(config, update_payload)
                         # 1) 立即写入 LangGraph 状态
                         graph.app.update_state(config, update_payload)
-                        # 2) 更新本地 current_state（让后续 restart 用最新值）
-                        current_state["messages"].append(teacher_msg)
-                        current_state["is_teacher_interrupted"] = True
-                        current_state["next_speaker"] = "teacher_handler"
 
-                        # 3) 抢占：重启流任务
+                        # 2) 抢占：重启流任务
                         if graph_task:
                             graph_task.cancel()
                         if output_task:
                             output_task.cancel()
 
+                        # 清空输出队列
+                        while not output_queue.empty():
+                            try:
+                                output_queue.get_nowait()
+                                output_queue.task_done()
+                            except asyncio.QueueEmpty:
+                                break
+
+                        # 恢复时传入 None，astream 会自动从刚才 update_state 后的 checkpoint 恢复
                         graph_task = asyncio.create_task(
-                            stream_langgraph(current_state))
+                            stream_langgraph(None))
                         output_task = asyncio.create_task(output_processor())
 
                     # 通知前端教师干预已接收
@@ -644,6 +649,35 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         "type": "teacher_intervention_ack",
                         "content": teacher_content
                     })
+
+            elif action == "pause_discussion":
+                logger.info("教师指令：暂停讨论。")
+                if graph_task:
+                    graph_task.cancel()
+                if output_task:
+                    output_task.cancel()
+
+                # 尽量清空输出队列，实现“憋回去”
+                while not output_queue.empty():
+                    try:
+                        output_queue.get_nowait()
+                        output_queue.task_done()
+                    except asyncio.QueueEmpty:
+                        break
+
+                await websocket.send_json({"type": "discussion_paused"})
+
+            elif action == "resume_discussion":
+                logger.info("教师指令：恢复讨论。")
+                if graph_task:
+                    graph_task.cancel()
+                if output_task:
+                    output_task.cancel()
+
+                # 恢复时传入 None，astream 会自动从 checkpoint 恢复
+                graph_task = asyncio.create_task(stream_langgraph(None))
+                output_task = asyncio.create_task(output_processor())
+                await websocket.send_json({"type": "discussion_resumed"})
 
     except WebSocketDisconnect:
         # 清理资源
