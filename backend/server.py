@@ -522,7 +522,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
     logger.info(f"WebSocket connection established for session: {session_id}")
 
-    config = {"configurable": {"thread_id": session_id}}
+    config = {"configurable": {"thread_id": session_id}, "recursion_limit": 60}
 
     # 初始化该 session 的历史记录
     if session_id not in session_histories:
@@ -543,8 +543,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     async def stream_langgraph(state):
         """后台流式输出任务"""
         # 动态生成 config 以支持分支和持久化
-        current_config = {"configurable": {
-            "thread_id": f"{session_id}_{sh.get('current_branch', 'main')}"}}
+        current_config = {
+            "configurable": {"thread_id": f"{session_id}_{sh.get('current_branch', 'main')}"},
+            "recursion_limit": 60
+        }
+        logger.info(f"Using config with recursion_limit: {current_config.get('recursion_limit')}")
         try:
             async for event in graph.app.astream(state, config=current_config):
                 # 将输出放入队列，避免阻塞 astream
