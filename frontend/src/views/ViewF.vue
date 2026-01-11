@@ -62,6 +62,13 @@ import { usePBLSocket } from '../composables/usePBLSocket.js'
 import ChatCard from '../components/ChatCard.vue'
 import TeacherInput from '../components/TeacherInput.vue'
 
+const props = defineProps({
+  activeContext: {
+    type: Object,
+    default: null
+  }
+})
+
 // =====================
 // Refs and Session
 // =====================
@@ -127,7 +134,14 @@ const initialCaseText =
 const handleStartDiscussion = async () => {
   // 讨论开始前获取最新 agent 配置
   await fetchPersonas()
-  startDiscussion(initialCaseText)
+  
+  // 优先使用当前选中的案例情节，如果没有则用默认文字
+  let textToSend = initialCaseText
+  if (props.activeContext) {
+    textToSend = `${props.activeContext.story}\n\n引导问题：${props.activeContext.question}\n请各位同学开始讨论。`
+  }
+  
+  startDiscussion(textToSend)
 }
 
 const handleTeacherIntervention = (messageText) => {

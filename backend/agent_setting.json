@@ -1,6 +1,6 @@
 {
-  "徐源松": {
-    "name": "徐源松",
+  "s": {
+    "name": "s",
     "age": "100",
     "major": "",
     "avatar": "avatar1.png",
@@ -8,113 +8,80 @@
     "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
+        "病理学",
+        "内科学"
+      ],
+      "medium": [
         "病理生理学",
         "医学伦理学"
       ],
-      "medium": [
-        "药理学"
-      ],
-      "low": []
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "Symptoms",
-        "Social Cues"
-      ],
-      "reasoning_entry": [
-        "Mechanism",
-        "Risk Perception"
-      ],
-      "causal_structure": [
-        "Linear Causality",
-        "Multi-Concurrent"
+      "low": [
+        "诊断学",
+        "药理学",
+        "生理学"
       ]
     },
-    "social_interaction_style": {
-      "verbal_confidence": "low",
-      "language_register": "low",
-      "interaction_role": "follower"
+    "cognitive orientation": {
+      "attentional anchor": [
+        "Patient Events",
+        "Symptoms"
+      ],
+      "reasoning entry": [
+        "Familiarity Driven",
+        "Mechanism"
+      ],
+      "causal structure": [
+        "Cues-Driven",
+        "Linear Causality"
+      ]
     },
-    "learning_adaptivity": "low"
+    "social interaction style": {
+      "verbal confidence": "medium",
+      "language register": "medium",
+      "interaction role": "leader"
+    },
+    "learning adaptivity": "medium"
   },
-  "quan": {
-    "name": "quan",
-    "age": "",
-    "major": "",
-    "avatar": "avatar1.png",
+  "a": {
+    "name": "a",
+    "age": "100",
+    "major": "计算机",
+    "avatar": "avatar2.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
     "knowledge_background": {
-      "high": [
-        "病理学",
-        "生理学",
+      "high": [],
+      "medium": [],
+      "low": [
+        "病理生理学",
+        "药理学",
         "诊断学",
         "内科学",
-        "药理学",
-        "医学伦理学"
-      ],
-      "medium": [
-        "病理生理学"
-      ],
-      "low": []
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "Social Cues",
-        "Symptoms",
-        "Patient Events"
-      ],
-      "reasoning_entry": [
-        "External Factors",
-        "Risk Perception",
-        "Mechanism",
-        "Familiarity Driven"
-      ],
-      "causal_structure": [
-        "Multi-Concurrent",
-        "Linear Causality",
-        "Cues-Driven"
+        "医学伦理学",
+        "生理学",
+        "病理学"
       ]
     },
-    "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
-      "interaction_role": "leader"
-    },
-    "learning_adaptivity": "high"
-  },
-  "aaa": {
-    "name": "aaa",
-    "age": "",
-    "major": "",
-    "avatar": "avatar1.png",
-    "color": "#D2FBCE",
-    "cardColor": "#D2FBCE",
-    "knowledge_background": {
-      "high": [],
-      "medium": [
-        "药理学",
-        "医学伦理学"
-      ],
-      "low": []
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
+    "cognitive orientation": {
+      "attentional anchor": [
+        "Patient Events",
         "Social Cues"
       ],
-      "reasoning_entry": [
-        "External Factors",
+      "reasoning entry": [
+        "Familiarity Driven",
         "Risk Perception"
       ],
-      "causal_structure": [
+      "causal structure": [
+        "Cues-Driven",
+        "Undefined",
         "Multi-Concurrent"
       ]
     },
-    "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
-      "interaction_role": "leader"
+    "social interaction style": {
+      "verbal confidence": "high",
+      "language register": "high",
+      "interaction role": "critical"
     },
-    "learning adaptivity": "high"
+    "learning adaptivity": "low"
   }
 }

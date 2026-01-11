@@ -132,11 +132,12 @@ def process_response_urls(result_dict: dict) -> dict:
 
 # --- API 路由 ---
 
+
 @app_fastapi.on_event("startup")
 async def startup_event():
     """服务器启动时，从配置文件加载 Agents 并构建图。"""
     print("Initializing agents from agent_setting.json...")
-    
+
     if not AGENT_SETTING_PATH.exists():
         print("✗ Startup: agent_setting.json not found. No agents loaded.")
         return
@@ -144,10 +145,10 @@ async def startup_event():
     try:
         with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
             personas = json.load(f)
-        
+
         for agent_id, persona in personas.items():
             register_student_agent(agent_id, persona)
-        
+
         agent_ids = list(student_nodes.keys())
         graph.app = build_graph(agent_ids)
         print(f"✓ Startup: Graph built with agents: {agent_ids}")
@@ -384,19 +385,18 @@ async def api_save_case(request_data: dict):
 #     student_personas.clear()
 #     student_nodes.clear()
 #     print("Cleared existing agent configurations.")
-
 #     # 2. 根据请求注册新的 agent
 #     request = {
-#         "Alice": {     
+#         "Alice": {
 #             "name": "Alice",
 #             "age": 22,
 #             "major": "female",
 #             "knowledge_background": {
 #                 "high": ["hypertension"],
 #                 "medium": ["haemodynamics"],
-#                 "low": ["diabete"] 
+#                 "low": ["diabete"]
 #                 },
-#             "cognitive_orientation": 
+#             "cognitive_orientation":
 #                 {
 #                     "attentional_anchor":[
 #                         "patient_events",
@@ -409,20 +409,20 @@ async def api_save_case(request_data: dict):
 #             "social_interaction_style": {
 #                 "verbal_confidence": "high",
 #                 "language_register": "medium",
-#                 "interaction_role": "leader"     
-#                  },    
+#                 "interaction_role": "leader"
+#                  },
 #             "learning_adaptivity": "high"
 #         },
-#         "Bob": {     
+#         "Bob": {
 #             "name": "Bob",
 #             "age": 23,
 #             "major": "male",
 #             "knowledge_background": {
 #                 "high": ["hypertension"],
 #                 "medium": ["haemodynamics"],
-#                 "low": ["diabete"] 
+#                 "low": ["diabete"]
 #                 },
-#             "cognitive_orientation": 
+#             "cognitive_orientation":
 #                 {
 #                     "attentional_anchor":[
 #                         "symptoms",
@@ -434,20 +434,20 @@ async def api_save_case(request_data: dict):
 #             "social_interaction_style": {
 #                 "verbal_confidence": "low",
 #                 "language_register": "low",
-#                 "interaction_role": "follower"     
-#                  },    
+#                 "interaction_role": "follower"
+#                  },
 #             "learning_adaptivity": "medium"
 #         },
-#         "Lily": {     
+#         "Lily": {
 #             "name": "Lily",
 #             "age": 22,
 #             "major": "female",
 #             "knowledge_background": {
 #                 "high": ["hypertension"],
 #                 "medium": ["haemodynamics"],
-#                 "low": ["diabete"] 
+#                 "low": ["diabete"]
 #                 },
-#             "cognitive_orientation": 
+#             "cognitive_orientation":
 #                 {
 #                     "attentional_anchor":[
 #                         "social_cues",
@@ -458,17 +458,14 @@ async def api_save_case(request_data: dict):
 #             "social_interaction_style": {
 #                 "verbal_confidence": "high",
 #                 "language_register": "high",
-#                 "interaction_role": "follower"     
-#                  },    
+#                 "interaction_role": "follower"
+#                  },
 #             "learning_adaptivity": "medium"
 #         },
 #     }
-
 #     for agent_id, persona_data in request.items():
 #         register_student_agent(agent_id, persona_data)
-
 #     return {"status": "success", "message": f"Personas updated and graph rebuilt for {len(agent_ids)} agents."}
-
 async def update_personas_v1(request: Dict[str, Dict]):
     """接收前端配置，保存到 JSON 文件，清空并重新注册所有 agent，并重新构建图。"""
     try:
@@ -495,9 +492,11 @@ async def update_personas_v1(request: Dict[str, Dict]):
     except Exception as e:
         logger.error(f"Failed to update personas: {e}")
         return {"status": "error", "detail": str(e)}, 500
-        
+
 # 存储每个 session 的后台任务，用于处理 LangGraph 流输出
 session_tasks = {}
+
+
 @app_fastapi.get("/get_personas")
 async def get_personas():
     """从 agent_setting.json 读取所有 agent 的配置并返回。"""
@@ -520,12 +519,12 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     logger.info(f"WebSocket connection established for session: {session_id}")
 
     config = {"configurable": {"thread_id": session_id}}
-    
+
     # 状态管理
     current_state = None
     graph_task = None
     output_queue = asyncio.Queue()
-    
+
     async def stream_langgraph(state):
         """后台流式输出任务"""
         try:
@@ -538,7 +537,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
         except Exception as e:
             # 发送错误信息到前端
             await websocket.send_json({"error": str(e)})
-    
+
     async def output_processor():
         """处理输出队列的任务"""
         while True:
@@ -548,26 +547,31 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     if "messages" in out:
                         for m in out["messages"]:
                             await websocket.send_json({
-                                "node": node, 
+                                "node": node,
                                 "content": m.content,
                                 "type": "agent_output"
                             })
                 output_queue.task_done()
             except asyncio.CancelledError:
                 break
-    
+
     output_task = None
-    
+
     try:
         while True:
             # 主循环只负责接收消息
             data = await websocket.receive_text()
             msg = json.loads(data)
             action = msg.get("action")
-            
+
             if action == "start_discussion":
                 # 初始化状态
                 initial_case = msg.get("initial_case", "")
+
+                # 同步更新全局 pbl_info，确保 Agent 讨论基于传入的案例
+                from .pbl_info import update_pbl_info
+                update_pbl_info(initial_case, [])
+
                 current_state = {
                     "messages": [HumanMessage(content=initial_case, name="case_introduction")],
                     "summary": "",
@@ -575,21 +579,23 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     "is_teacher_interrupted": False,
                     "discussion_active": True,  # 显式初始化讨论状态
                 }
-                
+
                 # 取消旧任务
                 if graph_task:
                     graph_task.cancel()
                 if output_task:
                     output_task.cancel()
-                
+
                 # 启动新任务
-                graph_task = asyncio.create_task(stream_langgraph(current_state))
+                graph_task = asyncio.create_task(
+                    stream_langgraph(current_state))
                 output_task = asyncio.create_task(output_processor())
-                
+
             elif action == "teacher_intervention":
                 teacher_content = msg.get("content", "")
                 print(f"teacher_content: {teacher_content}")
-                teacher_msg = HumanMessage(content=teacher_content, name="teacher")
+                teacher_msg = HumanMessage(
+                    content=teacher_content, name="teacher")
                 print(f"current_state: {current_state}")
                 # 更新状态以触发干预
                 if current_state:
@@ -600,7 +606,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     if any(kw in teacher_content for kw in stop_keywords):
                         logger.info("教师指令：停止讨论。更新状态以终止图。")
                         update_payload["discussion_active"] = False
-                        update_payload["next_speaker"] = "END"  # 直接终止图，避免 KeyError
+                        # 直接终止图，避免 KeyError
+                        update_payload["next_speaker"] = "END"
                         # 先更新状态，然后取消后台任务，防止学生继续发言
                         graph.app.update_state(config, update_payload)
                         if graph_task:
@@ -628,16 +635,16 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         if output_task:
                             output_task.cancel()
 
-                        graph_task  = asyncio.create_task(stream_langgraph(current_state))
+                        graph_task = asyncio.create_task(
+                            stream_langgraph(current_state))
                         output_task = asyncio.create_task(output_processor())
-                    
-                    
+
                     # 通知前端教师干预已接收
                     await websocket.send_json({
                         "type": "teacher_intervention_ack",
                         "content": teacher_content
                     })
-                
+
     except WebSocketDisconnect:
         # 清理资源
         if graph_task:

@@ -31,6 +31,7 @@
           style="height: 100%;"
           :case-data="caseResult" 
           :raw-pdf-data="imagesResult" 
+          @inspect-question="handleInspectQuestion"
         />
       </div>
 
@@ -47,7 +48,7 @@
 
     <!-- 右栏 -->
     <div class="right-column">
-      <ViewF />
+      <ViewF :active-context="activeContext" />
     </div>
   </div>
 </template>
@@ -60,13 +61,15 @@ import ViewC from './views/ViewC.vue'
 import ViewD from './views/ViewD.vue'
 import ViewE from './views/ViewE.vue'
 import ViewF from './views/ViewF.vue'
-import { provide} from 'vue';
+import { provide } from 'vue';
+
 const sessionId = `pbl-session-${Date.now()}`   // 只生成一次
 provide('sessionId', sessionId)
 
 // --- 修改点 3: 定义响应式变量存储数据 ---
 const caseResult = ref(null)   // 存放结构化教案数据
 const imagesResult = ref(null) // 存放图片数据
+const activeContext = ref(null) // 存放当前激活的场景内容（用于 ViewF 仿真）
 
 // --- 修改点 4: 处理数据回调 ---
 const handleDataReady = (payload) => {
@@ -79,6 +82,19 @@ const handleDataReady = (payload) => {
     // 如果 ViewA 发出的是移除文件的信号
     caseResult.value = null
     imagesResult.value = null
+    activeContext.value = null
+  }
+}
+
+const handleInspectQuestion = (payload) => {
+  console.log('父组件监听到问题查看:', payload)
+  // payload 结构: { sceneIndex, questionIndex, data: questionObj }
+  if (caseResult.value && caseResult.value.scenes[payload.sceneIndex]) {
+    const scene = caseResult.value.scenes[payload.sceneIndex]
+    activeContext.value = {
+      story: scene.story_content,
+      question: payload.data.question
+    }
   }
 }
 </script>

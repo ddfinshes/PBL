@@ -28,7 +28,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      
+
       if (data.node && data.content) {
         messages.value.push({
           id: sessionId + Math.random(), // 简单的唯一ID
@@ -66,12 +66,20 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
    */
   const startDiscussion = (initialCase) => {
     if (socket && isConnected.value) {
-      messages.value = []; // 清空之前的消息
+      messages.value = [
+        {
+          id: 'case-intro-' + Date.now(),
+          agent: 'case_introduction',
+          text: initialCase
+        }
+      ]; // 初始化并加入病例
       discussionStage.value = '初步诊断与鉴别诊断';
       socket.send(JSON.stringify({
         action: 'start_discussion',
         initial_case: initialCase,
       }));
+
+      nextTick(() => onScrollToBottom());
     } else {
       console.error('WebSocket 未连接。');
     }
@@ -82,7 +90,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
    * @param {string} interventionText - 来自老师的消息。
    */
   const sendTeacherIntervention = (interventionText) => {
-    console.log('sendTeacherIntervention', socket , isConnected.value)
+    console.log('sendTeacherIntervention', socket, isConnected.value)
     if (socket && isConnected.value) {
       // 为即时反馈，直接将老师的消息添加到聊天中
       messages.value.push({
