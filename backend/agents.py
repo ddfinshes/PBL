@@ -109,8 +109,8 @@ def format_persona_to_string(persona: Dict) -> str:
                 res.append(v)
         return " -> ".join(res) + " (按优先级排序)"
 
-    kb = persona.get('knowledge background', {}) or {}
-    social = persona.get('social interaction style', {}) or {}
+    kb = persona.get('knowledge_background', {}) or {}
+    social = persona.get('social_interaction_style', {}) or {}
 
     return (f"""
     - 姓名：{persona.get('name', '匿名')} \n
@@ -130,13 +130,14 @@ def format_persona_to_string(persona: Dict) -> str:
         - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal structure', causal_structure_map)}。\n
 
     - 社会行为维度（作用：决定 agent“怎么说、怎么影响他人”）\n
-        - 发言风格: {verbal_confidence.get(social.get('verbal confidence'), "平稳")} \n
-        - 发言专业用语情况：{language_register.get(social.get('language register'), "灵活切换")} \n
-        - 与其他同学互动特点：{interaction_role.get(social.get('interaction role'), "参与讨论")} \n
+        - 发言风格: {verbal_confidence.get(social.get('verbal_confidence'), "平稳")} \n
+        - 发言专业用语情况：{language_register.get(social.get('language_register'), "灵活切换")} \n
+        - 与其他同学互动特点：{interaction_role.get(social.get('interaction_role'), "参与讨论")} \n
 
     - 动态学习维度（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
-        - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning adaptivity'), "中等稳定")}
-    """)
+        - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
+    """
+            )
 
 
 # --------- 通用学生 Prompt ---------

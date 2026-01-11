@@ -269,17 +269,17 @@ const syncPersona = async () => {
            medium: agent.classifiedKnowledge.novice,
            low: agent.classifiedKnowledge.layman
         },
-        "cognitive orientation": {
-           "attentional anchor": agent.cognitive[0],
-           "reasoning entry": agent.cognitive[1],
-           "causal structure": agent.cognitive[2]
+        cognitive_orientation: {
+           attentional_anchor: agent.cognitive[0],
+           reasoning_entry: agent.cognitive[1],
+           causal_structure: agent.cognitive[2]
         },
-        "social interaction style": {
-           "verbal confidence": agent.social.confidence,
-           "language register": agent.social.register,
-           "interaction role": agent.social.role
+        social_interaction_style: {
+           verbal_confidence: agent.social.confidence,
+           language_register: agent.social.register,
+           interaction_role: agent.social.role
         },
-        "learning adaptivity": agent.plasticity
+        learning_adaptivity: agent.plasticity
       };
     });
 
