@@ -498,16 +498,20 @@ async def update_personas_v1(request: Dict[str, Dict]):
         
 # 存储每个 session 的后台任务，用于处理 LangGraph 流输出
 session_tasks = {}
-async def update_personas(request: UpdatePersonasRequest):
-    new_personas = request.dict()
-    for agent_id, persona_data in new_personas.items():
-        if agent_id in student_personas:
-            student_personas[agent_id] = persona_data
-            print(f"Updated persona for {agent_id}: {persona_data}")
-        else:
-            student_personas[agent_id] = persona_data
-            print(f"Added persona for {agent_id}: {persona_data}")
-    return {"status": "success", "message": "Personas updated successfully."}
+@app_fastapi.get("/get_personas")
+async def get_personas():
+    """从 agent_setting.json 读取所有 agent 的配置并返回。"""
+    try:
+        if not AGENT_SETTING_PATH.exists():
+            return {}
+        with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
+            personas = json.load(f)
+        return personas
+    except Exception as e:
+        logger.error(f"Error reading personas: {e}")
+        return {"detail": str(e)}, 500
+
+# 移除冗余或过时的 Pydantic 定义
 
 
 @app_fastapi.websocket("/ws/pbl/{session_id}")

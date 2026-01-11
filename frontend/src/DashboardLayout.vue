@@ -87,21 +87,21 @@ const handleDataReady = (payload) => {
 .dashboard-layout {
   display: flex;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   gap: 10px;
   padding: 10px;
-  background: #0a0e27;
+  background: #0C0E27;
 }
 
 .left-column {
-  width: 30%;
+  width: 32%; /* 稍微加宽一点左边栏以容纳卡片 */
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .center-column {
-  width: 40%;
+  width: 38%; /* 相应微调中栏 */
   display: flex;
   flex-direction: column;
   gap: 10px;

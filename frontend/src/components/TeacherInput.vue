@@ -7,13 +7,13 @@
       @keyup="onKeyup"
       :placeholder="placeholderText"
       :disabled="!isSocketConnected"
-      class="w-full px-4 py-3 border border-gray-300 rounded-l-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow duration-200"
+      class="w-full px-4 py-3 border border-gray-300 rounded-l-full focus:outline-none focus:ring-2 focus:ring-[#8095CA] transition-shadow duration-200 text-gray-800 bg-white"
       />
       
       <button
         @click="handleSend"
         :disabled="!isSocketConnected || !inputText.trim()"
-        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-r-full shadow-md hover:bg-indigo-700 focus:outline-none disabled:bg-gray-400 transition-colors duration-200"
+        class="px-6 py-3 bg-[#8095CA] text-white font-semibold rounded-r-full shadow-md hover:bg-[#6D8DBE] focus:outline-none disabled:bg-gray-400 transition-colors duration-200"
       >
         发送
       </button>
