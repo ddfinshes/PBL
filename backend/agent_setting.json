@@ -1,24 +1,20 @@
 {
-  "A": {
-    "name": "A",
-    "age": "",
-    "major": "",
+  "uu": {
+    "name": "uu",
+    "age": "27",
+    "major": "临床",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
-        "病理学",
-        "诊断学"
+        "病理生理学"
       ],
       "medium": [
-        "生理学",
-        "病理生理学",
-        "药理学"
+        "医学伦理学"
       ],
       "low": [
-        "内科学",
-        "医学伦理学"
+        "内科学"
       ]
     },
     "cognitive_orientation": {
@@ -39,26 +35,24 @@
     },
     "learning_adaptivity": "medium"
   },
-  "B": {
-    "name": "B",
-    "age": "",
-    "major": "",
+  "nn": {
+    "name": "nn",
+    "age": "22",
+    "major": "中医",
     "avatar": "avatar1.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
     "knowledge_background": {
       "high": [
-        "内科学"
+        "药理学"
       ],
       "medium": [
-        "病理学",
-        "病理生理学",
-        "诊断学"
+        "医学伦理学"
       ],
       "low": [
-        "药理学",
-        "医学伦理学",
-        "生理学"
+        "诊断学",
+        "内科学",
+        "病理生理学"
       ]
     },
     "cognitive_orientation": {
@@ -73,30 +67,27 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "high",
+      "verbal_confidence": "low",
       "language_register": "medium",
       "interaction_role": "follower"
     },
-    "learning_adaptivity": "high"
+    "learning_adaptivity": "medium"
   },
-  "C": {
-    "name": "C",
-    "age": "",
-    "major": "",
+  "ww": {
+    "name": "ww",
+    "age": "25",
+    "major": "护理",
     "avatar": "avatar1.png",
     "color": "#D2FBCE",
     "cardColor": "#D2FBCE",
     "knowledge_background": {
-      "high": [],
+      "high": [
+        "药理学"
+      ],
       "medium": [
-        "病理学",
-        "药理学",
-        "病理生理学",
-        "生理学"
+        "病理学"
       ],
       "low": [
-        "内科学",
-        "医学伦理学",
         "诊断学"
       ]
     },
@@ -112,10 +103,10 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "low",
-      "language_register": "medium",
+      "verbal_confidence": "medium",
+      "language_register": "low",
       "interaction_role": "critical"
     },
-    "learning_adaptivity": "low"
+    "learning_adaptivity": "medium"
   }
 }

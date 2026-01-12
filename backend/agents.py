@@ -390,6 +390,11 @@ async def router_node(state: Dict) -> Dict:
         result = await HOST_LLM.ainvoke(prompt)
         choice = result.content.strip()
         print(f"DEBUG: [Router Node] HOST_LLM choice: '{choice}'")
+        # ---- 强制避免连续同人发言 ----
+        if choice == last_speaker and len(agent_ids) > 1:
+            print(f"Router: LLM returned same speaker '{choice}'. Forcing rotation.")
+            fallback_options = [aid for aid in agent_ids if aid != last_speaker]
+            choice = fallback_options[0]
     except Exception as e:
         print(f"ERROR: [Router Node] HOST_LLM call failed: {e}")
         choice = "FALLBACK"
