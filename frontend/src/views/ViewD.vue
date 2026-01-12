@@ -1,10 +1,75 @@
 <template>
   <div class="view-d-container h-full w-full relative overflow-hidden bg-[#0C0E27] rounded-xl border border-[#8095CA]/20">
-    <div class="absolute top-4 left-4 z-10">
+    <div class="absolute top-4 left-4 z-10 flex items-center gap-4">
       <h3 class="text-[#8095CA] font-bold tracking-wider">讨论主题演化路径</h3>
+      <button 
+        @click="isHighlightingFlags = !isHighlightingFlags"
+        class="px-3 py-1 text-xs rounded-full border transition-all duration-300"
+        :class="isHighlightingFlags ? 'bg-[#EF4444] text-white border-[#EF4444]' : 'text-[#8095CA] border-[#8095CA] hover:bg-[#8095CA]/10'"
+      >
+        {{ isHighlightingFlags ? '取消高亮' : '演化复盘 (高亮干预)' }}
+      </button>
     </div>
     <div ref="svgWrapper" class="w-full h-full">
       <svg ref="svgRef" class="w-full h-full"></svg>
+    </div>
+
+    <!-- 总结弹窗 -->
+    <div v-if="showSummaryModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8">
+      <div class="bg-[#1a1f3a] border border-[#8095CA]/40 rounded-2xl w-full max-w-2xl max-h-[80%] flex flex-col shadow-2xl">
+        <div class="p-4 border-b border-[#8095CA]/20 flex justify-between items-center">
+          <h4 class="text-[#E0E7FF] font-bold">教师介入点深度分析</h4>
+          <button @click="showSummaryModal = false" class="text-gray-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-6 space-y-4">
+          <div v-if="summaryLoading" class="flex flex-col items-center justify-center py-12 space-y-4">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8095CA]"></div>
+            <p class="text-[#8095CA] text-sm italic">正在调用 Qwen 专家系统进行并行分析...</p>
+          </div>
+          <div v-else-if="currentSummaryParts.context || currentSummaryParts.action || currentSummaryParts.consequence" class="space-y-4">
+            <div class="space-y-2">
+              <label class="text-xs text-[#8095CA] font-medium uppercase tracking-wider">介入前：讨论状态总结</label>
+              <textarea 
+                v-model="currentSummaryParts.context"
+                class="w-full h-24 bg-[#0C0E27] text-gray-200 p-3 rounded-xl border border-[#8095CA]/20 focus:border-[#8095CA]/60 outline-none text-sm leading-relaxed"
+              ></textarea>
+            </div>
+            
+            <div class="space-y-2">
+              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">介入：教师行为描述</label>
+              <textarea 
+                v-model="currentSummaryParts.action"
+                class="w-full h-24 bg-[#0C0E27] text-gray-200 p-3 rounded-xl border border-[#EF4444]/20 focus:border-[#EF4444]/60 outline-none text-sm leading-relaxed"
+              ></textarea>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-xs text-green-400 font-medium uppercase tracking-wider">介入后：即时互动变化</label>
+              <textarea 
+                v-model="currentSummaryParts.consequence"
+                class="w-full h-24 bg-[#0C0E27] text-gray-200 p-3 rounded-xl border border-green-400/20 focus:border-green-400/60 outline-none text-sm leading-relaxed"
+              ></textarea>
+            </div>
+          </div>
+          <div v-else class="flex flex-col items-center justify-center py-12">
+             <p class="text-[#8095CA] text-sm italic">等待数据载入...</p>
+          </div>
+        </div>
+
+        <div class="p-4 border-t border-[#8095CA]/20 flex justify-end gap-3">
+          <button @click="showSummaryModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">取消</button>
+          <button 
+            v-if="currentSummaryParts.context"
+            @click="saveSummary" 
+            class="px-6 py-2 bg-[#8095CA] text-white rounded-lg text-sm hover:bg-[#6D8DBE] transition-colors"
+          >
+            确认并归档
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -14,16 +79,101 @@ import { ref, onMounted, inject, watch, computed } from 'vue';
 import * as d3 from 'd3';
 import axios from 'axios';
 
-const { messages, currentTopic, selectedTopic, activeMessageId } = inject('pblSocket');
+const { 
+  messages, 
+  currentTopic, 
+  selectedTopic, 
+  activeMessageId,
+  activeQuestionInfo,
+  selectedNodeLeafId,
+  interventionSummaries
+} = inject('pblSocket');
+const sessionId = inject('sessionId');
 const svgRef = ref(null);
 const svgWrapper = ref(null);
 const personas = ref({});
+
+// --- 总结功能相关状态 ---
+const showSummaryModal = ref(false);
+const summaryLoading = ref(false);
+const currentSummaryParts = ref({
+  context: '',
+  action: '',
+  consequence: ''
+});
+const summaryInterventionId = ref('');
+const isHighlightingFlags = ref(false);
+
+const openSummaryModal = async (node) => {
+  // 1. 优先从本地/归档缓存中获取
+  const targetId = node.interventionId || node.turnsList?.[0]?.id || node.id;
+  summaryInterventionId.value = targetId;
+
+  if (interventionSummaries.value[targetId]) {
+    console.log('Loading summary from archive/cache:', targetId);
+    currentSummaryParts.value = interventionSummaries.value[targetId].parts;
+    showSummaryModal.value = true;
+    summaryLoading.value = false;
+    return;
+  }
+
+  // 2. 如果没有缓存，则清空并调用后端接口
+  currentSummaryParts.value = { context: '', action: '', consequence: '' };
+  showSummaryModal.value = true;
+  summaryLoading.value = true;
+  
+  try {
+    const resp = await axios.post('http://127.0.0.1:8000/api/generate-intervention-summary', {
+      session_id: sessionId,
+      intervention_id: summaryInterventionId.value,
+      scene_index: activeQuestionInfo.value.sceneIndex,
+      question_index: activeQuestionInfo.value.questionIndex
+    });
+    if (resp.data.status === 'success' && resp.data.summary_parts) {
+      currentSummaryParts.value = resp.data.summary_parts;
+    }
+  } catch (err) {
+    console.error('Failed to generate summary:', err);
+    currentSummaryParts.value = { context: '生成失败', action: '生成失败', consequence: '生成失败' };
+  } finally {
+    summaryLoading.value = false;
+  }
+};
+
+const saveSummary = async () => {
+  try {
+    const summaryData = {
+      parts: currentSummaryParts.value,
+      timestamp: Date.now()
+    };
+    await axios.post('http://127.0.0.1:8000/api/save-intervention-summary', {
+      session_id: sessionId,
+      scene_index: activeQuestionInfo.value.sceneIndex,
+      question_index: activeQuestionInfo.value.questionIndex,
+      intervention_id: summaryInterventionId.value,
+      summary_data: summaryData
+    });
+    // 更新本地缓存以便即时回显
+    interventionSummaries.value[summaryInterventionId.value] = summaryData;
+
+    alert('总结已保存');
+    showSummaryModal.value = false;
+  } catch (err) {
+    alert('保存失败: ' + err.message);
+  }
+};
 
 // 计算基于选中节点或活跃节点的“主路径” (包含祖先和后代)
 const mainPathSet = computed(() => {
   const path = new Set();
   const graphLinks = graphData.value?.links;
   if (!messages?.value?.length || !graphLinks) return path;
+
+  // Filter messages by active question
+  const questionMessages = messages.value.filter(m => 
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
+  );
 
   // 1. 建立节点之间的父子关系逻辑
   const nodeParentMap = {};
@@ -43,7 +193,10 @@ const mainPathSet = computed(() => {
   if (selectedTopic.value) {
     anchorNodeKey = selectedTopic.value;
   } else if (activeMessageId.value) {
-    anchorNodeKey = findNodeForMsg(activeMessageId.value);
+    // 确保 activeMessageId 在当前问题的消息列表中
+    if (questionMessages.find(m => m.id === activeMessageId.value)) {
+      anchorNodeKey = findNodeForMsg(activeMessageId.value);
+    }
   }
 
   if (!anchorNodeKey) return path;
@@ -78,8 +231,19 @@ const currentPathMsgIds = computed(() => {
   const ids = new Set();
   if (!messages.value?.length) return ids;
 
+  // Filter messages by active question
+  const questionMessages = messages.value.filter(m => 
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
+  );
+
   // 确定“叶子”消息 ID
   let leafId = activeMessageId.value;
+  // 如果当前活跃消息不在当前问题的范围内，则尝试寻找该问题范围内的最后一条
+  if (!questionMessages.find(m => m.id === leafId) && questionMessages.length > 0) {
+    leafId = questionMessages[questionMessages.length - 1].id;
+  }
+
   if (selectedTopic.value) {
     // 如果选中了某个节点，以该节点关联的最后一条消息作为“叶子”
     const selectedNode = graphData.value.nodes.find(n => n.id === selectedTopic.value);
@@ -120,12 +284,18 @@ const graphData = computed(() => {
   const msgToNodeIdMap = new Map(); // msg_id -> nodeId
   const nodeMap = new Map(); // nodeId -> nodeObject
 
+  // Filter messages by active question
+  const questionMessages = messages.value.filter(m => 
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
+  );
+
   // 1. 预处理：构建消息树结构，识别分叉点和分支路径
   const childCountMap = new Map(); // parent_id -> 子消息数
   const childrenMap = new Map(); // parent_id -> [children]
   const msgMap = new Map(); // msg_id -> msg
   
-  messages.value.forEach(m => {
+  questionMessages.forEach(m => {
     msgMap.set(m.id, m);
     if (m.parent_id) {
       childCountMap.set(m.parent_id, (childCountMap.get(m.parent_id) || 0) + 1);
@@ -139,9 +309,9 @@ const graphData = computed(() => {
   // 2. 识别每条消息链的"当前活跃路径"（最新的分支）
   const getActivePathMsgIds = () => {
     const pathSet = new Set();
-    if (messages.value.length === 0) return pathSet;
+    if (questionMessages.length === 0) return pathSet;
     
-    let curr = messages.value[messages.value.length - 1];
+    let curr = questionMessages[questionMessages.length - 1];
     let safety = 0;
     while (curr && safety < 1000) {
       pathSet.add(curr.id);
@@ -189,7 +359,7 @@ const graphData = computed(() => {
   };
 
   // 4. 映射消息到节点
-  messages.value.forEach((msg) => {
+  questionMessages.forEach((msg) => {
     let topicName = msg.topic || (msg.agent === 'teacher' ? '教师干预' : '待识别');
     if (topicName === '待识别' || topicName === '开始讨论') return;
 
@@ -264,6 +434,7 @@ const graphData = computed(() => {
           turns: 0,
           turnsList: [],
           hasTeacherFlag: msg.agent === 'teacher',
+          interventionId: msg.agent === 'teacher' ? msg.id : null,
           isOldTopic: isOldTopic,
           order: nodes.length
         };
@@ -286,6 +457,7 @@ const graphData = computed(() => {
       // 更新节点数据
       if (msg.agent === 'teacher') {
         node.hasTeacherFlag = true;
+        if (!node.interventionId) node.interventionId = msg.id;
       } else if (msg.agent !== 'case_introduction') {
         node.turns += 1;
         let color = personas.value[msg.agent]?.cardColor || '#8095CA';
@@ -318,24 +490,34 @@ const initGraph = () => {
   svg.on('click', (event) => {
     if (event.target === svgRef.value) {
       selectedTopic.value = null;
+      selectedNodeLeafId.value = null;
     }
   });
 
   // 定义渐变阴影
   const defs = svg.append('defs');
+  
+  // 普通发光
   const filter = defs.append('filter')
     .attr('id', 'glow')
     .attr('x', '-50%')
     .attr('y', '-50%')
     .attr('width', '200%')
     .attr('height', '200%');
-  filter.append('feGaussianBlur')
-    .attr('stdDeviation', '3')
-    .attr('result', 'blur');
-  filter.append('feComposite')
-    .attr('in', 'SourceGraphic')
-    .attr('in2', 'blur')
-    .attr('operator', 'over');
+  filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur');
+  filter.append('feComposite').attr('in', 'SourceGraphic').attr('in2', 'blur').attr('operator', 'over');
+
+  // 红色高亮发光 (用于教师干预)
+  const redFilter = defs.append('filter')
+    .attr('id', 'glow-red')
+    .attr('x', '-50%')
+    .attr('y', '-50%')
+    .attr('width', '200%')
+    .attr('height', '200%');
+  redFilter.append('feGaussianBlur').attr('stdDeviation', '5').attr('result', 'blur');
+  redFilter.append('feFlood').attr('flood-color', '#EF4444').attr('flood-opacity', '0.7').attr('result', 'color');
+  redFilter.append('feComposite').attr('in', 'color').attr('in2', 'blur').attr('operator', 'in').attr('result', 'glow');
+  redFilter.append('feComposite').attr('in', 'SourceGraphic').attr('in2', 'glow').attr('operator', 'over');
 
   // 定义箭头
   defs.append('marker')
@@ -385,6 +567,7 @@ const initGraph = () => {
     .on('click', (event) => {
         if (event.target.classList.contains('zoom-background')) {
             selectedTopic.value = null;
+            selectedNodeLeafId.value = null;
         }
     });
 
@@ -441,7 +624,22 @@ const updateGraph = () => {
     .attr('class', 'node-group')
     .on('click', (event, d) => {
       event.stopPropagation(); // 防止触发背景点击
+
+      // 如果处于复盘模式且是教师节点，则打开总结弹窗
+      if (isHighlightingFlags.value && d.hasTeacherFlag) {
+        openSummaryModal(d);
+        return;
+      }
+
       selectedTopic.value = d.id;
+      
+      // 更新该节点关联的最末端消息 ID，用于 ViewE/ViewF 过滤和下次教师干预
+      if (d.turnsList && d.turnsList.length > 0) {
+        selectedNodeLeafId.value = d.turnsList[d.turnsList.length - 1].id;
+      } else {
+        // 如果是教师干预节点或其他特殊节点，优先使用存储的 interventionId
+        selectedNodeLeafId.value = d.interventionId || d.id;
+      }
     })
     .call(d3.drag()
       .on('start', dragstarted)
@@ -531,8 +729,7 @@ const updateGraph = () => {
     ticks.enter().append('path')
       .attr('class', 'turn-tick')
       .merge(ticks)
-      .transition().duration(300) // 增加切换动画
-      .attr('d', (v, i) => {
+      .attr('d', (v, i) => { // 取消 d 的过渡，直接更新，避免插值产生非法路径
         const startA = i * anglePerSlot;
         const endA = startA + anglePerSlot - gapAngle;
         return d3.arc()
@@ -541,6 +738,7 @@ const updateGraph = () => {
           .startAngle(startA)
           .endAngle(endA)();
       })
+      .transition().duration(300) 
       .attr('fill', v => v.color)
       .attr('stroke', 'none');
 
@@ -602,86 +800,50 @@ function dragended(event, d) {
   d.fx = null; d.fy = null;
 }
 
-// 监听选中状态或主路径的变化，更新视觉效果
-watch([selectedTopic, mainPathSet], ([newTopic, newPath]) => {
+// 监听选中状态、主路径或复盘模式的变化，更新视觉效果
+watch([selectedTopic, mainPathSet, isHighlightingFlags], ([newTopic, newPath, isReviving]) => {
   if (!svgRef.value || !simulation) return;
   const svg = d3.select(svgRef.value);
   const { links } = graphData.value;
 
-  // 识别选中节点的邻居 (直接父节点和直接子节点)
-  const neighbors = new Set();
-  if (newTopic) {
-    links.forEach(l => {
-      const s = typeof l.source === 'object' ? l.source.id : l.source;
-      const t = typeof l.target === 'object' ? l.target.id : l.target;
-      if (s === newTopic) neighbors.add(t);
-      if (t === newTopic) neighbors.add(s);
-    });
-  }
-
-  // 1. 动态更新力导向图的 X 轴拉力，确保选中路径始终垂直居中
-  const width = svgWrapper.value?.clientWidth || 400;
-  simulation.force('x', d3.forceX(d => {
-    if (newPath.has(d.id)) return width / 2;
-    // 减小位移幅度 (从 250 降至 180)，使侧向平移更柔和
-    return d.branch === 'main' ? width / 2 - 180 : width / 2 + 180;
-  }).strength(0.8)); // 降低拉力强度 (从 2.0 降至 0.8)，让位移过程更具弹性/缓冲感
-  
-  // 采用更小的 alpha 预热，让力导向的重新布局更缓慢细腻
-  simulation.alpha(0.15).restart();
-  
-  // 2. 视觉反馈：统一延长过渡时间至 600ms，并使用更平滑的插值
+  // 1. 节点视觉效果更新
   svg.selectAll('.node-group')
-    .transition().duration(600).ease(d3.easeCubicInOut)
-    .style('opacity', d => (newPath.has(d.id) || neighbors.has(d.id)) ? 1 : 0.15);
-    
-  // 3. 更新节点高亮状态
-  svg.selectAll('.core-circle')
-    .transition().duration(600).ease(d3.easeCubicInOut)
-    .attr('stroke', d => (d.id === newTopic) ? '#FBBF24' : '#8095CA')
-    .attr('stroke-width', d => (d.id === newTopic) ? 8 : 3);
-  
-  // 4. 更新高亮特效 (呼吸环)
-  svg.selectAll('.node-group')
-    .each(function(d) {
-        const isTarget = (newTopic && d.id === newTopic);
-        const ring = d3.select(this).select('.pulse-ring');
-        
-        if (isTarget) {
-          ring.transition().duration(600).attr('opacity', 0.8);
-          ring.classed('animate-pulse-custom', true);
-        } else {
-          ring.transition().duration(600).attr('opacity', 0);
-          ring.classed('animate-pulse-custom', false);
-        }
-    });
-
-  // 5. 更新连线高亮
-  svg.selectAll('.topic-link')
     .transition().duration(600).ease(d3.easeCubicInOut)
     .style('opacity', d => {
-      const s = typeof d.source === 'object' ? d.source.id : d.source;
-      const t = typeof d.target === 'object' ? d.target.id : d.target;
-      return (newPath.has(s) && newPath.has(t)) ? 1 : 0.15;
-    }) 
+        if (isReviving) {
+            return d.hasTeacherFlag ? 1 : 0.2;
+        }
+        return (newPath.has(d.id)) ? 1 : 0.2;
+    })
+    .style('cursor', d => (isReviving && d.hasTeacherFlag) ? 'help' : 'pointer');
+
+  // 2. 节点主体环更新
+  svg.selectAll('.core-circle')
+    .transition().duration(600).ease(d3.easeCubicInOut)
     .attr('stroke', d => {
-      const s = typeof d.source === 'object' ? d.source.id : d.source;
-      const t = typeof d.target === 'object' ? d.target.id : d.target;
-      return (newPath.has(s) && newPath.has(t)) ? '#60A5FA' : '#4a5568';
+        if (isReviving && d.hasTeacherFlag) return '#EF4444';
+        return (d.id === newTopic) ? '#FBBF24' : '#8095CA';
     })
     .attr('stroke-width', d => {
-      const s = typeof d.source === 'object' ? d.source.id : d.source;
-      const t = typeof d.target === 'object' ? d.target.id : d.target;
-      return (newPath.has(s) && newPath.has(t)) ? 4 : 1.5;
+        if (isReviving && d.hasTeacherFlag) return 6;
+        return (d.id === newTopic) ? 8 : 3;
     })
-    .attr('marker-end', d => {
-      const s = typeof d.source === 'object' ? d.source.id : d.source;
-      const t = typeof d.target === 'object' ? d.target.id : d.target;
-      return (newPath.has(s) && newPath.has(t)) ? 'url(#arrowhead-active)' : 'url(#arrowhead)';
-    });
+    .style('filter', d => (isReviving && d.hasTeacherFlag) ? 'url(#glow-red)' : 'url(#glow)');
 
-  // 6. 减缓重绘频率
-  setTimeout(() => updateGraph(), 100);
+  // 3. 连线视觉效果更新
+  svg.selectAll('.topic-link')
+    .transition().duration(600).ease(d3.easeCubicInOut)
+    .style('opacity', d => isReviving ? 0.1 : (newPath.has(d.source.id || d.source) && newPath.has(d.target.id || d.target) ? 1 : 0.15));
+
+  // 4. 重热力导向 (复盘模式下如果不需要移动可以不调用)
+  if (!isReviving) {
+      const width = svgWrapper.value?.clientWidth || 400;
+      simulation.force('x', d3.forceX(d => {
+        if (newPath.has(d.id)) return width / 2;
+        return d.branch === 'main' ? width / 2 - 180 : width / 2 + 180;
+      }).strength(0.8));
+      simulation.alpha(0.15).restart();
+  }
 }, { deep: true });
 
 // 监听数据变化并重新渲染

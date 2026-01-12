@@ -1,4 +1,4 @@
-import { ref, onUnmounted, nextTick } from 'vue';
+import { ref, onUnmounted, nextTick, watch } from 'vue';
 
 /**
  * @description 管理 PBL 讨论的 WebSocket 连接的组合式函数。
@@ -14,6 +14,22 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   const discussionStage = ref('等待开始'); // 初始阶段
   const activeMessageId = ref(null); // 当前活跃的消息节点 ID
   const selectedTopic = ref(null); // 当前选中的主题（用于过滤）
+  const selectedNodeLeafId = ref(null); // 当前选中主题节点的最新一条消息 ID
+  const activeQuestionInfo = ref({ sceneIndex: -1, questionIndex: -1 });
+  const interventionSummaries = ref({}); // 新增：离线/归档的总结分析数据 (intervention_id -> {parts, timestamp})
+
+  // 监听活跃问题变化，同步后端的讨论上下文（active_id 和 branch）
+  watch(activeQuestionInfo, (newVal) => {
+    if (socket && isConnected.value && newVal.sceneIndex !== -1) {
+      console.log('Switching socket context to:', newVal);
+      isPaused.value = true; // 切换查看时，默认进入暂停状态，由教师决定何时开始/恢复
+      socket.send(JSON.stringify({
+        action: 'switch_context',
+        scene_index: newVal.sceneIndex,
+        question_index: newVal.questionIndex
+      }));
+    }
+  }, { deep: true });
 
   let socket = null;
   let reconnectTimer = null;
@@ -33,6 +49,39 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
+      if (data.type === 'history_sync' && data.messages) {
+        console.log('Synchronizing history from server:', data.messages.length);
+
+        // 1. 同步总结分析
+        if (data.intervention_summaries) {
+          interventionSummaries.value = { ...interventionSummaries.value, ...data.intervention_summaries };
+          console.log('Synchronized summaries:', Object.keys(data.intervention_summaries).length);
+        }
+
+        // 2. 合并历史消息，避免重复
+        const existingIds = new Set(messages.value.map(m => m.id));
+        const newMsgs = data.messages.filter(m => !existingIds.has(m.id)).map(m => ({
+          id: m.id,
+          parent_id: m.parent_id,
+          branch_id: m.branch_id || 'main',
+          agent: m.agent,
+          text: m.content,
+          summary: m.summary || m.content,
+          topic: m.topic || '历史记录',
+          timestamp: m.timestamp || Date.now(),
+          sceneIndex: m.scene_index,
+          questionIndex: m.question_index
+        }));
+
+        if (newMsgs.length > 0) {
+          messages.value = [...messages.value, ...newMsgs].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          // 如果没有活跃 ID，则设为最后一条
+          if (!activeMessageId.value && messages.value.length > 0) {
+            activeMessageId.value = messages.value[messages.value.length - 1].id;
+          }
+        }
+      }
+
       if (data.type === 'agent_output' && (data.node || data.agent) && data.content) {
         const newMsg = {
           id: data.id || (sessionId + Math.random()),
@@ -42,7 +91,9 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
           text: data.content,
           summary: data.summary || data.content,
           topic: data.topic || currentTopic.value,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          sceneIndex: data.scene_index,
+          questionIndex: data.question_index
         };
         messages.value.push(newMsg);
         activeMessageId.value = newMsg.id;
@@ -62,6 +113,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         console.log('Teacher intervention ack received, resetting topic.');
         currentTopic.value = '待识别';
         selectedTopic.value = null; // 教师干预后取消选中，以便看到最新的分支动态
+        selectedNodeLeafId.value = null;
       }
 
       if (data.type === 'topic_update' && data.topic) {
@@ -113,22 +165,36 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   /**
    * 通过向后端发送初始案例来开始 PBL 讨论。
    * @param {string} initialCase - 病例介绍文本。
+   * @param {number} sceneIndex - 场景索引。
+   * @param {number} questionIndex - 问题索引。
    */
-  const startDiscussion = (initialCase) => {
+  const startDiscussion = (initialCase, sceneIndex = 0, questionIndex = 0) => {
     if (socket && isConnected.value) {
       selectedTopic.value = null; // 开始新讨论时清空选中状态
-      messages.value = [
-        {
-          id: 'case-intro-' + Date.now(),
-          agent: 'case_introduction',
-          text: initialCase,
-          topic: '待识别'
-        }
-      ]; // 初始化并加入病例
+      selectedNodeLeafId.value = null;
+      activeQuestionInfo.value = { sceneIndex, questionIndex };
+
+      // 使用 nextTick 确保在 watch(activeQuestionInfo) 之后执行，防止被 watch 覆盖为暂停状态
+      nextTick(() => {
+        isPaused.value = false;
+      });
+
+      const introMsg = {
+        id: 'case-intro-' + Date.now(),
+        agent: 'case_introduction',
+        text: initialCase,
+        topic: '待识别',
+        sceneIndex,
+        questionIndex
+      };
+      messages.value.push(introMsg);
+
       discussionStage.value = '初步诊断与鉴别诊断';
       socket.send(JSON.stringify({
         action: 'start_discussion',
         initial_case: initialCase,
+        scene_index: sceneIndex,
+        question_index: questionIndex
       }));
 
       nextTick(() => onScrollToBottom());
@@ -164,17 +230,8 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       // 干预后，自动取消暂停状态
       isPaused.value = false;
 
-      let parentId = activeMessageId.value;
-      // 如果当前选中了某个主题，则从该主题对应的最新一条消息后进行教师干预/分支
-      if (selectedTopic.value) {
-        const topicMsgs = messages.value.filter(m => {
-          let tName = m.topic || (m.agent === 'teacher' ? '教师干预' : '待识别');
-          return `${m.branch_id || 'main'}_${tName}` === selectedTopic.value;
-        });
-        if (topicMsgs.length > 0) {
-          parentId = topicMsgs[topicMsgs.length - 1].id;
-        }
-      }
+      // 优先从选中的节点叶子开始干预，否则从当前最活跃的消息开始
+      let parentId = selectedNodeLeafId.value || activeMessageId.value;
 
       socket.send(JSON.stringify({
         action: 'teacher_intervention',
@@ -194,6 +251,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       // 执行回退操作时，自动取消当前的主题选中状态，
       // 并乐观更新活跃消息 ID，以确保视图（尤其是 ViewF）能够立即显示回退后的对话状态。
       selectedTopic.value = null;
+      selectedNodeLeafId.value = null;
       activeMessageId.value = messageId;
       socket.send(JSON.stringify({
         action: 'rollback_to',
@@ -222,6 +280,9 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     discussionStage,
     activeMessageId,
     selectedTopic,
+    selectedNodeLeafId,
+    activeQuestionInfo,
+    interventionSummaries,
     startDiscussion,
     togglePause,
     sendTeacherIntervention,

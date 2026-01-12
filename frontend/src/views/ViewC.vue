@@ -84,7 +84,7 @@
                         <div class="q-actions">
                           <button 
                             class="inspect-btn" 
-                            :class="{ 'active-inspect': activeQuestionInfo.sceneIdx === currentIndex && activeQuestionInfo.qIdx === qIdx }"
+                            :class="{ 'active-inspect': activeQuestionInfo.sceneIndex === currentIndex && activeQuestionInfo.questionIndex === qIdx }"
                             @click.stop="onInspectQuestion(q, qIdx)"
                             title="查看详细解析或关联位置"
                           >
@@ -182,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, defineEmits } from 'vue'
+import { ref, computed, watch, defineEmits, inject } from 'vue'
 import MarkdownIt from 'markdown-it'
 
 // --- 配置与 Props ---
@@ -196,9 +196,11 @@ const props = defineProps({
 // 定义事件，供外部组件监听
 const emit = defineEmits(['inspect-question'])
 
+const { activeQuestionInfo } = inject('pblSocket')
+
 // --- 状态管理 ---
 const currentIndex = ref(0)
-const activeQuestionInfo = ref({ sceneIdx: -1, qIdx: -1 })
+// const activeQuestionInfo = ref({ sceneIdx: -1, qIdx: -1 })
 const showTeacherGuide = ref(true)
 const failedImages = ref(new Set())
 // 编辑状态：{ sceneIdx, qIdx, text }
@@ -261,8 +263,8 @@ const onInspectQuestion = async (questionObj, qIdx) => {
   const activeStory = currentScene.value.story_content;
   const activeQuestion = questionObj.question;
 
-  // 更新当前激活的问题索引，用于 UI 高亮
-  activeQuestionInfo.value = { sceneIdx: currentIndex.value, qIdx };
+  // 更新当前激活的问题索引，用于 UI 高亮 (同步到全局 socket 状态)
+  activeQuestionInfo.value = { sceneIndex: currentIndex.value, questionIndex: qIdx };
 
   console.log('--- Agent Context Updated ---');
   console.log('Scene:', currentScene.value.title);
@@ -277,7 +279,9 @@ const onInspectQuestion = async (questionObj, qIdx) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         story: activeStory,
-        trigger_questions: [activeQuestion] // 重点：传入当前点击的这一个问题
+        trigger_questions: [activeQuestion], // 重点：传入当前点击的这一个问题
+        scene_index: currentIndex.value,
+        question_index: qIdx
       })
     })
     if (response.ok) {

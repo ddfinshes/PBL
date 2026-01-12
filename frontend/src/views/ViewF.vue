@@ -25,7 +25,7 @@
     <!-- Chat Area -->
     <main ref="chatContainer" class="flex-1 overflow-y-auto p-4">
       <!-- Initial State / Start Button -->
-      <div v-if="messages.length === 0" class="text-center py-12">
+      <div v-if="filteredMessages.length === 0" class="text-center py-12">
         <h2 class="text-xl font-semibold text-gray-200">讨论尚未开始</h2>
         <p class="mt-2 text-gray-400">点击下方按钮，以上述病例开始一场新的 PBL 讨论。</p>
         <button
@@ -95,7 +95,9 @@ const {
   togglePause, 
   sendTeacherIntervention,
   selectedTopic,
-  activeMessageId
+  selectedNodeLeafId,
+  activeMessageId,
+  activeQuestionInfo
 } = inject('pblSocket')
 
 // 获取特定消息 ID 向上溯源的所有父节点 ID（即该分支的完整路径）
@@ -124,20 +126,27 @@ const getChainForId = (leafId) => {
 const filteredMessages = computed(() => {
   if (!messages.value?.length) return [];
 
+  // Filter messages by active question
+  const questionMessages = messages.value.filter(m => 
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
+  );
+
+  if (questionMessages.length === 0) return [];
+
   // 1. 确定我们要观察哪条“路径”的终点
-  let leafId = activeMessageId.value;
-  if (selectedTopic.value) {
-     const topicMsgs = messages.value.filter(m => {
-        let tName = m.topic || (m.agent === 'teacher' ? '教师干预' : '待识别');
-        return `${m.branch_id || 'main'}_${tName}` === selectedTopic.value;
-     });
-     if (topicMsgs.length > 0) leafId = topicMsgs[topicMsgs.length - 1].id;
+  // 优先使用选中的节点作为终点，否则使用当前最新活跃消息
+  let localActiveId = selectedNodeLeafId.value || activeMessageId.value;
+  
+  // 兜底校验：如果选中的 ID 不在当前问题的范围内，则取该问题范围内的最后一条
+  if (!questionMessages.find(m => m.id === localActiveId)) {
+    localActiveId = questionMessages[questionMessages.length - 1].id;
   }
 
-  const viewingChain = getChainForId(leafId);
+  const viewingChain = getChainForId(localActiveId);
 
   // 2. 映射消息并标记高亮
-  return messages.value
+  return questionMessages
     .filter(m => m && viewingChain.has(m.id))
     .map(m => {
        const agentName = m.agent;
@@ -225,11 +234,16 @@ const handleStartDiscussion = async () => {
   
   // 优先使用当前选中的案例情节，如果没有则用默认文字
   let textToSend = initialCaseText
+  let sIdx = 0
+  let qIdx = 0
+
   if (props.activeContext) {
     textToSend = `${props.activeContext.story}\n\n引导问题：${props.activeContext.question}\n请各位同学开始讨论。`
+    sIdx = activeQuestionInfo.value.sceneIndex
+    qIdx = activeQuestionInfo.value.questionIndex
   }
   
-  startDiscussion(textToSend)
+  startDiscussion(textToSend, sIdx, qIdx)
 }
 
 const handleTeacherIntervention = (messageText) => {

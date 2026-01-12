@@ -36,7 +36,7 @@
       </div>
 
       <!-- ViewD 和 ViewE 并排区域 -->
-      <div style="flex: 2; min-height: 0; display: flex; gap: 10px;">
+      <div style="flex: 3; min-height: 0; display: flex; gap: 10px;">
         <div style="flex: 1; min-width: 0;">
           <ViewD style="height: 100%;" />
         </div>
@@ -75,7 +75,9 @@ const {
   togglePause, 
   sendTeacherIntervention,
   activeMessageId,
-  rollbackTo
+  rollbackTo,
+  activeQuestionInfo,
+  selectedNodeLeafId
 } = usePBLSocket(sessionId, () => {
     // 自动滚动的逻辑交给组件内部处理或通过事件
 });
@@ -94,7 +96,9 @@ provide('pblSocket', {
   sendTeacherIntervention,
   activeMessageId,
   rollbackTo,
-  selectedTopic // 提供给子组件
+  selectedTopic, // 提供给子组件
+  activeQuestionInfo,
+  selectedNodeLeafId
 })
 
 // --- 修改点 3: 定义响应式变量存储数据 ---
@@ -120,6 +124,13 @@ const handleDataReady = (payload) => {
 const handleInspectQuestion = (payload) => {
   console.log('父组件监听到问题查看:', payload)
   // payload 结构: { sceneIndex, questionIndex, data: questionObj }
+  
+  // 更新活跃问题信息
+  activeQuestionInfo.value = { 
+    sceneIndex: payload.sceneIndex, 
+    questionIndex: payload.questionIndex 
+  };
+
   if (caseResult.value && caseResult.value.scenes[payload.sceneIndex]) {
     const scene = caseResult.value.scenes[payload.sceneIndex]
     activeContext.value = {

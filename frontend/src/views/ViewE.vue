@@ -91,7 +91,14 @@
 import { ref, onMounted, inject, computed, watch, nextTick } from 'vue';
 import axios from 'axios';
 
-const { messages, selectedTopic, activeMessageId, rollbackTo } = inject('pblSocket');
+const { 
+  messages, 
+  selectedTopic, 
+  selectedNodeLeafId,
+  activeMessageId, 
+  activeQuestionInfo,
+  rollbackTo 
+} = inject('pblSocket');
 const container = ref(null);
 const personas = ref({});
 
@@ -100,20 +107,27 @@ const activePathIds = computed(() => {
   const path = new Set();
   if (!messages?.value?.length) return path;
 
-  let curr = activeMessageId?.value;
+  // Filter messages by active question
+  const questionMessages = messages.value.filter(m => 
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
+  );
+
+  let curr = selectedNodeLeafId.value || activeMessageId?.value;
+  // 如果当前活跃消息不在范围内，取范围内最后一个
+  if (!questionMessages.find(m => m.id === curr) && questionMessages.length > 0) {
+    curr = questionMessages[questionMessages.length - 1].id;
+  }
+
   let safety = 0;
   while (curr && safety < 1000) {
     path.add(curr);
-    const m = messages.value.find(msg => msg.id === curr);
+    const m = questionMessages.find(msg => msg.id === curr);
     const next = m ? m.parent_id : null;
-    if (next === curr) break;
+    if (!next || next === curr) break;
     curr = next;
     safety++;
   }
-  // 还要包括没有 parent_id 的初始消息
-  messages.value.forEach(m => {
-    if (!m.parent_id) path.add(m.id);
-  });
   return path;
 });
 
@@ -131,17 +145,31 @@ const fetchPersonas = async () => {
 const filteredMessages = computed(() => {
   if (!messages.value?.length) return [];
 
-  // 保留除系统处理节点外的所有重要角色（包含老师）
+  // Filter messages by active question
   let baseMessages = messages.value.filter(m => 
     m && m.agent !== 'case_introduction' && 
-    m.agent !== 'teacher_handler'
+    m.agent !== 'teacher_handler' &&
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
   );
   
+  if (baseMessages.length === 0) return [];
+
+  // 获取该问题下的所有消息，用于查找
+  const questionMessages = messages.value.filter(m => 
+    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+    m.questionIndex === activeQuestionInfo.value.questionIndex
+  );
+
   // 1. 确定我们要展示哪条路径
-  let leafId = activeMessageId?.value;
+  let leafId = selectedNodeLeafId.value || activeMessageId?.value;
+  if (!questionMessages.find(m => m.id === leafId)) {
+    leafId = questionMessages[questionMessages.length - 1].id;
+  }
+
   if (selectedTopic?.value) {
      // 找到选中主题涉及的最佳叶子节点（该主题下的最后一条发言）
-     const topicMsgs = messages.value.filter(m => {
+     const topicMsgs = questionMessages.filter(m => {
         let tName = m.topic || (m.agent === 'teacher' ? '教师干预' : '待识别');
         return `${m.branch_id || 'main'}_${tName}` === selectedTopic.value;
      });
@@ -154,14 +182,13 @@ const filteredMessages = computed(() => {
   let safety = 0;
   while (curr && safety < 1000) {
     pathIds.add(curr);
-    const m = messages.value.find(msg => msg.id === curr);
+    const m = questionMessages.find(msg => msg.id === curr);
     const next = m ? m.parent_id : null;
-    if (next === curr) break;
+    if (!next || next === curr) break;
     curr = next;
     safety++;
   }
 
-  // 始终包含根节点的病例介绍（如果需要的话，但这里 baseMessages 滤掉了）
   // 确保所有在路径上的消息被按时间顺序排列
   return baseMessages
     .filter(m => pathIds.has(m.id))
