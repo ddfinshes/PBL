@@ -1,0 +1,350 @@
+{
+  "pbl-session-1768225473382": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_d5a4",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "患者：男，45岁，因“突发胸痛2小时”入院。既往有高血压病史5年，吸烟史20年。查体：血压150/90mmHg，心率110次/分，双肺呼吸音清。心电图提示V1-V5导联ST段抬高。请各位同学开始讨论。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "ad06c323",
+          "parent_id": "init_0_0_d5a4",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "这个患者中年男性，有高血压和长期吸烟史，现在突发胸痛，心电图显示V1到V5导联ST段抬高，这是前壁心肌梗死的典型表现。心率快也可能提示交感兴奋或心功能代偿。我觉得首先要考虑急性前壁ST段抬高型心肌梗死，得尽快评估能否溶栓或做介入治疗。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "58247b78",
+          "parent_id": "ad06c323",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我同意前面同学说的，确实是急性前壁心肌梗死的表现。不过我想补充一点：V1-V5导联抬高也得注意排除其他可能引起ST段抬高的情况，比如早期复极综合征或心包炎，虽然结合胸痛和危险因素，还是更倾向心梗。另外，患者血压不低，可以尽快准备抗血小板药物，同时要查心肌酶和超声心动图来进一步支持诊断。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "f8657b72",
+          "parent_id": "58247b78",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我同意前面同学的分析，确实要考虑急性前壁心肌梗死。不过我想补充一点：V1-V5导联ST段抬高还要注意是否为左主干病变或前降支近端闭塞，这类情况容易出现大面积前壁心梗，甚至导致心源性休克。虽然目前双肺呼吸音清，血压尚可，但心率快提示可能存在早期血流动力学不稳定，需密切监测。建议尽快完善心肌标志物和超声心动图，评估有无室壁运动异常。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "84dad518",
+          "parent_id": "f8657b72",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我同意前面同学提到的左主干或前降支近端病变的可能性。确实，V1-V5广泛ST段抬高合并心动过速，要警惕恶性心律失常和快速进展为心源性休克的风险。我想补充一点：患者虽目前双肺无啰音，但前壁梗死易导致室间隔穿孔或急性二尖瓣反流，后续听诊要注意新出现的杂音。另外，建议尽快启动抗凝、抗血小板治疗，并评估溶栓禁忌，为急诊介入争取时间。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ]
+    }
+  },
+  "pbl-session-1768225568919": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_b3fa",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "07c59d13",
+          "parent_id": "init_0_0_b3fa",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "老师，您好，我还没有听到具体的病例摘要和触发问题，请您先介绍一下患者的基本情况和我们这次讨论的重点。这样我们可以更有针对性地开展分析和讨论。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ]
+    }
+  },
+  "pbl-session-1768225634441": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_52a3",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "072cdafa",
+          "parent_id": "init_0_0_52a3",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "老师，请问这个病例的具体信息什么时候可以提供？我们需要结合患者的病史、症状和检查结果才能开展讨论。目前还没有收到完整的病例摘要，无法进行下一步分析。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "d89a902d",
+          "parent_id": "072cdafa",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "老师，我们现在确实需要完整的病例摘要才能开始分析。正如刚才同学提到的，没有病史、症状和检查结果这些关键信息，我们无法进行有针对性的讨论。您看能否提供具体的临床资料？这样我们才能继续推进。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ]
+    }
+  },
+  "pbl-session-1768225804747": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_3250",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "be7960e7",
+          "parent_id": "init_0_0_3250",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "请提供具体的病例摘要和触发问题，以便我能够参与讨论。目前尚未收到相关临床信息，无法进行分析或回应其他同学的发言。  \n我需要更多细节才能开始。  \n（提示：可补充患者主诉、现病史、查体、辅助检查等关键信息）",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "0a74614e",
+          "parent_id": "be7960e7",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我同意前面同学的意见，目前缺乏具体的病例信息，无法开展有效讨论。我们需要患者的主诉、现病史、体格检查和初步辅助检查结果等资料，才能进行系统分析。建议先由老师或案例提供者补充完整临床资料，以便我们后续围绕关键线索展开推理和讨论。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ]
+    }
+  },
+  "pbl-session-1768226016183": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_7ffd",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "555ad103",
+          "parent_id": "init_0_0_7ffd",
+          "branch_id": "main",
+          "agent": "hh",
+          "content": "刚才提到金大爷有泡沫尿，我来说一下。泡沫尿不等于蛋白尿，虽然蛋白尿确实会导致小便起泡，就像我们做实验时看到的那样——蛋白质改变表面张力。但尿液浓缩、排尿过快也可能出现泡沫。不过结合他尿蛋白两个加号，这个泡沫尿很可能是病理性蛋白尿，提示肾小球滤过屏障受损，需要进一步看24小时尿蛋白定量。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "ad62a42e",
+          "parent_id": "555ad103",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "我同意你对泡沫尿的分析。确实，单次尿蛋白两个加号不能直接定性，但结合金大爷有糖尿病和高血压病史，长期血管病变可能已累及肾脏，导致糖尿病肾病或高血压肾损害，这种背景下蛋白尿更倾向病理性。我觉得接下来除了查24小时尿蛋白，还得评估肾功能和尿微量白蛋白/肌酐比值，看看有没有慢性肾脏病的证据。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "36e77c82",
+          "parent_id": "ad62a42e",
+          "branch_id": "main",
+          "agent": "zz",
+          "content": "我同意你们对蛋白尿的分析，但我想问一下，会不会存在其他导致水肿和蛋白尿的情况？比如是不是要排除一下低蛋白血症引起的肾病性水肿？毕竟他长期慢性病，营养状态可能也不太好，这个有没有可能影响胶体渗透压，导致小腿肿胀？需要查个血清白蛋白确认一下吧？",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "8d159942",
+          "parent_id": "36e77c82",
+          "branch_id": "main",
+          "agent": "hh",
+          "content": "我同意zz提到的低蛋白血症可能性。确实，长期糖尿病和高血压患者常伴有营养不良或蛋白质丢失，血清白蛋白降低会减少血浆胶体渗透压，导致液体外渗到组织间隙，引起下肢水肿。这个机制和心源性水肿不同，后者是静脉压升高为主的被动淤血。所以查血清白蛋白很有必要，还能帮助判断是不是肾病综合征范围的蛋白尿。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "0377238b",
+          "parent_id": "8d159942",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "我同意hh对水肿机制的区分。确实，低蛋白血症导致的胶体渗透压下降和心功能不全引起的静脉淤血是两种不同路径。金大爷最近咳嗽加重、夜间睡眠差，还要警惕有没有心功能恶化的情况，毕竟他有高血压和糖尿病，都是心肌病的高危因素。是不是也该查个脑钠肽和心脏超声？",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_890a4f",
+          "parent_id": "0377238b",
+          "branch_id": "main",
+          "agent": "teacher",
+          "content": "同学们先分别说一下你们从案例描述中掌握了哪些信息",
+          "summary": "同学们先分别说一下你们从案例描述中掌握了哪些信息",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": true
+        },
+        {
+          "id": "b3fca9cc",
+          "parent_id": "teacher_890a4f",
+          "branch_id": "main",
+          "agent": "hh",
+          "content": "老师，我来汇报一下。金大爷60岁，有高血压、糖尿病病史，近期受凉后出现咳嗽、咳痰、胸闷，自行过量服用维生素C泡腾片三天。现在症状加重，乏力、夜间不能平卧，下肢水肿明显。既往有长期吸烟饮酒史，目前存在泡沫尿和蛋白尿。提示可能存在心肾功能受损，尤其是合并水肿、呼吸困难，需警惕心力衰竭或肾脏疾病进展。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "adc8d38b",
+          "parent_id": "b3fca9cc",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "老师，我来补充一下。金大爷有高血压和糖尿病，这两个都是慢性病，容易伤血管，时间久了可能影响心、肾。他最近着凉后咳嗽加重，还出现胸闷、夜间不能平卧，这可能是心功能变差的表现。加上腿胀、乏力、泡沫尿，我觉得不单是感冒，更可能是心衰或肾的问题在进展，特别是他自己乱吃了三倍剂量的维生素C泡腾片，里面钠含量高，可能会加重水钠潴留，让水肿更严重。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "20399bdd",
+          "parent_id": "adc8d38b",
+          "branch_id": "main",
+          "agent": "hh",
+          "content": "老师，我接着uu的补充再强调一点：金大爷过量服用的维生素C泡腾片不仅含钠高，可能加重心脏负担，而且大剂量维生素C在体内代谢后可能增加草酸负荷，对肾功能不全的患者有潜在风险。结合他已有蛋白尿和下肢水肿，要警惕急性肾损伤叠加慢性基础病的可能，建议尽快查肾功能和电解质。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ]
+    }
+  },
+  "pbl-session-1768228437256": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_966f",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\n请各位同学开始讨论。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "6db95ba5",
+          "parent_id": "init_0_0_966f",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "水肿就是组织里水分太多，表现为腿胀、按下去一个坑。常见原因是心、肾、肝的问题，也可能是营养不良或静脉回流不好。金大爷有高血压糖尿病史，现在小腿肿、乏力，我觉得要警惕心功能不全，加上他最近咳嗽胸闷，可能不是普通感冒，需要进一步查体看有没有肺淤血、下肢静脉问题。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "768650d5",
+          "parent_id": "6db95ba5",
+          "branch_id": "main",
+          "agent": "nn",
+          "content": "嗯，我同意uu说的，金大爷这个腿胀确实可能是水肿，按下去有坑那种。不过我还想补充一点，他最近吃了好多维生素C泡腾片，这个会不会也有关系啊？因为这些泡腾片里钠含量好像不低，吃多了可能导致水钠潴留，也可能加重心脏负担……当然，心功能不全还是最可能的原因，但这个因素是不是也得考虑一下？",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "ace734ae",
+          "parent_id": "768650d5",
+          "branch_id": "main",
+          "agent": "ww",
+          "content": "我听nn提到维生素C泡腾片含钠多，这点我觉得说得对。但我想问一下，你说钠多会水钠潴留，那是不是意味着金大爷本身心功能已经不好了，才会因为多吃点钠就肿起来？换句话说，泡腾片可能是诱因，但根子是不是还是心脏问题？我们是不是不能光盯着药片，得先看心脏能不能扛得住？",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "7c846abb",
+          "parent_id": "ace734ae",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "我同意ww的分析，泡腾片里的钠可能是“压垮骆驼的最后一根稻草”。金大爷本身有高血压和糖尿病，都是心功能不全的高危因素，现在又出现夜间咳嗽、胸闷、下肢水肿，这些很可能是左心衰逐渐发展到右心衰的表现。我们不能只看药物诱因，得先评估心脏整体功能，比如查BNP、心脏超声，才能明确是不是心源性水肿为主。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "ea82cfb5",
+          "parent_id": "7c846abb",
+          "branch_id": "main",
+          "agent": "nn",
+          "content": "我同意uu说的，心功能评估确实关键。不过我想再补充一点，金大爷有糖尿病，会不会也有肾损伤？毕竟长期糖尿病可能影响肾脏，导致蛋白尿、低蛋白血症，也可能引起水肿……当然，现在症状还是更偏向心源性，但我觉得肾脏方面也不能完全排除，可能需要查个尿常规和肾功能看看。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "2878f70a",
+          "parent_id": "ea82cfb5",
+          "branch_id": "main",
+          "agent": "ww",
+          "content": "我听nn说要查尿常规和肾功能，这点我觉得有必要。但我想问，如果真有糖尿病肾病，一般下肢肿得这么明显吗？而且他最近才三天，会不会太急了？再说了，他晚上睡不好、咳嗽，还是更像心衰往上走的表现。咱们是不是先把心的问题摸清楚，再考虑肾？",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "4e199dcd",
+          "parent_id": "2878f70a",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "我同意ww的疑问，急性肾损伤一般不会这么快引起明显水肿，但糖尿病患者的肾脏基础可能已经受损，只是平时没表现出来。现在加上高钠摄入和心功能负担加重，可能是多因素叠加。所以我觉得不能非此即彼，应该同时排查心源性和肾性因素，比如查尿蛋白、血白蛋白、肌酐，再结合BNP和心脏超声，才能分清主次。",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ]
+    }
+  }
+}

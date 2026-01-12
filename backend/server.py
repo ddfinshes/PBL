@@ -520,6 +520,200 @@ session_tasks = {}
 # 结构: { session_id: { "messages": [...], "active_id": "none" } }
 session_histories = {}
 
+DISCUSSION_FILE = BASE_DIR / "discussion.json"
+
+
+def persist_discussion(session_id, messages_map):
+    """将讨论历史持久化到 discussion.json，按 trigger question 分块存储"""
+    try:
+        data = {}
+        if DISCUSSION_FILE.exists():
+            with open(DISCUSSION_FILE, "r", encoding="utf-8") as f:
+                content = f.read()
+                if content.strip():
+                    data = json.loads(content)
+
+        session_data = data.get(session_id, {})
+
+        # 按 scene_index 和 question_index 进行分组
+        for msg_id, msg in messages_map.items():
+            s_idx = msg.get("scene_index", 0)
+            q_idx = msg.get("question_index", 0)
+            block_key = f"q_{s_idx}_{q_idx}"
+
+            if block_key not in session_data:
+                session_data[block_key] = {"messages": []}
+
+            # 检查是否已存在
+            if not any(m["id"] == msg_id for m in session_data[block_key]["messages"]):
+                # 序列化副本 (去掉不可序列化的 langchain_msg)
+                store_msg = {k: v for k, v in msg.items() if k !=
+                             "langchain_msg"}
+                session_data[block_key]["messages"].append(store_msg)
+
+        data[session_id] = session_data
+
+        with open(DISCUSSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error persisting discussion: {e}")
+
+
+@app_fastapi.post("/api/generate-intervention-summary")
+async def api_generate_intervention_summary(request: InterventionSummaryRequest):
+    """根据教师干预点，优先检查已归档总结，否则并行调用 Qwen 生成"""
+    try:
+        logger.info(
+            f"=== Summary generation requested for {request.intervention_id} ===")
+
+        # 1. 优先从磁盘（归档文件）检查是否已有总结
+        block_key = f"q_{request.scene_index}_{request.question_index}"
+        if DISCUSSION_FILE.exists():
+            with open(DISCUSSION_FILE, "r", encoding="utf-8") as f:
+                disk_data = json.load(f)
+                cached = disk_data.get(request.session_id, {}).get(block_key, {}).get(
+                    "intervention_summaries", {}).get(request.intervention_id)
+                if cached and "parts" in cached:
+                    logger.info(
+                        f"Found archived summary for {request.intervention_id}. Skipping LLM.")
+                    return {
+                        "status": "success",
+                        "summary_parts": cached["parts"],
+                        "is_archived": True
+                    }
+
+        # 2. 获取消息地图：优先内存，缺失则查文件
+        messages_map = {}
+        if request.session_id in session_histories:
+            messages_map = session_histories[request.session_id]["messages_map"].copy(
+            )
+            logger.info("Accessing session from memory.")
+
+        target_id = request.intervention_id
+        # 如果内存中找不到该干预点，尝试从本地文件补全（可能是旧会话或刚重启）
+        if target_id not in messages_map:
+            logger.info(
+                f"Target {target_id} not in memory, checking discussion.json...")
+            if DISCUSSION_FILE.exists():
+                with open(DISCUSSION_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if request.session_id in data:
+                        full_history = data[request.session_id]
+                        for q_key, q_data in full_history.items():
+                            for m in q_data.get("messages", []):
+                                if m["id"] not in messages_map:
+                                    messages_map[m["id"]] = m
+                        logger.info(
+                            f"Updated messages_map from file. Total: {len(messages_map)}")
+
+        if not messages_map or target_id not in messages_map:
+            logger.error(
+                f"Message {target_id} not found in memory or session file.")
+            return {"status": "error", "detail": "Intervention message not found"}, 404
+
+        intervention_msg = messages_map[target_id]
+        parent_id = intervention_msg.get("parent_id")
+
+        # 2. 搜集介入前的上下文
+        logger.info(f"Collecting context for parent_id: {parent_id}")
+        context_msgs = []
+        curr = parent_id
+        count = 0
+        while curr and count < 10:
+            m = messages_map.get(curr)
+            if m:
+                context_msgs.append(f"{m['agent']}: {m['content']}")
+                curr = m.get("parent_id")
+                count += 1
+            else:
+                break
+        context_msgs.reverse()
+        context_text = "\n".join(context_msgs)
+
+        # 3. 搜集介入后的即时反应
+        logger.info(
+            f"Collecting consequences for intervention_id: {target_id}")
+        consequence_msgs = []
+        children = [m for m in messages_map.values() if m.get(
+            "parent_id") == target_id]
+        children.sort(key=lambda x: x.get("timestamp", 0))
+        for c in children[:5]:
+            consequence_msgs.append(f"{c['agent']}: {c['content']}")
+        consequence_text = "\n".join(
+            consequence_msgs) if consequence_msgs else "暂无后续讨论"
+
+        logger.info(f"Calling LLM ({LLM_MODEL_NAME}) parallelly...")
+        llm = ChatOpenAI(
+            model_name=LLM_MODEL_NAME,
+            openai_api_base=BASE_URL,
+            openai_api_key=DASHSCOPE_API_KEY,
+            temperature=0,
+            timeout=60  # 设置 60s 超时防止一直挂起
+        )
+
+        async def get_part(prompt_content):
+            resp = await llm.ainvoke(prompt_content)
+            return resp.content
+
+        prompt_context = f"你是一名 PBL 教育专家。请根据提供的学生讨论上下文，总结在此教师介入前的讨论状态（包含主题趋势、学生观点分布、是否存在僵局或不均等）。\n上下文：\n{context_text}\n要求：客观、简练，直接输出总结，不要包含开头。"
+        prompt_action = f"你是一名 PBL 教育专家。请对以下教师的干预行为进行客观的‘形式性描述’（如：提问、复述、指出证据、点名等）。\n干预内容：\n{intervention_msg['content']}\n要求：去意图化，仅描述事实，直接输出。"
+        prompt_consequence = f"你是一名 PBL 教育专家。请根据教师介入后的后续讨论，总结即时的互动变化（是否产生了新假设、讨论是否聚焦、语气变化等）。\n后续讨论：\n{consequence_text}\n要求：客观简练，直接输出。"
+
+        # 并行执行
+        results = await asyncio.gather(
+            get_part(prompt_context),
+            get_part(prompt_action),
+            get_part(prompt_consequence)
+        )
+
+        logger.info("LLM summary generation completed successfully.")
+
+        return {
+            "status": "success",
+            "summary_parts": {
+                "context": results[0],
+                "action": results[1],
+                "consequence": results[2]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error generating summary: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/save-intervention-summary")
+async def api_save_intervention_summary(request: SaveSummaryRequest):
+    """将编辑后的总结保存回 discussion.json"""
+    try:
+        if not DISCUSSION_FILE.exists():
+            return {"status": "error", "detail": "File not found"}, 404
+
+        with open(DISCUSSION_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        session_id = request.session_id
+        block_key = f"q_{request.scene_index}_{request.question_index}"
+
+        if session_id not in data:
+            data[session_id] = {}
+        if block_key not in data[session_id]:
+            data[session_id][block_key] = {
+                "messages": [], "intervention_summaries": {}}
+
+        if "intervention_summaries" not in data[session_id][block_key]:
+            data[session_id][block_key]["intervention_summaries"] = {}
+
+        data[session_id][block_key]["intervention_summaries"][request.intervention_id] = request.summary_data
+
+        with open(DISCUSSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error saving summary: {e}")
+        return {"status": "error", "detail": str(e)}, 500
+
+
 @app_fastapi.get("/get_personas")
 async def get_personas():
     """从 agent_setting.json 读取所有 agent 的配置并返回。"""
