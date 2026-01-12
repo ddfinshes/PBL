@@ -1,34 +1,78 @@
 {
-  "A": {
-    "name": "A",
-    "age": "",
+  "徐源松": {
+    "name": "徐源松",
+    "age": "100",
     "major": "",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
-        "病理学",
-        "诊断学"
+        "病理生理学",
+        "医学伦理学"
       ],
       "medium": [
-        "生理学",
-        "病理生理学",
         "药理学"
       ],
-      "low": [
-        "内科学",
-        "医学伦理学"
-      ]
+      "low": []
     },
     "cognitive_orientation": {
       "attentional_anchor": [
+        "Symptoms",
+        "Social Cues"
+      ],
+      "reasoning_entry": [
+        "Mechanism",
+        "Risk Perception"
+      ],
+      "causal_structure": [
+        "Linear Causality",
+        "Multi-Concurrent"
+      ]
+    },
+    "social_interaction_style": {
+      "verbal_confidence": "low",
+      "language_register": "low",
+      "interaction_role": "follower"
+    },
+    "learning_adaptivity": "low"
+  },
+  "quan": {
+    "name": "quan",
+    "age": "",
+    "major": "",
+    "avatar": "avatar1.png",
+    "color": "#FBCEDC",
+    "cardColor": "#FBCEDC",
+    "knowledge_background": {
+      "high": [
+        "病理学",
+        "生理学",
+        "诊断学",
+        "内科学",
+        "药理学",
+        "医学伦理学"
+      ],
+      "medium": [
+        "病理生理学"
+      ],
+      "low": []
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "Social Cues",
+        "Symptoms",
         "Patient Events"
       ],
       "reasoning_entry": [
+        "External Factors",
+        "Risk Perception",
+        "Mechanism",
         "Familiarity Driven"
       ],
       "causal_structure": [
+        "Multi-Concurrent",
+        "Linear Causality",
         "Cues-Driven"
       ]
     },
@@ -37,50 +81,10 @@
       "language_register": "medium",
       "interaction_role": "leader"
     },
-    "learning_adaptivity": "medium"
-  },
-  "B": {
-    "name": "B",
-    "age": "",
-    "major": "",
-    "avatar": "avatar1.png",
-    "color": "#FBCEDC",
-    "cardColor": "#FBCEDC",
-    "knowledge_background": {
-      "high": [
-        "内科学"
-      ],
-      "medium": [
-        "病理学",
-        "病理生理学",
-        "诊断学"
-      ],
-      "low": [
-        "药理学",
-        "医学伦理学",
-        "生理学"
-      ]
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "Symptoms"
-      ],
-      "reasoning_entry": [
-        "Mechanism"
-      ],
-      "causal_structure": [
-        "Linear Causality"
-      ]
-    },
-    "social_interaction_style": {
-      "verbal_confidence": "high",
-      "language_register": "medium",
-      "interaction_role": "follower"
-    },
     "learning_adaptivity": "high"
   },
-  "C": {
-    "name": "C",
+  "aaa": {
+    "name": "aaa",
     "age": "",
     "major": "",
     "avatar": "avatar1.png",
@@ -89,27 +93,27 @@
     "knowledge_background": {
       "high": [],
       "medium": [
-        "病理学",
         "药理学",
-        "病理生理学",
-        "生理学"
+        "医学伦理学"
       ],
-      "low": [
-        "内科学",
-        "医学伦理学",
-        "诊断学"
-      ]
+      "low": []
     },
     "cognitive_orientation": {
       "attentional_anchor": [
         "Social Cues"
       ],
       "reasoning_entry": [
+        "External Factors",
         "Risk Perception"
       ],
       "causal_structure": [
         "Multi-Concurrent"
       ]
+    },
+    "social_interaction_style": {
+      "verbal_confidence": "medium",
+      "language_register": "medium",
+      "interaction_role": "leader"
     },
     "social_interaction_style": {
       "verbal_confidence": "low",

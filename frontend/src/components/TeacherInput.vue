@@ -1,13 +1,19 @@
 <template>
   <div class="border-t border-gray-600 p-4 w-full">
-    <div class="relative flex items-center space-x-2">
-      <!-- Pause/Resume Button moved here -->
-      <button 
-        v-if="hasMessages"
-        @click="$emit('toggle-pause')"
-        class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-full transition-all duration-200 shadow-md"
-        :class="isPaused ? 'bg-orange-600 hover:bg-orange-700 text-white animate-pulse' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'"
-        :title="isPaused ? '继续讨论' : '暂停讨论'"
+    <div class="relative flex items-center">
+      <input
+      type="text"
+      v-model="inputText"
+      @keydown.enter="handleSend"
+      :placeholder="placeholderText"
+      :disabled="!isSocketConnected"
+      class="w-full px-4 py-3 border border-gray-300 rounded-l-full focus:outline-none focus:ring-2 focus:ring-[#8095CA] transition-shadow duration-200 text-gray-800 bg-white"
+      />
+      
+      <button
+        @click="handleSend"
+        :disabled="!isSocketConnected || !inputText.trim()"
+        class="px-6 py-3 bg-[#8095CA] text-white font-semibold rounded-r-full shadow-md hover:bg-[#6D8DBE] focus:outline-none disabled:bg-gray-400 transition-colors duration-200"
       >
         <span v-if="isPaused">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
