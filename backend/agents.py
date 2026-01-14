@@ -68,6 +68,175 @@ student_nodes: Dict[str, Callable] = {}
 #     )
 
 
+# def format_persona_to_string(persona: Dict) -> str:
+#     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
+#     verbal_confidence = {
+#         "high": "语气肯定，容易主导甚至误导",
+#         "medium": "语气平缓，实事求是",
+#         "low": "频繁使用不确定表达，即使观点正确"
+#     }
+#     language_register = {
+#         "high": "发言使用医学术语（如，水肿、乏力）",
+#         "medium": "发言中有时使用医学术语（如，水肿、乏力），有时使用日常口语表达（如，腿胀、没劲）",
+#         "low": "发言中总是使用日常口语表达（如，腿胀、没劲）"
+#     }
+#     interaction_role = {
+#         "leader": "领导同学间的讨论，擅长总结发言和推进讨论",
+#         "follower": "附和前面同学的发言，习惯附和、支持他人",
+#         "critical": "质疑者其他同学的发言/观点，习惯于提出反对与质疑",
+#     }
+    
+
+#     # 认知维度映射 (Key 为前端传递的英文, Value 为 Prompt 中使用的中文描述)
+#     # const subDimensionTranslations = {
+#     #     'Patient Events': '患者事件',
+#     #     'Symptoms': '临床症状',
+#     #     'Social Cues': '社会线索',
+#     #     'Status': '患者状态',
+#     #     'Mechanism': '机制推演',
+#     #     'External Factors': '外部因素',
+#     #     'Risk Perception': '风险感知',
+#     #     'Familiarity Driven': '自身经验驱动',
+#     #     'Linear Causality': '线性因果',
+#     #     'Multi-Concurrent': '多重并发',
+#     #     'Cues-Driven': '心理-社会-环境',
+#     #     'Undefined': '未定义'
+#     # }
+#     attentional_anchor_map = {
+#         "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
+#         "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
+#         "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
+#         "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
+#     }
+#     reasoning_entry_map = {
+#         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
+#         "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
+#         "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
+#         "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
+#     }
+#     causal_structure_map = {
+#         "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
+#         "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
+#         "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
+#         "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
+#     }
+
+#     learning_adaptivity = {
+#         "low": "即使被提示也坚持原观点",
+#         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
+#         "high": "能根据新线索快速修正",
+#     }
+#     def process_cog(dim_key, mapping):
+#         vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
+#         if not vals:
+#             return "无明确偏好"
+#         if isinstance(vals, str):
+#             vals = [vals]
+#         res = []
+#         for v in vals:
+#             k = v.lower().replace(' ', '_').replace('-', '_')
+#             desc = mapping.get(k, v)
+#             if desc:
+#                 res.append(desc if desc else v)
+#             else:
+#                 res.append(v)
+#         return " -> ".join(res) + " (按优先级排序)"
+
+#     kb = persona.get('knowledge_background', {}) or {}
+
+#     social = persona.get('social_interaction_style', {}) or {}
+#     print('------------------------')
+#     print(persona)
+#     print('------------------------')
+#     return (f"""
+#     - **姓名**：{persona.get('name', '匿名')} \n
+#     - **年龄**：{persona.get('age', 22)} \n
+#     - **性别/专业**：{persona.get('major', '医学')} \n
+    
+#     - **领域知识深度**：
+#         - 教科书级理解：{', '.join(kb.get('high', []))} \n
+#             表现：能给出标准解释，但可能不敏感于关键细节。\n
+#         - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
+#             表现：能提名词，但机制模糊或泛化。\n
+#         - 仅生活常识：{', '.join(kb.get('low', []))} \n
+#             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
+
+#     - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
+#         - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
+#         - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
+#         - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
+
+#     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
+#         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
+
+#     - **社会行为维度**（作用：决定 agent“怎么说、怎么影响他人”）\n
+#         - 发言风格: {verbal_confidence.get(social.get('verbal_confidence'), "平稳")} \n
+#         - 发言专业用语情况：{language_register.get(social.get('language_register'), "灵活切换")} \n
+#         - 与其他同学互动特点：{interaction_role.get(social.get('interaction_role'), "参与讨论")} \n
+#     """
+#             )
+
+# def memory_format(persona:Dict) ->str:
+#     attentional_anchor_map = {
+#         "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
+#         "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
+#         "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
+#         "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
+#     }
+#     reasoning_entry_map = {
+#         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
+#         "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
+#         "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
+#         "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
+#     }
+#     causal_structure_map = {
+#         "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
+#         "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
+#         "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
+#         "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
+#     }
+
+#     learning_adaptivity = {
+#         "low": "即使被提示也坚持原观点",
+#         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
+#         "high": "能根据新线索快速修正",
+#     }
+#     def process_cog(dim_key, mapping):
+#         vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
+#         if not vals:
+#             return "无明确偏好"
+#         if isinstance(vals, str):
+#             vals = [vals]
+#         res = []
+#         for v in vals:
+#             k = v.lower().replace(' ', '_').replace('-', '_')
+#             desc = mapping.get(k, v)
+#             if desc:
+#                 res.append(desc if desc else v)
+#             else:
+#                 res.append(v)
+#         return " -> ".join(res) + " (按优先级排序)"
+
+#     kb = persona.get('knowledge_background', {}) or {}
+
+#     return (f"""
+#     - **领域知识深度**：
+#         - 教科书级理解：{', '.join(kb.get('high', []))} \n
+#             表现：能给出标准解释，但可能不敏感于关键细节。\n
+#         - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
+#             表现：能提名词，但机制模糊或泛化。\n
+#         - 仅生活常识：{', '.join(kb.get('low', []))} \n
+#             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
+
+#     - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
+#         - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
+#         - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
+#         - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
+
+#     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
+#         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
+#     """)
+
 def format_persona_to_string(persona: Dict) -> str:
     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
     verbal_confidence = {
@@ -103,22 +272,21 @@ def format_persona_to_string(persona: Dict) -> str:
     #     'Undefined': '未定义'
     # }
     attentional_anchor_map = {
-        "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
-        "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
-        "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
-        "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
+        "symptoms": '对于信息的筛选优先关注患者当前主诉与可直接感知的症状体征，并将其视为主要证据。例如：医生第一时间抓住“咳嗽咳痰、胸闷、眼肿”，反复追问咳了多久、痰多不多、胸闷严不严重，而很少去问病史。',
+        "present_illness": '对于信息的筛选优先关注能够解释疾病发生与演变过程的信息，关注时间顺序、进展趋势与诱发因素。例如：医生注意到“三天前开始、逐渐加重、最近转差”。',
+        "past_medical_history": '对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。例如：对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。',
+        "physicochemical_parameters": '信息筛选优先关注客观、可量化的检查结果。例如：医生会忽略患者对不适的描述，转而关注“肾功能、影像、实验室结果”。',
     }
     reasoning_entry_map = {
-        "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
-        "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
-        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
-        "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
+        "familiarity_driven": '推理起点：从熟悉或常见病例出发,像不像常见情况。例如：看到咳嗽、咳痰，立刻想到“像普通肺炎/上呼吸道感染”，然后开始用这个熟悉模板去解释所有其他症状',
+        "symptom_significance": '推理起点：从“最显眼 / 最让人不舒服 / 最容易被注意到的症状”开始。例如：因为“胸闷”和“眼肿”很显著提到，先围着这两个症状进行推理，即使它们可能只是整体问题的一部分。',
+        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全。例如：一看到胸闷和浮肿，就优先排查“心衰、肺栓塞、肾衰竭”等高风险诊断，而不管它们出现得是否常见。',
+        "irrelevant_factors": '推理起点：不以疾病实体为中心。例如：一开始关注“这是考试题还是训练案例？”、“老师想我们讨论什么？”、“这个病例是不是设计来考某个知识点？”而不是病人的真实情况。'
     }
     causal_structure_map = {
-        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
-        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
-        "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
-        "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
+        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例。例如：“他就是因为感染了肺炎，所以才会咳嗽、胸闷、乏力，浮肿应该也是感染引起的。”——所有症状被强行压到一个原因上。',
+        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；同时考虑多个因素，并把它们整合进一个连贯的疾病机制中进行推理。例如：“他可能有慢性心功能不全或肾功能问题作为背景，感染诱发了病情加重，因此既有咳嗽胸闷（感染与心肺负担），也有浮肿（心肾因素）。”',
+        "undefined": '推理方式：没有形成一个良好的思维方式。例如：一会儿觉得是感染，一会儿觉得是心脏，一会儿又觉得是肾脏，没有一个持续维持的解释框架。'
     }
 
     learning_adaptivity = {
@@ -145,9 +313,6 @@ def format_persona_to_string(persona: Dict) -> str:
     kb = persona.get('knowledge_background', {}) or {}
 
     social = persona.get('social_interaction_style', {}) or {}
-    print('------------------------')
-    print(persona)
-    print('------------------------')
     return (f"""
     - **姓名**：{persona.get('name', '匿名')} \n
     - **年龄**：{persona.get('age', 22)} \n
@@ -178,22 +343,21 @@ def format_persona_to_string(persona: Dict) -> str:
 
 def memory_format(persona:Dict) ->str:
     attentional_anchor_map = {
-        "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
-        "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
-        "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
-        "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
+        "symptoms": '对于信息的筛选优先关注患者当前主诉与可直接感知的症状体征，并将其视为主要证据。例如：医生第一时间抓住“咳嗽咳痰、胸闷、眼肿”，反复追问咳了多久、痰多不多、胸闷严不严重，而很少去问病史。',
+        "present_illness": '对于信息的筛选优先关注能够解释疾病发生与演变过程的信息，关注时间顺序、进展趋势与诱发因素。例如：医生注意到“三天前开始、逐渐加重、最近转差”。',
+        "past_medical_history": '对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。例如：对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。',
+        "physicochemical_parameters": '信息筛选优先关注客观、可量化的检查结果。例如：医生会忽略患者对不适的描述，转而关注“肾功能、影像、实验室结果”。',
     }
     reasoning_entry_map = {
-        "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
-        "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
-        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
-        "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
+        "familiarity_driven": '推理起点：从熟悉或常见病例出发,像不像常见情况。例如：看到咳嗽、咳痰，立刻想到“像普通肺炎/上呼吸道感染”，然后开始用这个熟悉模板去解释所有其他症状',
+        "symptom_significance": '推理起点：从“最显眼 / 最让人不舒服 / 最容易被注意到的症状”开始。例如：因为“胸闷”和“眼肿”很显著提到，先围着这两个症状进行推理，即使它们可能只是整体问题的一部分。',
+        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全。例如：一看到胸闷和浮肿，就优先排查“心衰、肺栓塞、肾衰竭”等高风险诊断，而不管它们出现得是否常见。',
+        "irrelevant_factors": '推理起点：不以疾病实体为中心。例如：一开始关注“这是考试题还是训练案例？”、“老师想我们讨论什么？”、“这个病例是不是设计来考某个知识点？”而不是病人的真实情况。'
     }
     causal_structure_map = {
-        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
-        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
-        "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
-        "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
+        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例。例如：“他就是因为感染了肺炎，所以才会咳嗽、胸闷、乏力，浮肿应该也是感染引起的。”——所有症状被强行压到一个原因上。',
+        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；同时考虑多个因素，并把它们整合进一个连贯的疾病机制中进行推理。例如：“他可能有慢性心功能不全或肾功能问题作为背景，感染诱发了病情加重，因此既有咳嗽胸闷（感染与心肺负担），也有浮肿（心肾因素）。”',
+        "undefined": '推理方式：没有形成一个良好的思维方式。例如：一会儿觉得是感染，一会儿觉得是心脏，一会儿又觉得是肾脏，没有一个持续维持的解释框架。'
     }
 
     learning_adaptivity = {
@@ -236,6 +400,7 @@ def memory_format(persona:Dict) ->str:
     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
     """)
+
 
 # --------- 通用学生 Prompt ---------
 _STUDENT_SYS_TEMPLATE_STR = '''你是一名医学生，正在小组讨论一个病例：
@@ -313,6 +478,7 @@ def _student_node_fn(agent_id: str):
                 "messages": messages[MES_INDEX:]
             }
         )
+        print(f"prompt: {prompt}")
         print(f"agent_id: {agent_id}, summary : {summary_for_agent}")
         print(f"messages : {messages[MES_INDEX:]}") # 每次传最近了两个同学的发言
 
@@ -468,7 +634,7 @@ async def router_node(state: Dict) -> Dict:
         f"1. 如果最近几轮学生的发言只是重复、改写或轻微重述已有内容（例如：反复围绕同一组病因、检查或结论），请选择 `END`。\n"
         f"2. 如果有学生明确表示“没有新的关键医学点可以补充”或表达类似意思，且没有其他人引入新的医学线索，选择 `END`。\n"
         f"3. 只有当你认为下一位学生有可能引入新的医学角度、证据或矛盾点时，才选择一位新的发言人。\n"
-        f"4. 若老师介入并要求停止，也必须选择 `END`。\n\n"
+        f"4. 若老师要求停止讨论，也必须选择 `END`。\n\n"
         
         f"【选择下一位学生时】\n"
         f"- 优先选择尚未充分发言或与上一位认知风格不同的学生；\n"

@@ -68,9 +68,9 @@ const cardRefs = ref([]);
 const activeIndex = ref(0);
 
 const cognitiveOptions = {
-  0: ['patient_events', 'symptoms', 'social_cues', 'status'],
-  1: ['mechanism', 'external_factors', 'risk_perception', 'familiarity_driven'],
-  2: ['linear_causality', 'multi_concurrent', 'cues_driven', 'undefined']
+  0: ['symptoms', 'present_illness', 'past_medical_history', 'physicochemical_parameters'],
+  1: ['familiarity_driven', 'symptom_significance', 'risk_perception', 'irrelevant_factors'],
+  2: ['linear_causality', 'multi_concurrent', 'undefined']
 };
 
 const interactionRoles = [

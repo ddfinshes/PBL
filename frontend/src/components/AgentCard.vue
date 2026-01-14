@@ -345,17 +345,16 @@ const cognitiveLabels = {
 };
 
 const subDimensionTranslations = {
-  'patient_events': '患者事件',
-  'symptoms': '临床症状',
-  'social_cues': '社会线索',
-  'status': '患者状态',
-  'mechanism': '机制推演',
-  'external_factors': '外部因素',
+  'symptoms': '症状体征',
+  'present_illness': '现病史',
+  'past_medical_history': '既往史',
+  'physicochemical_parameters': '理化指标',
+  'familiarity_driven': '熟悉感驱动（模式/经验）',
+  'symptom_significance': '症状显著性',
   'risk_perception': '风险感知',
-  'familiarity_driven': '自身经验驱动',
-  'linear_causality': '线性因果',
-  'multi_concurrent': '多重并发',
-  'cues_driven': '心理-社会-环境',
+  'irrelevant_factors': '无关因素',
+  'linear_causality': '单线因果模型',
+  'multi_concurrent': '多因并列模型',
   'undefined': '未定义'
 };
 
