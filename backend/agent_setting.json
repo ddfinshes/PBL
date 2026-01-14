@@ -1,20 +1,20 @@
 {
-  "uu": {
-    "name": "uu",
-    "age": "22",
-    "major": "临床",
+  "Student_0": {
+    "name": "",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
-        "生理学"
+        "内科学"
       ],
       "medium": [
-        "医学伦理学"
+        "诊断学"
       ],
       "low": [
-        "内科学"
+        "医学伦理学"
       ]
     },
     "cognitive_orientation": {
@@ -29,29 +29,28 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "high",
-      "language_register": "high",
+      "verbal_confidence": "medium",
+      "language_register": "medium",
       "interaction_role": "leader"
     },
-    "learning_adaptivity": "low"
+    "learning_adaptivity": "medium"
   },
-  "yy": {
-    "name": "yy",
-    "age": "23",
-    "major": "中医药",
+  "Student_1": {
+    "name": "",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
     "knowledge_background": {
       "high": [
-        "药理学",
-        "医学伦理学"
+        "病理生理学"
       ],
       "medium": [
-        "生理学"
+        "医学伦理学"
       ],
       "low": [
-        "内科学"
+        "诊断学"
       ]
     },
     "cognitive_orientation": {
@@ -68,47 +67,45 @@
     },
     "social_interaction_style": {
       "verbal_confidence": "medium",
-      "language_register": "high",
+      "language_register": "medium",
       "interaction_role": "critical"
     },
-    "learning_adaptivity": "high"
+    "learning_adaptivity": "medium"
   },
-  "zz": {
-    "name": "zz",
+  "Student_2": {
+    "name": "",
     "age": "",
-    "major": "护理",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#D2FBCE",
     "cardColor": "#D2FBCE",
     "knowledge_background": {
       "high": [
-        "内科学"
+        "医学伦理学"
       ],
       "medium": [
-        "诊断学"
+        "内科学"
       ],
       "low": [
-        "药理学",
-        "病理学"
+        "病理生理学"
       ]
     },
     "cognitive_orientation": {
       "attentional_anchor": [
-        "patient_events",
-        "status"
+        "social_cues"
       ],
       "reasoning_entry": [
-        "familiarity_driven"
+        "risk_perception"
       ],
       "causal_structure": [
-        "cues_driven"
+        "multi_concurrent"
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "low",
-      "language_register": "low",
-      "interaction_role": "follower"
+      "verbal_confidence": "medium",
+      "language_register": "high",
+      "interaction_role": "critical"
     },
-    "learning_adaptivity": "low"
+    "learning_adaptivity": "medium"
   }
 }

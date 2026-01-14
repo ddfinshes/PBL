@@ -617,8 +617,14 @@ const updateGraph = () => {
     .on('click', (event, d) => {
       event.stopPropagation(); // 防止触发背景点击
 
-      // 如果处于复盘模式且是教师节点，则打开总结弹窗
-      if (isHighlightingFlags.value && d.hasTeacherFlag) {
+      // 判断是否点击在红旗图标上
+      const target = event.target;
+      const isClickOnFlag = target.classList.contains('teacher-flag-icon') || 
+                           (target.parentElement && target.parentElement.classList.contains('teacher-flag-icon')) ||
+                           target.closest('.teacher-flag-icon');
+
+      // 如果处于复盘模式或者是直接点击红旗，且节点包含教师干预，则打开总结弹窗
+      if (d.hasTeacherFlag && (isHighlightingFlags.value || isClickOnFlag)) {
         openSummaryModal(d);
         return;
       }
@@ -755,7 +761,9 @@ const updateGraph = () => {
     flag.enter().append('use')
       .attr('class', 'teacher-flag-icon')
       .attr('xlink:href', '#teacher-flag')
-      .attr('transform', `translate(${-radius - 12}, ${-radius - 20}) scale(1.5)`);
+      .merge(flag)
+      .attr('transform', `translate(${-radius - 12}, ${-radius - 20}) scale(1.5)`)
+      .style('cursor', 'help');
   });
 
   // 4. 重启模拟

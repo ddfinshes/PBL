@@ -78,6 +78,7 @@ const {
   rollbackTo,
   activeQuestionInfo,
   selectedNodeLeafId,
+  interventionSummaries,
   personas,
   fetchPersonas,
   getAgentConfig,
@@ -105,6 +106,7 @@ provide('pblSocket', {
   selectedTopic, // 提供给子组件
   activeQuestionInfo,
   selectedNodeLeafId,
+  interventionSummaries,
   personas,
   fetchPersonas,
   getAgentConfig,
