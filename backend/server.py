@@ -983,7 +983,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
                 current_state = {
                     "messages": [init_msg],
-                    "summary": "",
+                    "summary": {},
                     "next_speaker": "router",
                     "is_teacher_interrupted": False,
                     "discussion_active": True,

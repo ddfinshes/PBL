@@ -1,56 +1,24 @@
 {
-  "Student_0": {
-    "name": "",
-    "age": "",
-    "major": "",
+  "uu": {
+    "name": "uu",
+    "age": "22",
+    "major": "临床",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
-        "内科学"
-      ],
-      "medium": [
-        "诊断学"
-      ],
-      "low": [
-        "医学伦理学"
-      ]
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "patient_events"
-      ],
-      "reasoning_entry": [
-        "familiarity_driven"
-      ],
-      "causal_structure": [
-        "cues_driven"
-      ]
-    },
-    "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
-      "interaction_role": "leader"
-    },
-    "learning_adaptivity": "medium"
-  },
-  "Student_1": {
-    "name": "",
-    "age": "",
-    "major": "",
-    "avatar": "avatar1.png",
-    "color": "#FBCEDC",
-    "cardColor": "#FBCEDC",
-    "knowledge_background": {
-      "high": [
+        "生理学",
+        "病理学",
         "病理生理学"
       ],
       "medium": [
-        "医学伦理学"
+        "药理学",
+        "内科学"
       ],
       "low": [
-        "诊断学"
+        "诊断学",
+        "医学伦理学"
       ]
     },
     "cognitive_orientation": {
@@ -58,7 +26,6 @@
         "social_cues"
       ],
       "reasoning_entry": [
-        "external_factors",
         "risk_perception"
       ],
       "causal_structure": [
@@ -66,46 +33,95 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
+      "verbal_confidence": "high",
+      "language_register": "low",
       "interaction_role": "critical"
     },
-    "learning_adaptivity": "medium"
+    "learning_adaptivity": "high"
   },
-  "Student_2": {
-    "name": "",
-    "age": "",
-    "major": "",
+  "dd": {
+    "name": "dd",
+    "age": "23",
+    "major": "临床",
     "avatar": "avatar1.png",
-    "color": "#D2FBCE",
-    "cardColor": "#D2FBCE",
+    "color": "#FBCEDC",
+    "cardColor": "#FBCEDC",
     "knowledge_background": {
       "high": [
-        "医学伦理学"
+        "内科学",
+        "诊断学"
       ],
       "medium": [
-        "内科学"
+        "病理生理学"
       ],
       "low": [
-        "病理生理学"
+        "医学伦理学",
+        "药理学",
+        "病理学",
+        "生理学"
       ]
     },
     "cognitive_orientation": {
       "attentional_anchor": [
+        "status",
+        "symptoms",
         "social_cues"
       ],
       "reasoning_entry": [
         "risk_perception"
       ],
       "causal_structure": [
+        "linear_causality",
         "multi_concurrent"
       ]
     },
     "social_interaction_style": {
       "verbal_confidence": "medium",
       "language_register": "high",
-      "interaction_role": "critical"
+      "interaction_role": "follower"
     },
-    "learning_adaptivity": "medium"
+    "learning_adaptivity": "low"
+  },
+  "zz": {
+    "name": "zz",
+    "age": "",
+    "major": "中医药",
+    "avatar": "avatar1.png",
+    "color": "#D2FBCE",
+    "cardColor": "#D2FBCE",
+    "knowledge_background": {
+      "high": [
+        "药理学",
+        "病理学",
+        "病理生理学"
+      ],
+      "medium": [
+        "医学伦理学"
+      ],
+      "low": [
+        "生理学",
+        "内科学",
+        "诊断学"
+      ]
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "symptoms",
+        "social_cues"
+      ],
+      "reasoning_entry": [
+        "risk_perception"
+      ],
+      "causal_structure": [
+        "linear_causality",
+        "multi_concurrent"
+      ]
+    },
+    "social_interaction_style": {
+      "verbal_confidence": "low",
+      "language_register": "high",
+      "interaction_role": "leader"
+    },
+    "learning_adaptivity": "low"
   }
 }

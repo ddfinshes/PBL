@@ -25,11 +25,13 @@ class GraphState(TypedDict):
     """
     messages: Annotated[List[BaseMessage], operator.add]
     discussion_stage: str
-    summary: str
+    summary: dict
     next_speaker: str
     is_teacher_interrupted: bool
     discussion_active: bool
     current_topic: str
+    # 新增：累积消息计数器，每返回 {"total_messages": 1} 即自增
+    total_messages: Annotated[int, operator.add]
 
 
 def build_graph(agent_ids: List[str]):
