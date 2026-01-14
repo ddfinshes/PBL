@@ -345,18 +345,18 @@ const cognitiveLabels = {
 };
 
 const subDimensionTranslations = {
-  'Patient Events': '患者事件',
-  'Symptoms': '临床症状',
-  'Social Cues': '社会线索',
-  'Status': '患者状态',
-  'Mechanism': '机制推演',
-  'External Factors': '外部因素',
-  'Risk Perception': '风险感知',
-  'Familiarity Driven': '自身经验驱动',
-  'Linear Causality': '线性因果',
-  'Multi-Concurrent': '多重并发',
-  'Cues-Driven': '心理-社会-环境',
-  'Undefined': '未定义'
+  'patient_events': '患者事件',
+  'symptoms': '临床症状',
+  'social_cues': '社会线索',
+  'status': '患者状态',
+  'mechanism': '机制推演',
+  'external_factors': '外部因素',
+  'risk_perception': '风险感知',
+  'familiarity_driven': '自身经验驱动',
+  'linear_causality': '线性因果',
+  'multi_concurrent': '多重并发',
+  'cues_driven': '心理-社会-环境',
+  'undefined': '未定义'
 };
 
 const levelTranslations = {
@@ -374,17 +374,17 @@ const plasticityTranslations = {
 // 手动添加区域！！！！！自定义
 const archetypes = {
   "经验直觉型": {
-    "composition": ["Patient Events", "Familiarity Driven", "Cues-Driven"],
+    "composition": ["patient_events", "familiarity_driven", "cues_driven"],
     "color": "#7895CB",
     "description": "该型学生倾向于依靠直觉和患者呈现的表象进行快速判断，习惯于匹配过往经验而非深究病理机制。"
   },
   "系统生理型": {
-    "composition": ["Symptoms", "Mechanism", "Linear Causality"],
+    "composition": ["symptoms", "mechanism", "linear_causality"],
     "color": "#6EA6B3",
     "description": "该型学生擅长从生理机制出发，通过逻辑严密的线性因果链条来推导病情，注重理论知识的系统应用。"
   },
   "风险感知型": {
-    "composition": ["Social Cues", "Risk Perception", "Multi-Concurrent"],
+    "composition": ["social_cues", "risk_perception", "multi_concurrent"],
     "color": "#8A87C1",
     "description": "该型学生对环境和社会线索敏感，在推理过程中会优先考虑潜在风险和多重并发因素的影响。"
   }

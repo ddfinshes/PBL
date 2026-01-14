@@ -125,7 +125,7 @@ def format_persona_to_string(persona: Dict) -> str:
     }
 
     def process_cog(dim_key, mapping):
-        vals = persona.get('cognitive orientation', {}).get(dim_key, [])
+        vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
         if not vals:
             return "无明确偏好"
         if isinstance(vals, str):
@@ -142,12 +142,14 @@ def format_persona_to_string(persona: Dict) -> str:
 
     kb = persona.get('knowledge_background', {}) or {}
     social = persona.get('social_interaction_style', {}) or {}
-
+    print('------------------------')
+    print(persona)
+    print('------------------------')
     return (f"""
-    - 姓名：{persona.get('name', '匿名')} \n
-    - 年龄：{persona.get('age', 22)} \n
-    - 性别/专业：{persona.get('major', '医学')} \n
-    - 领域知识深度：
+    - **姓名**：{persona.get('name', '匿名')} \n
+    - **年龄**：{persona.get('age', 22)} \n
+    - **性别/专业**：{persona.get('major', '医学')} \n
+    - **领域知识深度**：
         - 教科书级理解：{', '.join(kb.get('high', []))} \n
             表现：能给出标准解释，但可能不敏感于关键细节。\n
         - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
@@ -155,17 +157,17 @@ def format_persona_to_string(persona: Dict) -> str:
         - 仅生活常识：{', '.join(kb.get('low', []))} \n
             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
 
-    - 认知维度（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
-        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional anchor', attentional_anchor_map)}。 \n
-        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning entry', reasoning_entry_map)}。\n
-        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal structure', causal_structure_map)}。\n
+    - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
+        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
+        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
+        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
 
-    - 社会行为维度（作用：决定 agent“怎么说、怎么影响他人”）\n
+    - **社会行为维度**（作用：决定 agent“怎么说、怎么影响他人”）\n
         - 发言风格: {verbal_confidence.get(social.get('verbal_confidence'), "平稳")} \n
         - 发言专业用语情况：{language_register.get(social.get('language_register'), "灵活切换")} \n
         - 与其他同学互动特点：{interaction_role.get(social.get('interaction_role'), "参与讨论")} \n
 
-    - 动态学习维度（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
+    - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
     """
             )
@@ -175,10 +177,11 @@ def format_persona_to_string(persona: Dict) -> str:
 _STUDENT_SYS_TEMPLATE_STR = '''你是一名医学生，正在小组讨论一个病例：
 【病例摘要】{pbl_story}
 
-【触发问题】{pbl_triger_questions}
+{pbl_triger_questions}
 
 【角色设定】你的人格特点如下：
 {persona}
+
 你必须严格按照以上人格特征进行思考和表达，包括领域知识深度，认知维度，社会行为以及动态学习维度
 
 【讨论原则（必须遵守）】
@@ -252,6 +255,7 @@ def _student_node_fn(agent_id: str):
                 "messages": messages
             }
         )
+        print(prompt)
 
         try:
             print(f"DEBUG: [Agent Node] {agent_id} calling LLM...")
