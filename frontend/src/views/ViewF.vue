@@ -85,8 +85,9 @@ const props = defineProps({
 })
 
 const chatContainer = ref(null)
-const personas = ref({})
 const sessionId = inject('sessionId')
+const pblSocket = inject('pblSocket', {})
+
 const { 
   messages, 
   isConnected, 
@@ -97,8 +98,11 @@ const {
   selectedTopic,
   selectedNodeLeafId,
   activeMessageId,
-  activeQuestionInfo
-} = inject('pblSocket')
+  activeQuestionInfo,
+  personas,
+  fetchPersonas,
+  getAgentConfig
+} = pblSocket
 
 // 获取特定消息 ID 向上溯源的所有父节点 ID（即该分支的完整路径）
 const getChainForId = (leafId) => {
@@ -184,35 +188,6 @@ watch(() => filteredMessages.value.length, () => {
 
 const discussionStage = ref('阶段一：初步讨论')
 
-// =====================
-// Fetch Personas (Incoming Feature)
-// =====================
-const fetchPersonas = async () => {
-  try {
-    const resp = await axios.get('http://127.0.0.1:8000/get_personas')
-    personas.value = resp.data
-    console.log('Personas loaded for simulation:', Object.keys(personas.value))
-  } catch (err) {
-    console.error('Failed to fetch personas:', err)
-  }
-}
-
-// =====================
-// Agent Config Mapping
-// =====================
-const getAgentConfig = (agentKey) => {
-  if (!agentKey || !personas.value) return {}
-
-  // 1. 直接通过 key 匹配
-  if (personas.value[agentKey]) return personas.value[agentKey]
-
-  // 2. 尝试按 name 属性搜索
-  const found = Object.values(personas.value).find(p => p.name === agentKey)
-  if (found) return found
-
-  return {}
-}
-
 const scrollToBottom = () => {
   if (chatContainer.value) {
     chatContainer.value.scrollTop = chatContainer.value.scrollHeight
@@ -230,7 +205,7 @@ const initialCaseText =
 // =====================
 const handleStartDiscussion = async () => {
   // 讨论开始前获取最新 agent 配置
-  await fetchPersonas()
+  if (fetchPersonas) await fetchPersonas()
   
   // 优先使用当前选中的案例情节，如果没有则用默认文字
   let textToSend = initialCaseText
@@ -255,7 +230,7 @@ const handleTeacherIntervention = (messageText) => {
 // Lifecycle
 // =====================
 onMounted(() => {
-  fetchPersonas()
+  if (fetchPersonas) fetchPersonas()
 })
 </script>
 

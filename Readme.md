@@ -54,7 +54,7 @@ You will need two separate terminals to run the backend and frontend servers.
 
    * From the `PBL/` root directory, run:
      ```bash
-     uvicorn backend.server:app_fastapi --reload
+     vicorn backend.server:app_fastapi --reload
      ```
    * The backend will be available at `http://127.0.0.1:8000`.
 2. **Run the Frontend Development Server**
@@ -66,8 +66,6 @@ You will need two separate terminals to run the backend and frontend servers.
    * The frontend will typically be available at `http://localhost:5173`.
 
 ## Testing
-
-
 
 1. “认知时钟” Glyph (Cognitive Rhythm Ring)
    目前的环形图只反映了总量。PBL 更看重讨论的“轮转”和“动态”。

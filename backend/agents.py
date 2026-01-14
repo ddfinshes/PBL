@@ -91,10 +91,25 @@ def format_persona_to_string(persona: Dict) -> str:
     }
 
     # 认知维度映射 (Key 为前端传递的英文, Value 为 Prompt 中使用的中文描述)
+    # const subDimensionTranslations = {
+    #     'Patient Events': '患者事件',
+    #     'Symptoms': '临床症状',
+    #     'Social Cues': '社会线索',
+    #     'Status': '患者状态',
+    #     'Mechanism': '机制推演',
+    #     'External Factors': '外部因素',
+    #     'Risk Perception': '风险感知',
+    #     'Familiarity Driven': '自身经验驱动',
+    #     'Linear Causality': '线性因果',
+    #     'Multi-Concurrent': '多重并发',
+    #     'Cues-Driven': '心理-社会-环境',
+    #     'Undefined': '未定义'
+    # }
     attentional_anchor_map = {
-        "patient_events": '对病人的事件描述高度敏感',
-        "symptoms": '临床症状表现',
-        "social_cues": '社交与环境线索',
+        "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
+        "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
+        "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
+        "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
     }
     reasoning_entry_map = {
         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',

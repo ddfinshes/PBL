@@ -86,12 +86,14 @@ const {
   activeMessageId,
   activeQuestionInfo,
   selectedNodeLeafId,
-  interventionSummaries
-} = inject('pblSocket');
+  interventionSummaries,
+  personas,
+  getAgentColor,
+  fetchPersonas
+} = inject('pblSocket', {});
 const sessionId = inject('sessionId');
 const svgRef = ref(null);
 const svgWrapper = ref(null);
-const personas = ref({});
 
 // --- 总结功能相关状态 ---
 const showSummaryModal = ref(false);
@@ -266,16 +268,6 @@ const currentPathMsgIds = computed(() => {
   }
   return ids;
 });
-
-// 加载 Agent 配置以获取颜色数据
-const fetchPersonas = async () => {
-  try {
-    const resp = await axios.get('http://127.0.0.1:8000/get_personas');
-    personas.value = resp.data;
-  } catch (err) {
-    console.error('ViewD: Failed to fetch personas:', err);
-  }
-};
 
 // 数据处理：支持树状演化路径与干预标识
 const graphData = computed(() => {
@@ -460,7 +452,7 @@ const graphData = computed(() => {
         if (!node.interventionId) node.interventionId = msg.id;
       } else if (msg.agent !== 'case_introduction') {
         node.turns += 1;
-        let color = personas.value[msg.agent]?.cardColor || '#8095CA';
+        let color = getAgentColor(msg.agent);
         node.turnsList.push({
           id: msg.id,
           agent: msg.agent,
@@ -852,7 +844,7 @@ watch(graphData, () => {
 }, { deep: true });
 
 onMounted(async () => {
-  await fetchPersonas();
+  if (fetchPersonas) await fetchPersonas();
   initGraph();
 });
 </script>

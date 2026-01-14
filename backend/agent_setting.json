@@ -1,20 +1,22 @@
 {
-  "uu": {
-    "name": "uu",
-    "age": "27",
-    "major": "临床",
+  "xys": {
+    "name": "xys",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
-      "high": [
-        "病理生理学"
-      ],
-      "medium": [
-        "医学伦理学"
-      ],
+      "high": [],
+      "medium": [],
       "low": [
-        "内科学"
+        "病理学",
+        "生理学",
+        "病理生理学",
+        "药理学",
+        "诊断学",
+        "内科学",
+        "医学伦理学"
       ]
     },
     "cognitive_orientation": {
@@ -35,24 +37,25 @@
     },
     "learning_adaptivity": "medium"
   },
-  "nn": {
-    "name": "nn",
-    "age": "22",
-    "major": "中医",
+  "a": {
+    "name": "a",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
     "knowledge_background": {
-      "high": [
-        "药理学"
-      ],
+      "high": [],
       "medium": [
-        "医学伦理学"
+        "病理生理学"
       ],
       "low": [
+        "病理学",
+        "生理学",
+        "药理学",
         "诊断学",
         "内科学",
-        "病理生理学"
+        "医学伦理学"
       ]
     },
     "cognitive_orientation": {
@@ -67,45 +70,9 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "low",
-      "language_register": "medium",
-      "interaction_role": "follower"
-    },
-    "learning_adaptivity": "medium"
-  },
-  "ww": {
-    "name": "ww",
-    "age": "25",
-    "major": "护理",
-    "avatar": "avatar1.png",
-    "color": "#D2FBCE",
-    "cardColor": "#D2FBCE",
-    "knowledge_background": {
-      "high": [
-        "药理学"
-      ],
-      "medium": [
-        "病理学"
-      ],
-      "low": [
-        "诊断学"
-      ]
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "Social Cues"
-      ],
-      "reasoning_entry": [
-        "Risk Perception"
-      ],
-      "causal_structure": [
-        "Multi-Concurrent"
-      ]
-    },
-    "social_interaction_style": {
       "verbal_confidence": "medium",
-      "language_register": "low",
-      "interaction_role": "critical"
+      "language_register": "medium",
+      "interaction_role": "leader"
     },
     "learning_adaptivity": "medium"
   }

@@ -22,6 +22,20 @@ class BackgroundKnowledge(BaseModel):
     category: str = Field(description="分类，如：基础医学、临床医学")
     items: List[str] = Field(description="知识点列表")
 
+# --- 新增：知识点溯源 ---
+
+
+class KnowledgeEvidence(BaseModel):
+    """知识点与原文的对应关系"""
+    point: str = Field(description="背景知识点")
+    evidence: List[str] = Field(description="原文中的证据片段（句子或短语）")
+    explanation: str = Field(description="该片段如何体现了该知识点的必要性")
+
+
+class KnowledgeAlignment(BaseModel):
+    """全案知识点对齐结果"""
+    alignments: List[KnowledgeEvidence] = Field(description="所有知识点的溯源列表")
+
 # --- 核心场景结构 ---
 
 

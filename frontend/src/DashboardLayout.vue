@@ -77,7 +77,13 @@ const {
   activeMessageId,
   rollbackTo,
   activeQuestionInfo,
-  selectedNodeLeafId
+  selectedNodeLeafId,
+  personas,
+  fetchPersonas,
+  getAgentConfig,
+  getAgentColor,
+  getAgentName,
+  getAgentAvatar
 } = usePBLSocket(sessionId, () => {
     // 自动滚动的逻辑交给组件内部处理或通过事件
 });
@@ -98,7 +104,13 @@ provide('pblSocket', {
   rollbackTo,
   selectedTopic, // 提供给子组件
   activeQuestionInfo,
-  selectedNodeLeafId
+  selectedNodeLeafId,
+  personas,
+  fetchPersonas,
+  getAgentConfig,
+  getAgentColor,
+  getAgentName,
+  getAgentAvatar
 })
 
 // --- 修改点 3: 定义响应式变量存储数据 ---

@@ -19,7 +19,7 @@ from typing import Dict, Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from .schema import PBLCaseStructure
+from .schema import PBLCaseStructure, KnowledgeAlignment
 from .config import DASHSCOPE_API_KEY, BASE_URL, LLM_MODEL_NAME
 
 logging.basicConfig(level=logging.INFO,
@@ -115,6 +115,35 @@ class PBLFastParser:
             chain = prompt | self.llm.with_structured_output(PBLCaseStructure)
             result = await chain.ainvoke({"text": md_text})
 
+            # --- 【新增步骤】 知识点与原文对齐 (Alignment) ---
+            logger.info("🚀 [LLM溯源] 正在将提取的知识点与原文对齐...")
+            alignment_system_prompt = """
+            你是一个医学教育专家。你将获得一份 PBL 教案的 Markdown 原文，以及一组从中提取出的“背景知识点”。
+            你的任务是：
+            1. 针对每一个背景知识点，从 Markdown 原文的【案例剧情/病历描述/检查结果】部分寻找最真实的【证据片段】（原话），需要把每个Scene的story_content相关的都考虑进去，允许重叠。
+            2. 【关键要求】：证据必须是原文中描述患者病情、症状、检查指标或医生操作的具体文字。
+            3. 【严禁】：严禁使用“掌握xxx”、“了解xxx”、“熟悉xxx”等来自“教学目标”或“学习要求”板块的总结性语句作为证据。
+            4. 解释该具体临床表现（证据）为什么需要这个学科的背景知识。
+            
+            注意：
+            - `point` 必须来自我提供的知识点列表。
+            - `evidence` 必须是原文中的原词原句。
+            - `explanation` 描述该具体临床细节与学科知识之间的深度关联。
+            """
+
+            points_list = result.theoretical_knowledge_points
+            alignment_human_prompt = f"待对齐的知识点：{', '.join(points_list)}\n\nMarkdown 原文：\n{{text}}"
+
+            alignment_prompt = ChatPromptTemplate.from_messages([
+                ("system", alignment_system_prompt),
+                ("human", alignment_human_prompt)
+            ])
+
+            alignment_chain = alignment_prompt | self.llm.with_structured_output(
+                KnowledgeAlignment)
+            alignment_result = await alignment_chain.ainvoke({"text": md_text})
+            # ---------------------------------------------
+
             # 3. 后处理：强制重命名标题 & 回填图片
             final_scenes = []
             for scene_idx, scene in enumerate(result.scenes):
@@ -163,6 +192,7 @@ class PBLFastParser:
             return {
                 "case_title": result.case_title,
                 "theoretical_knowledge_points": result.theoretical_knowledge_points,
+                "knowledge_alignments": [a.model_dump() for a in alignment_result.alignments],
                 "learning_objectives": [obj.model_dump() for obj in result.learning_objectives],
                 "total_scenes": len(final_scenes),
                 "scenes": final_scenes,

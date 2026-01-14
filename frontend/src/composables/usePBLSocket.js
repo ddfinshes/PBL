@@ -1,4 +1,5 @@
 import { ref, onUnmounted, nextTick, watch } from 'vue';
+import axios from 'axios';
 
 /**
  * @description 管理 PBL 讨论的 WebSocket 连接的组合式函数。
@@ -17,8 +18,47 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   const selectedNodeLeafId = ref(null); // 当前选中主题节点的最新一条消息 ID
   const activeQuestionInfo = ref({ sceneIndex: -1, questionIndex: -1 });
   const interventionSummaries = ref({}); // 新增：离线/归档的总结分析数据 (intervention_id -> {parts, timestamp})
+  const personas = ref({}); // 新增：Agent 配置数据
 
-  // 监听活跃问题变化，同步后端的讨论上下文（active_id 和 branch）
+  // 加载 Agent 配置
+  const fetchPersonas = async () => {
+    try {
+      const resp = await axios.get('http://127.0.0.1:8000/get_personas');
+      personas.value = resp.data;
+    } catch (err) {
+      console.error('Failed to fetch personas:', err);
+    }
+  };
+
+  // 通过名称或 Key 获取 Agent 配置的通用方法
+  const getAgentConfig = (agentKey) => {
+    if (!agentKey || !personas.value) return {};
+    if (personas.value[agentKey]) return personas.value[agentKey];
+    const found = Object.values(personas.value).find(p => p.name === agentKey);
+    return found || {};
+  };
+
+  const getAgentColor = (agentKey) => {
+    if (agentKey === 'teacher' || agentKey === 'teacher_handler') return '#E0E7FF';
+    if (agentKey === 'case_introduction') return '#E5E7EB';
+    const config = getAgentConfig(agentKey);
+    return config.cardColor || config.color || '#8095CA';
+  };
+
+  const getAgentName = (agentKey) => {
+    if (agentKey === 'teacher' || agentKey === 'teacher_handler') return '指导老师';
+    if (agentKey === 'case_introduction') return '案例背景';
+    const config = getAgentConfig(agentKey);
+    return config.name || agentKey;
+  };
+
+  const getAgentAvatar = (agentKey) => {
+    if (agentKey === 'teacher' || agentKey === 'teacher_handler') return '/avatar/teacher.png';
+    const config = getAgentConfig(agentKey);
+    const avatar = config.avatar || 'avatar1.png';
+    // 兼容性处理：如果是完整的 URL 或以 / 开头则直接返回，否则由于 vite/public 结构补全路径
+    return avatar.startsWith('http') || avatar.startsWith('/') ? avatar : `/avatar/${avatar}`;
+  };
   watch(activeQuestionInfo, (newVal) => {
     if (socket && isConnected.value && newVal.sceneIndex !== -1) {
       console.log('Switching socket context to:', newVal);
@@ -270,8 +310,9 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
 
   // 初始连接
   connect();
+  fetchPersonas();
 
-  // 返回暴露给组件的状态和方法
+  // 返回暴露给组件的状态 and 方法
   return {
     messages,
     currentTopic,
@@ -283,6 +324,12 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     selectedNodeLeafId,
     activeQuestionInfo,
     interventionSummaries,
+    personas,
+    fetchPersonas,
+    getAgentConfig,
+    getAgentColor,
+    getAgentName,
+    getAgentAvatar,
     startDiscussion,
     togglePause,
     sendTeacherIntervention,

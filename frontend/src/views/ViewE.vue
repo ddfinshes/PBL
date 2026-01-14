@@ -97,10 +97,13 @@ const {
   selectedNodeLeafId,
   activeMessageId, 
   activeQuestionInfo,
-  rollbackTo 
-} = inject('pblSocket');
+  rollbackTo,
+  personas,
+  getAgentColor,
+  getAgentName,
+  getAgentAvatar
+} = inject('pblSocket', {});
 const container = ref(null);
-const personas = ref({});
 
 // 计算当前活跃路径上的消息 ID 集合
 const activePathIds = computed(() => {
@@ -131,24 +134,17 @@ const activePathIds = computed(() => {
   return path;
 });
 
-// 加载 Agent 配置
-const fetchPersonas = async () => {
-  try {
-    const resp = await axios.get('http://127.0.0.1:8000/get_personas');
-    personas.value = resp.data;
-  } catch (err) {
-    console.error('ViewE: Failed to fetch personas:', err);
-  }
-};
-
 // 过滤和处理消息
 const filteredMessages = computed(() => {
+  // 显式引用 personas.value 确保当配置加载后，视图能正确刷新头像和颜色
+  const _configs = personas.value;
+  
   if (!messages.value?.length) return [];
 
   // Filter messages by active question
+  // 允许 teacher_handler 显示，确保讨论链路完整
   let baseMessages = messages.value.filter(m => 
     m && m.agent !== 'case_introduction' && 
-    m.agent !== 'teacher_handler' &&
     m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
     m.questionIndex === activeQuestionInfo.value.questionIndex
   );
@@ -170,7 +166,7 @@ const filteredMessages = computed(() => {
   if (selectedTopic?.value) {
      // 找到选中主题涉及的最佳叶子节点（该主题下的最后一条发言）
      const topicMsgs = questionMessages.filter(m => {
-        let tName = m.topic || (m.agent === 'teacher' ? '教师干预' : '待识别');
+        let tName = m.topic || ((m.agent === 'teacher' || m.agent === 'teacher_handler') ? '教师干预' : '待识别');
         return `${m.branch_id || 'main'}_${tName}` === selectedTopic.value;
      });
      if (topicMsgs.length > 0) leafId = topicMsgs[topicMsgs.length - 1].id;
@@ -194,7 +190,7 @@ const filteredMessages = computed(() => {
     .filter(m => pathIds.has(m.id))
     .map(m => {
        const agentName = m.agent;
-       let tName = m.topic || (agentName === 'teacher' ? '教师干预' : '待识别');
+       let tName = m.topic || ((agentName === 'teacher' || agentName === 'teacher_handler') ? '教师干预' : '待识别');
        const nodeKey = `${m.branch_id || 'main'}_${tName}`;
        return {
          ...m,
@@ -211,22 +207,6 @@ const handleMessageClick = (msg) => {
   }
 };
 
-const getAgentAvatar = (agentKey) => {
-  if (personas.value[agentKey]?.avatar) {
-    const avatar = personas.value[agentKey].avatar;
-    return avatar.startsWith('http') || avatar.startsWith('/') ? avatar : `/avatar/${avatar}`;
-  }
-  return '/avatar/default.png';
-};
-
-const getAgentName = (agentKey) => {
-  return personas.value[agentKey]?.name || agentKey;
-};
-
-const getAgentColor = (agentKey) => {
-  return personas.value[agentKey]?.cardColor || '#8095CA';
-};
-
 // 自动滚动到底部
 watch(() => filteredMessages.value.length, () => {
   nextTick(() => {
@@ -240,7 +220,7 @@ watch(() => filteredMessages.value.length, () => {
 });
 
 onMounted(() => {
-  fetchPersonas();
+  // fetchPersonas(); // 已经由 pblSocket 全局处理
 });
 </script>
 

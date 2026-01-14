@@ -49,10 +49,12 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, inject } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import AgentCard from '../components/AgentCard.vue';
+
+const { fetchPersonas } = inject('pblSocket', {});
 
 const props = defineProps({
   theoreticalKnowledge: {
@@ -286,6 +288,7 @@ const syncPersona = async () => {
     const response = await axios.post('http://127.0.0.1:8000/update_personas', payload);
     if (response.status === 200) {
       ElMessage.success('配置保存成功！');
+      if (fetchPersonas) fetchPersonas();
     }
   } catch (error) {
     console.error('Error saving personas:', error);
