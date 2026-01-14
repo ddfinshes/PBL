@@ -347,6 +347,7 @@
       ]
     }
   },
+<<<<<<< HEAD
   "pbl-session-1768293661566": {
     "q_0_0": {
       "messages": [
@@ -660,6 +661,149 @@
           "content": "我同意你对水肿的分析，确实要优先考虑心源性和肾源性因素。不过金大爷最近连着吃了三天维生素C泡腾片，每次三粒，这个细节不能忽视。这类泡腾片含有大量钠离子，过量服用可能导致水钠潴留，加重心脏负担，也可能诱发或加剧下肢水肿。所以我觉得除了基础疾病，还要考虑医源性因素参与其中，需要进一步问清成分和用量。",
           "scene_index": 0,
           "question_index": 0,
+=======
+  "pbl-session-1768230276899": {
+    "q_0_1": {
+      "messages": [
+        {
+          "id": "init_0_1_af8e",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：咳嗽的问诊要点？\n请各位同学开始讨论。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "78fd9e4d",
+          "parent_id": "init_0_1_af8e",
+          "branch_id": "main",
+          "agent": "kk",
+          "content": "我觉得问咳嗽不能光听他说咳不咳，得往深了问。比如这咳嗽是干咳还是有痰？痰是什么颜色？黄的还是白的？有没有发烧、胸闷加重？特别是金大爷本来就有高血压、糖尿病，还自己乱吃维生素C泡腾片，一天三粒地喝，我听说那玩意儿钠含量挺高，搞不好会引起水肿，可能跟他小腿胀、鞋子变小有关。说不定咳嗽也跟心功能受影响有点关系，不能单纯当感冒看。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "2eba7139",
+          "parent_id": "78fd9e4d",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "我同意kk说的，确实不能只看咳嗽本身。金大爷小腿胀、鞋子变紧，明显是下肢水肿的表现，再加上他有高血压和糖尿病基础病，心功能可能本来就偏弱。维生素C泡腾片含钠量高，过量服用可能导致水钠潴留，加重心脏负担，可能诱发或加重心力衰竭，这样也会引起咳嗽，尤其是夜间平躺时加重的情况。所以问诊时还得问问他是不是晚上躺着咳得更厉害，有没有被迫坐起来喘气的情况。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "aab066a1",
+          "parent_id": "2eba7139",
+          "branch_id": "main",
+          "agent": "yy",
+          "content": "我同意uu说的夜间咳嗽加重可能和心功能有关，不过我想问一下，咱们是不是也得考虑维生素C泡腾片里的成分除了钠之外，会不会还有别的影响？比如他连续三天超量服用，会不会对血糖也有干扰？毕竟金大爷有糖尿病，而有些泡腾片里可能含糖或添加剂……这个会不会间接影响整体状况，导致症状复杂化？",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "6283ea0a",
+          "parent_id": "aab066a1",
+          "branch_id": "main",
+          "agent": "kk",
+          "content": "我同意yy提到的血糖干扰问题。金大爷有糖尿病，如果这泡腾片里含有葡萄糖或麦芽糖，他一天喝三片，连续三天，相当于额外摄入不少糖分，可能让血糖控制更差。高血糖本身会降低免疫力，还可能导致渗透性利尿，反过来加重脱水或电解质紊乱。咱们问诊时得问清楚这个泡腾片的具体成分，还有他最近在家测没测过血糖。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "36f2b7df",
+          "parent_id": "6283ea0a",
+          "branch_id": "main",
+          "agent": "uu",
+          "content": "我同意kk说的要问血糖情况，另外既然提到泡腾片可能含糖，那还得问问他有没有口干、多饮、多尿这些高血糖症状加重的表现。而且他现在乏力、腿肿，如果真有脱水又水肿，电解质可能乱了套，比如低钾或高钠，这些也会让身体更虚，咳嗽恢复更慢。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_e6b72e",
+          "parent_id": "36f2b7df",
+          "branch_id": "main",
+          "agent": "teacher",
+          "content": "好的，讨论差不多了，同学们可以给出结论",
+          "summary": "好的，讨论差不多了，同学们可以给出结论",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "teacher_93efe8",
+          "parent_id": "teacher_e6b72e",
+          "branch_id": "main",
+          "agent": "teacher",
+          "content": "好的，讨论差不多了，同学们可以给出结论",
+          "summary": "好的，讨论差不多了，同学们可以给出结论",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "teacher_fa1bec",
+          "parent_id": "36f2b7df",
+          "branch_id": "branch_02a1",
+          "agent": "teacher",
+          "content": "好的，讨论差不多了，同学们可以给出结论",
+          "summary": "好的，讨论差不多了，同学们可以给出结论",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "teacher_7dfc96",
+          "parent_id": "aab066a1",
+          "branch_id": "branch_bd68",
+          "agent": "teacher",
+          "content": "好的，同学们可以给出结论",
+          "summary": "好的，同学们可以给出结论",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "teacher_13e08b",
+          "parent_id": "2eba7139",
+          "branch_id": "branch_d587",
+          "agent": "teacher",
+          "content": "嗯嗯",
+          "summary": "嗯嗯",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "460959eb",
+          "parent_id": "teacher_13e08b",
+          "branch_id": "branch_d587",
+          "agent": "yy",
+          "content": "我有点担心，uu提到心衰可能，但金大爷的咳嗽会不会也和肺部感染有关？毕竟他着凉了，又有糖尿病，免疫力可能偏低。而且维生素C泡腾片虽然能抗氧化，但过量服用真的安全吗？我记得长期大剂量摄入可能导致草酸盐沉积，对肾脏也不好。这会不会间接影响体液代谢，加重水肿？这个角度是不是也需要考虑一下？",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "592dc7b9",
+          "parent_id": "460959eb",
+          "branch_id": "branch_d587",
+          "agent": "kk",
+          "content": "yy你提到草酸盐的问题，这点我之前没考虑到。确实，大剂量维生素C在体内代谢可能增加草酸生成，长期的话有肾损伤风险，尤其金大爷本来就有糖尿病，肾功能可能 already 受影响。要是肾小管排钠排水不行了，也会加重水肿和心脏负担。所以除了心衰、感染，还得考虑药物代谢带来的肾脏潜在问题，建议问问他最近尿量有没有变少，或者尿里有没有泡沫？",
+          "scene_index": 0,
+          "question_index": 1,
+>>>>>>> 227b6d0 (now)
           "is_convention": false
         }
       ]
