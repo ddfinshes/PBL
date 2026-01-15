@@ -184,8 +184,10 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         isPaused.value = false;
       }
 
-      // 如果后端发送了阶段更新，也可以在这里处理
-      // 例如: if (data.stage) { discussionStage.value = data.stage; }
+      if (data.type === 'stage_update' && data.stage_name) {
+        discussionStage.value = data.stage_name.split('】')[0].replace('【', '');
+        console.log('Stage updated:', data.stage_name);
+      }
     };
 
     socket.onclose = () => {
@@ -229,7 +231,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       };
       messages.value.push(introMsg);
 
-      discussionStage.value = '初步诊断与鉴别诊断';
+      discussionStage.value = '阶段一：问题识别';
       socket.send(JSON.stringify({
         action: 'start_discussion',
         initial_case: initialCase,

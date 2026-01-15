@@ -32,6 +32,9 @@ class GraphState(TypedDict):
     current_topic: str
     # 新增：累积消息计数器，每返回 {"total_messages": 1} 即自增
     total_messages: Annotated[int, operator.add]
+    stage_index: int # 当前阶段序号
+    stage_round: Annotated[int, operator.add]  # 本阶段已对话轮数  
+    stage_finished: bool
 
 
 def build_graph(agent_ids: List[str]):
@@ -48,11 +51,14 @@ def build_graph(agent_ids: List[str]):
     wf.add_node("teacher_handler", agents.teacher_handler_node)
     wf.add_node("summarizer", agents.summarizer_node)
     wf.add_node("router", agents.router_node)
+    # 新增阶段管理节点
+    wf.add_node("stage_manager", agents.stage_manager_node)
 
     # 3. 设置边关系
     wf.add_edge("topic_manager", "router")
     wf.add_edge("teacher_handler", "router")
     wf.add_edge("summarizer", "router")
+    wf.add_edge("stage_manager", "router")
 
     # 4. 设置入口点
     wf.set_entry_point("router")
@@ -66,6 +72,7 @@ def build_graph(agent_ids: List[str]):
     static_mapping = {
         "teacher_handler": "teacher_handler",
         "summarizer": "summarizer",
+        "stage_manager": "stage_manager",
         "END": END,
     }
     wf.add_conditional_edges(

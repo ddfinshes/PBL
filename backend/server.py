@@ -906,6 +906,15 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             "topic": out["current_topic"],
                             "type": "topic_update"
                         })
+                    # 新增阶段变更通知
+                    if "stage_index" in out:
+                        from . import pbl_info
+                        stage_idx = out["stage_index"]
+                        await websocket.send_json({
+                            "type": "stage_update",
+                            "stage_index": stage_idx,
+                            "stage_name": pbl_info.stage_tasks[stage_idx] if stage_idx < len(pbl_info.stage_tasks) else "讨论结束"
+                        })
                 output_queue.task_done()
             except asyncio.CancelledError:
                 break

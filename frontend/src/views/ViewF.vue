@@ -101,9 +101,11 @@ const {
   activeQuestionInfo,
   personas,
   fetchPersonas,
-  getAgentConfig
+  getAgentConfig,
+  discussionStage
 } = pblSocket
-
+console.log('-------',discussionStage
+)
 // 获取特定消息 ID 向上溯源的所有父节点 ID（即该分支的完整路径）
 const getChainForId = (leafId) => {
   const chain = new Set();
@@ -185,8 +187,6 @@ watch(() => filteredMessages.value.length, () => {
     }
   });
 });
-
-const discussionStage = ref('阶段一：初步讨论')
 
 const scrollToBottom = () => {
   if (chatContainer.value) {

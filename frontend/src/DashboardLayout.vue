@@ -78,13 +78,14 @@ const {
   rollbackTo,
   activeQuestionInfo,
   selectedNodeLeafId,
+  discussionStage,
   interventionSummaries,
   personas,
   fetchPersonas,
   getAgentConfig,
   getAgentColor,
   getAgentName,
-  getAgentAvatar
+  getAgentAvatar,
 } = usePBLSocket(sessionId, () => {
     // 自动滚动的逻辑交给组件内部处理或通过事件
 });
@@ -106,6 +107,7 @@ provide('pblSocket', {
   selectedTopic, // 提供给子组件
   activeQuestionInfo,
   selectedNodeLeafId,
+  discussionStage,
   interventionSummaries,
   personas,
   fetchPersonas,
