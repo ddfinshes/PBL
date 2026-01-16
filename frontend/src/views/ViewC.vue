@@ -10,7 +10,7 @@
           <line x1="16" y1="17" x2="8" y2="17"></line>
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
-        <p>暂无场景数据，请先在左侧上传并解析教案</p>
+        <p>请在左侧上传原始的案例文件</p>
       </div>
     </div>
 
@@ -18,9 +18,11 @@
     <div v-else class="scene-container">
       <!-- 顶部：场景标题 -->
       <div class="scene-header">
+        <div class="header-main">
+          <h2 class="view-title">原始案例</h2>
+        </div>
         <div class="scene-badges">
-          <span class="badge-index">第 {{ currentIndex + 1 }} 幕 / 共 {{ totalScenes }} 幕</span>
-          <span class="badge-title">{{ currentScene.title }}</span>
+          <span class="badge-index">场景 {{ currentIndex + 1 }} / {{ totalScenes }}</span>
         </div>
       </div>
 
@@ -31,37 +33,25 @@
           <div class="content-left">
             <!-- 1. 剧情/病情描述 (Markdown) -->
             <div class="section-card story-section">
-              <div class="section-title">
-                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                </svg>
-                情景描述 & 临床资料
-              </div>
               <div class="markdown-body" v-html="renderMarkdown(currentScene.story_content)"></div>
             </div>
 
-            <!-- 2. 教师指引/触发问题 (折叠面板) -->
+            <!-- 2. 教师指引/触发问题 -->
             <div class="section-card teacher-section">
-              <div class="section-title" @click="showTeacherGuide = !showTeacherGuide" style="cursor: pointer">
-                <div style="display:flex; align-items:center; gap:6px">
-                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none">
-                    <path d="M2 21h19a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H2"></path>
-                    <path d="M5 12V3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v9"></path>
-                  </svg>
-                 触发问题
-                </div>
-                <svg :class="{ 'rotate-180': !showTeacherGuide }" class="arrow-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
+              <div class="section-title">
+                引导问题
               </div>
               
-              <div v-show="showTeacherGuide" class="teacher-content-wrapper">
+              <div class="teacher-content-wrapper">
                 <div v-if="currentScene.trigger_questions?.length" class="sub-block">
-                  <div class="label">引导问题 (Trigger Questions)</div>
                   <ul class="question-list">
                     <!-- 列表项修改：增加 flex 布局 -->
-                    <li v-for="(q, qIdx) in currentScene.trigger_questions" :key="qIdx" class="question-item">
+                    <li 
+                      v-for="(q, qIdx) in currentScene.trigger_questions" 
+                      :key="qIdx" 
+                      class="question-item"
+                      :class="{ 'active-item': activeQuestionInfo.sceneIndex === currentIndex && activeQuestionInfo.questionIndex === qIdx }"
+                    >
                       <!-- 【编辑模式】 -->
                       <div v-if="editingQuestion?.sceneIdx === currentIndex && editingQuestion?.qIdx === qIdx" class="edit-mode">
                         <textarea 
@@ -88,18 +78,17 @@
                             @click.stop="onInspectQuestion(q, qIdx)"
                             title="查看详细解析或关联位置"
                           >
-                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5">
+                            <svg viewBox="0 0 24 24" width="18" height="14" stroke="currentColor" fill="none" stroke-width="2.5">
                               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                               <circle cx="12" cy="12" r="3"></circle>
                             </svg>
-                            <span>查看</span>
                           </button>
                           <button 
                             class="edit-icon-btn"
                             @click.stop="startEdit(q.question, qIdx)"
                             title="编辑问题"
                           >
-                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
                               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
@@ -115,28 +104,17 @@
 
           <!-- 右侧：图片内容 -->
           <div v-if="currentImages.length > 0" class="content-right">
-            <div class="section-card images-section">
-              <div class="section-title">
-                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                  <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-                相关影像资料
-              </div>
-              <div class="image-stack">
-                <div 
-                  v-for="(img, idx) in currentImages" 
-                  :key="idx" 
-                  class="image-item-vertical"
-                  @click="previewImage(img)"
-                >
-                  <img 
-                    :src="img.src" 
-                    @error="handleImageError(idx, currentIndex)"
-                  />
-                  <span class="img-caption">图 {{ idx + 1 }}</span>
-                </div>
+            <div class="image-stack">
+              <div 
+                v-for="(img, idx) in currentImages" 
+                :key="idx" 
+                class="image-item-vertical"
+                @click="previewImage(img)"
+              >
+                <img 
+                  :src="img.src" 
+                  @error="handleImageError(idx, currentIndex)"
+                />
               </div>
             </div>
           </div>
@@ -257,7 +235,7 @@ const handleImageError = (imgIdx, sceneIdx) => {
 }
 
 /**
- * 【新增方法】处理点击查看问题标识
+ * 处理点击查看问题标识
  */
 const onInspectQuestion = async (questionObj, qIdx) => {
   const activeStory = currentScene.value.story_content;
@@ -300,7 +278,7 @@ const onInspectQuestion = async (questionObj, qIdx) => {
 }
 
 /**
- * 【新增方法】开始编辑问题
+ * 开始编辑问题
  */
 const startEdit = (questionText, qIdx) => {
   editingQuestion.value = {
@@ -311,14 +289,14 @@ const startEdit = (questionText, qIdx) => {
 }
 
 /**
- * 【新增方法】取消编辑
+ * 取消编辑
  */
 const cancelEdit = () => {
   editingQuestion.value = null
 }
 
 /**
- * 【新增方法】保存编辑后的问题
+ * 保存编辑后的问题
  */
 const saveQuestion = async (qIdx) => {
   if (!editingQuestion.value || !editingQuestion.value.text.trim()) {
@@ -428,10 +406,34 @@ watch(currentIndex, (newIdx) => {
 
 /* 头部 */
 .scene-header {
-  padding: 16px 20px;
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 20px;
+  background: transparent;
   flex-shrink: 0;
+  position: relative;
+}
+.header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.view-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+.view-tag {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+  color: #8fa1ff;
 }
 .scene-badges {
   display: flex;
@@ -439,94 +441,71 @@ watch(currentIndex, (newIdx) => {
   gap: 12px;
 }
 .badge-index {
-  background: #8095CA;
+  background: #3b3f61;
   color: white;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.badge-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: white;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* 滚动内容区 */
 .scene-content-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 0 20px;
 }
 
 .content-wrapper {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   align-items: flex-start;
+  padding-top: 10px;
 }
 
 .content-left {
-  flex: 1;
+  flex: 1.2;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   min-width: 0;
 }
 
 .content-right {
-  width: 300px;
+  flex: 0.8;
   flex-shrink: 0;
 }
 
 /* 通用卡片 */
 .section-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: #151728;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 20px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
-  color: #9ca3af;
+  color: #ffffff;
   margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
 /* Markdown 内容样式 */
 :deep(.markdown-body) {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
-  color: #d1d5db;
-}
-:deep(.markdown-body p) { margin-bottom: 10px; }
-:deep(.markdown-body table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 10px 0;
-  background: rgba(0, 0, 0, 0.2);
-}
-:deep(.markdown-body th), :deep(.markdown-body td) {
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
 }
 
 /* 教师指引与问题列表 */
 .teacher-section {
-  border-left: 3px solid #8095CA;
-  background: rgba(128, 149, 202, 0.05);
-}
-
-.label {
-  font-size: 12px;
-  color: #8095CA;
-  font-weight: 600;
-  margin-bottom: 8px;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .question-list {
@@ -535,51 +514,30 @@ watch(currentIndex, (newIdx) => {
   margin: 0;
 }
 
-/* 每一项改为 Flex 布局以容纳按钮 */
 .question-item {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 10px 12px;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  background: #1c1e36;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 10px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   transition: all 0.2s;
 }
 
-.question-item:hover {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+.question-item.active-item {
+  background: #2d3154;
+  border-color: rgba(143, 161, 255, 0.3);
 }
 
-.q-main {
-  display: flex;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.q-marker {
-  color: #8095CA;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-.q-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* 查看模式和编辑模式的包装器 */
 .view-mode {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
   width: 100%;
+  min-height: 32px;
 }
 
 .edit-mode {
@@ -593,7 +551,7 @@ watch(currentIndex, (newIdx) => {
   width: 100%;
   min-height: 80px;
   padding: 10px;
-  border: 1px solid rgba(128, 149, 202, 0.5);
+  border: 1px solid rgba(143, 161, 255, 0.3);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.3);
   color: #d1d5db;
@@ -605,8 +563,8 @@ watch(currentIndex, (newIdx) => {
 
 .edit-textarea:focus {
   outline: none;
-  border-color: #8095CA;
-  box-shadow: 0 0 8px rgba(128, 149, 202, 0.3);
+  border-color: #8fa1ff;
+  box-shadow: 0 0 8px rgba(143, 161, 255, 0.2);
 }
 
 .edit-actions {
@@ -617,22 +575,22 @@ watch(currentIndex, (newIdx) => {
 .edit-btn {
   padding: 6px 12px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  /* border: 1px solid rgba(255, 255, 255, 0.2); */
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-  color: #d1d5db;
+  /* transition: all 0.2s; */
+  color: #ffffff;
+  background-color: #7F96CB;
 }
 
 .edit-btn.save {
-  background: #8095CA;
+  background: #3b3f61;
   color: white;
-  border-color: #8095CA;
+  border-color: #4a5d8a;
 }
 
 .edit-btn.save:hover {
-  background: #6678a4;
-  box-shadow: 0 0 8px rgba(128, 149, 202, 0.4);
+  background: #4a5d8a;
 }
 
 .edit-btn.cancel {
@@ -646,95 +604,84 @@ watch(currentIndex, (newIdx) => {
   border-color: rgba(252, 141, 89, 0.5);
 }
 
-/* 编辑图标按钮 */
-.edit-icon-btn {
+.q-main {
+  display: flex;
+  gap: 12px;
+  font-size: 15px;
+  color: #fff;
+  flex: 1;
+  min-width: 0;
+}
+
+.q-text {
+  word-break: break-word;
+}
+
+.q-marker {
+  color: #a5b4fc;
+  font-weight: 700;
   flex-shrink: 0;
+}
+
+.q-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.inspect-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #4d7c0f;
+  border: none;
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: rgba(128, 149, 202, 0.1);
-  border: 1px solid rgba(128, 149, 202, 0.3);
-  color: #8095CA;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.edit-icon-btn:hover {
-  background: #8095CA;
-  color: white;
-  border-color: #8095CA;
-}
-
-/* 查看标识按钮 */
-.inspect-btn {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: rgba(127, 191, 76, 0.15);
-  border: 1px solid rgba(127, 191, 76, 0.3);
-  color: #ffffff;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-top: -1px;
-}
-
-.inspect-btn:hover {
-  background: #37581c;
-  color: #fff;
-  border-color: #37581c;
-  box-shadow: 0 0 10px rgba(127, 191, 76, 0.3);
 }
 
 .inspect-btn.active-inspect {
-  background: #37581c;
-  color: white;
-  border-color: #37581c;
-  font-weight: bold;
+  background: #65a30d;
+  box-shadow: 0 0 12px rgba(101, 163, 13, 0.4);
+}
+
+.edit-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #182235;
+  border: 1px solid #4a5d8a;
+  color: #8fa1ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 /* 图片堆栈 */
-.images-section {
-  border-left: 3px solid #8095CA;
-  background: rgba(128, 149, 202, 0.05);
-}
 .image-stack {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .image-item-vertical {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
   cursor: zoom-in;
   background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 .image-item-vertical img {
   width: 100%;
   display: block;
-  max-height: 200px;
-  object-fit: contain;
-}
-.img-caption {
-  display: block;
-  padding: 4px;
-  text-align: center;
-  font-size: 11px;
-  background: rgba(0,0,0,0.5);
 }
 
 /* 底部导航 */
 .scene-footer {
-  padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px 20px;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -743,19 +690,20 @@ watch(currentIndex, (newIdx) => {
 .nav-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
+  background: rgba(37, 40, 69, 0.8);
+  color: #e5e7eb;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 10px;
+  font-size: 14px;
+  font-weight: 500;
 }
 .nav-btn:hover:not(:disabled) {
-  background: #8095CA;
-  border-color: #8095CA;
+  background: rgba(37, 40, 69, 1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 .nav-btn:disabled {
   opacity: 0.3;
@@ -764,17 +712,18 @@ watch(currentIndex, (newIdx) => {
 
 .progress-dots {
   display: flex;
-  gap: 8px;
+  gap: 12px;
 }
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
   cursor: pointer;
+  transition: all 0.2s;
 }
 .dot.active {
-  background: #8095CA;
+  background: #a5b4fc;
   transform: scale(1.2);
 }
 

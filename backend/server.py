@@ -542,9 +542,12 @@ def persist_discussion(session_id, messages_map):
             block_key = f"q_{s_idx}_{q_idx}"
 
             if block_key not in session_data:
-                session_data[block_key] = {"messages": []}
+                session_data[block_key] = {
+                    "messages": [],
+                    "intervention_summaries": {}
+                }
 
-            # 检查是否已存在
+            # 检查是否已存在 (优化: 只检查该 block 内部)
             if not any(m["id"] == msg_id for m in session_data[block_key]["messages"]):
                 # 序列化副本 (去掉不可序列化的 langchain_msg)
                 store_msg = {k: v for k, v in msg.items() if k !=
@@ -773,6 +776,18 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             m_id = m.get("id")
                             if m_id:
                                 sh["messages_map"][m_id] = m
+
+                        # 【新增】自动推断每个问题的最后活跃状态
+                        if q_val.get("messages"):
+                            last_msg = q_val["messages"][-1]
+                            sh["q_states"][f"{s_idx}_{q_idx}"] = {
+                                "active_id": last_msg["id"],
+                                "current_branch": last_msg.get("branch_id", "main")
+                            }
+                            # 顺便设置全局 active_id 保证初始上下文可见
+                            sh["active_id"] = last_msg["id"]
+                            sh["current_branch"] = last_msg.get(
+                                "branch_id", "main")
                     logger.info(
                         f"Restored {len(sh['messages_map'])} messages to memory.")
 
@@ -937,31 +952,33 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 block_key = f"q_{scene_idx}_{question_idx}"
 
                 # 【重要】用户点击开始讨论，视为该情景问题下的“硬重置”
-                # 1. 清除当前 block 在内存中的历史消息（保留其他情景的消息 map，或者全量清空根据需求定，这里全量清空符合大部分 PBL 重置逻辑）
-                sh["messages_map"] = {}
+                # 1. 仅清除当前 block 在内存中的历史消息（保留其他情景的消息）
+                sh["messages_map"] = {k: v for k, v in sh["messages_map"].items()
+                                      if v.get('scene_index') != scene_idx or v.get('question_index') != question_idx}
+
+                # 重置该问题的状态指针
+                if block_key in sh["q_states"]:
+                    del sh["q_states"][block_key]
                 sh["active_id"] = None
                 sh["current_branch"] = "main"
-                sh["q_states"] = {}
 
-                # 2. 从持久化文件中移除该 session 的记录，强制从新开始写入
+                # 2. 从持久化文件中移除该 block 的记录，强制从新开始写入
                 if DISCUSSION_FILE.exists():
                     try:
                         with open(DISCUSSION_FILE, "r", encoding="utf-8") as f:
                             disk_data = json.load(f)
                         if session_id in disk_data:
-                            # 如果希望只清除当前 block：
-                            # if block_key in disk_data[session_id]:
-                            #     del disk_data[session_id][block_key]
-                            # 如果希望清除整个 session：
-                            del disk_data[session_id]
+                            if block_key in disk_data[session_id]:
+                                del disk_data[session_id][block_key]
+                                logger.info(
+                                    f"Cleared existing block records for {block_key} in session {session_id}")
 
                             with open(DISCUSSION_FILE, "w", encoding="utf-8") as f:
                                 json.dump(disk_data, f,
                                           ensure_ascii=False, indent=2)
-                        logger.info(
-                            f"Cleared existing disk records for session {session_id} upon start_discussion.")
                     except Exception as e:
-                        logger.error(f"Failed to clear discussion file: {e}")
+                        logger.error(
+                            f"Failed to clear specific block in discussion file: {e}")
 
                 # 同步更新全局 pbl_info
                 from .pbl_info import update_pbl_info

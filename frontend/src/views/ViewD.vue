@@ -7,7 +7,7 @@
         class="px-3 py-1 text-xs rounded-full border transition-all duration-300"
         :class="isHighlightingFlags ? 'bg-[#EF4444] text-white border-[#EF4444]' : 'text-[#8095CA] border-[#8095CA] hover:bg-[#8095CA]/10'"
       >
-        {{ isHighlightingFlags ? '取消高亮' : '演化复盘 (高亮干预)' }}
+        {{ isHighlightingFlags ? '取消' : '演化复盘' }}
       </button>
     </div>
     <div ref="svgWrapper" class="w-full h-full">
@@ -419,6 +419,11 @@ const graphData = computed(() => {
       }
 
       if (shouldStartNewNode) {
+        // 计算 depth
+        // 获取父节点对象
+        const pNode = nodeMap.get(pNodeId);
+        // 如果有父节点，深度+1，否则为0（根节点）
+        const nodeDepth = pNode ? (pNode.depth + 1) : 0; 
         const newNode = {
           id: nodeId,
           label: nodeLabel,
@@ -428,7 +433,8 @@ const graphData = computed(() => {
           hasTeacherFlag: msg.agent === 'teacher',
           interventionId: msg.agent === 'teacher' ? msg.id : null,
           isOldTopic: isOldTopic,
-          order: nodes.length
+          order: nodes.length,
+          depth: nodeDepth
         };
         nodes.push(newNode);
         nodeMap.set(nodeId, newNode);
@@ -573,15 +579,34 @@ const initGraph = () => {
 
   // 使用力导向图，给平衡演化感和层级感
   simulation = d3.forceSimulation()
-    .force('link', d3.forceLink().id(d => d.id).distance(60)) // 距离进一步缩小
-    .force('charge', d3.forceManyBody().strength(-200)) // 电荷斥力减弱以紧凑
-    .force('center', d3.forceCenter(width / 2, height / 2))
-    // 关键修正：主路径节点强制垂直居中（X相同），分支节点偏离
-    .force('x', d3.forceX(d => mainPathSet.value.has(d.id) ? width / 2 : (width / 2 + (d.branch_id === 'main' ? 0 : 250))).strength(2.0))
-    // Y 坐标基于 order 确保垂直向下排列，间距缩小为 90
-    .force('y', d3.forceY(d => (d.order + 1) * 90).strength(3.0))
+    // 1. 调整连线距离以匹配 depth 间距 (原 40 -> 100)
+    .force('link', d3.forceLink().id(d => d.id).distance(100)) 
+    // 2. 稍微增加斥力，防止缩短距离后节点重叠 (原 -200 -> -300)
+    .force('charge', d3.forceManyBody().strength(-300)) 
+    // 移除 forceCenter，改用强力的 X/Y 约束来保持平衡
+    
+    // 3. 修改 X 轴力：主路径保持在中心，分支根据名称偏移
+    .force('x', d3.forceX(d => {
+      // 如果是主路径，居中
+      if (mainPathSet.value.has(d.id)) return width / 2;
+      
+      // 分支处理
+      if (!d.branch || d.branch === 'main') return width / 2;
+      
+      // 为不同分支计算一个固定的 X 偏移 (简单的字符串哈希)
+      let hash = 0;
+      for (let i = 0; i < d.branch.length; i++) {
+        hash = d.branch.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const offset = (hash % 3 === 0 ? -1 : 1) * (150 + (Math.abs(hash) % 100));
+      return width / 2 + offset;
+    }).strength(3.0))
+    
+    // 4. 修改 Y 轴力：完全按照 depth 确定位置，strength 设为最高
+    .force('y', d3.forceY(d => (d.depth * 100 + 50)).strength(4.0))
+    
     .force('collision', d3.forceCollide().radius(50))
-    .alphaDecay(0.05); // 增加衰减率 (默认约 0.02)，让模拟更快趋于稳定，减少晃动时间
+    .alphaDecay(0.05);
 
   updateGraph();
 };
@@ -778,10 +803,7 @@ const updateGraph = () => {
       const targetRadius = 14 + Math.sqrt(d.target.turns) * 3;
       const targetY = d.target.y - targetRadius - 25; // Label 组的偏移中心
       
-      const dx = d.target.x - d.source.x;
-      const dy = targetY - d.source.y;
-      const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
-      return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${targetY}`;
+      return `M${d.source.x},${d.source.y}L${d.target.x},${targetY}`;
     });
 
     allNodes.attr('transform', d => `translate(${d.x},${d.y})`);
@@ -840,8 +862,17 @@ watch([selectedTopic, mainPathSet, isHighlightingFlags], ([newTopic, newPath, is
       const width = svgWrapper.value?.clientWidth || 400;
       simulation.force('x', d3.forceX(d => {
         if (newPath.has(d.id)) return width / 2;
-        return d.branch === 'main' ? width / 2 - 180 : width / 2 + 180;
-      }).strength(0.8));
+        if (!d.branch || d.branch === 'main') return width / 2;
+        
+        let hash = 0;
+        for (let i = 0; i < d.branch.length; i++) {
+          hash = d.branch.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const offset = (hash % 3 === 0 ? -1 : 1) * (150 + (Math.abs(hash) % 100));
+        return width / 2 + offset;
+      }).strength(3.0));
+      // 复盘模式切换时，也重新应用基于 depth 的 Y 轴约束，防止错位
+      simulation.force('y', d3.forceY(d => (d.depth * 100 + 50)).strength(4.0));
       simulation.alpha(0.15).restart();
   }
 }, { deep: true });

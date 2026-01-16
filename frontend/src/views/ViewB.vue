@@ -1,5 +1,6 @@
 <template>
   <div class="view-b-container p-0 h-full flex flex-col" @mousedown="handleGlobalMouseDown">
+    <div class="header"><h2>Agent配置</h2></div>
     <!-- Scrollable Area for Cards -->
     <div class="view-b-scroll-area flex-1 overflow-y-auto p-4 custom-scrollbar">
       <div class="view-b-content-wrapper w-full relative">
@@ -300,6 +301,17 @@ const syncPersona = async () => {
 <style scoped>
 .view-b-content-wrapper {
   overflow: visible; /* 允许卡片溢出阴影显示 */
+}
+
+.header {
+  padding: 16px 24px;
+  flex-shrink: 0;
+}
+.header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
 }
 
 /* =========================================

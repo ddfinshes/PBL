@@ -54,7 +54,7 @@ You will need two separate terminals to run the backend and frontend servers.
 
    * From the `PBL/` root directory, run:
      ```bash
-     vicorn backend.server:app_fastapi --reload
+     uvicorn backend.server:app_fastapi --reload
      ```
    * The backend will be available at `http://127.0.0.1:8000`.
 2. **Run the Frontend Development Server**
