@@ -1,7 +1,7 @@
 <template>
   <div class="view-d-container h-full w-full relative overflow-hidden bg-[#0C0E27] rounded-xl border border-[#8095CA]/20">
     <div class="absolute top-4 left-4 z-10 flex items-center gap-4">
-      <h3 class="text-[#8095CA] font-bold tracking-wider">讨论主题演化路径</h3>
+      <h2 class="text-[18px] text-white font-bold">讨论主题演化路径</h2>
       <button 
         @click="isHighlightingFlags = !isHighlightingFlags"
         class="px-3 py-1 text-xs rounded-full border transition-all duration-300"

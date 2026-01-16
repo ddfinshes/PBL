@@ -2,7 +2,7 @@
   <div class="view-e-container h-full flex flex-col bg-[#0C0E27] rounded-xl border border-[#8095CA]/20 overflow-hidden relative p-6">
     <!-- Header -->
     <div class="mb-6 z-10">
-      <h3 class="text-[#8095CA] font-bold tracking-wider">讨论故事线</h3>
+      <h2 class="text-[18px] text-white font-bold">讨论故事线</h2>
     </div>
 
     <!-- Timeline Content -->
