@@ -19,6 +19,7 @@
           <ViewB 
             style="height: 100%;"
             :theoretical-knowledge="caseResult?.theoretical_knowledge_points || []"
+            :case-title="caseResult?.case_title || ''"
           />
         </div>
       </div>
@@ -55,6 +56,7 @@
 
 <script setup>
 import { ref, provide } from 'vue'
+import axios from 'axios'
 import ViewA from './views/ViewA.vue'
 import ViewB from './views/ViewB.vue'
 import ViewC from './views/ViewC.vue'
@@ -93,6 +95,60 @@ const {
 // 新增：全局选中的主题状态，用于跨视图过滤
 const selectedTopic = ref(null);
 
+const updateKnowledge = async (oldName, newName) => {
+  if (!currentPdfFilename.value) return;
+  try {
+    await axios.post('http://127.0.0.1:8000/api/update-knowledge', {
+      pdf_filename: currentPdfFilename.value,
+      old_name: oldName,
+      new_name: newName
+    });
+    // 更新本地 caseResult
+    if (caseResult.value && caseResult.value.theoretical_knowledge_points) {
+      caseResult.value.theoretical_knowledge_points = caseResult.value.theoretical_knowledge_points.map(p => p === oldName ? newName : p);
+    }
+  } catch (error) {
+    console.error('Failed to update knowledge:', error);
+  }
+};
+
+const addKnowledge = async (name) => {
+  if (!currentPdfFilename.value) return;
+  try {
+    await axios.post('http://127.0.0.1:8000/api/add-knowledge', {
+      pdf_filename: currentPdfFilename.value,
+      knowledge_point: name
+    });
+    // 更新本地 caseResult
+    if (caseResult.value) {
+      if (!caseResult.value.theoretical_knowledge_points) {
+        caseResult.value.theoretical_knowledge_points = [];
+      }
+      if (!caseResult.value.theoretical_knowledge_points.includes(name)) {
+        caseResult.value.theoretical_knowledge_points.push(name);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to add knowledge:', error);
+  }
+};
+
+const deleteKnowledge = async (name) => {
+  if (!currentPdfFilename.value) return;
+  try {
+    await axios.post('http://127.0.0.1:8000/api/delete-knowledge', {
+      pdf_filename: currentPdfFilename.value,
+      knowledge_point: name
+    });
+    // 更新本地 caseResult
+    if (caseResult.value && caseResult.value.theoretical_knowledge_points) {
+      caseResult.value.theoretical_knowledge_points = caseResult.value.theoretical_knowledge_points.filter(p => p !== name);
+    }
+  } catch (error) {
+    console.error('Failed to delete knowledge:', error);
+  }
+};
+
 provide('sessionId', sessionId)
 provide('pblSocket', {
   messages,
@@ -114,13 +170,17 @@ provide('pblSocket', {
   getAgentConfig,
   getAgentColor,
   getAgentName,
-  getAgentAvatar
+  getAgentAvatar,
+  updateKnowledge,
+  addKnowledge,
+  deleteKnowledge
 })
 
 // --- 修改点 3: 定义响应式变量存储数据 ---
 const caseResult = ref(null)   // 存放结构化教案数据
 const imagesResult = ref(null) // 存放图片数据
 const activeContext = ref(null) // 存放当前激活的场景内容（用于 ViewF 仿真）
+const currentPdfFilename = ref(null) // 存放当前 PDF 文件名
 
 // --- 修改点 4: 处理数据回调 ---
 const handleDataReady = (payload) => {
@@ -129,11 +189,13 @@ const handleDataReady = (payload) => {
   if (payload) {
     caseResult.value = payload.structure
     imagesResult.value = payload.raw_images
+    currentPdfFilename.value = payload.pdf_filename
   } else {
     // 如果 ViewA 发出的是移除文件的信号
     caseResult.value = null
     imagesResult.value = null
     activeContext.value = null
+    currentPdfFilename.value = null
   }
 }
 

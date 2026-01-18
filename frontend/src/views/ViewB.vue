@@ -50,17 +50,21 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, inject } from 'vue';
+import { ref, watch, computed, inject, provide } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import AgentCard from '../components/AgentCard.vue';
 
-const { fetchPersonas } = inject('pblSocket', {});
+const { fetchPersonas, updateKnowledge, addKnowledge, deleteKnowledge } = inject('pblSocket', {});
 
 const props = defineProps({
   theoreticalKnowledge: {
     type: Array,
     default: () => []
+  },
+  caseTitle: {
+    type: String,
+    default: ''
   }
 });
 
@@ -183,24 +187,76 @@ const getCardStyle = (index) => {
   };
 };
 
-// 监听背景知识变化：当新 PDF 解析完成后，自动更新所有 Agent 的待分类知识点
-watch(() => props.theoreticalKnowledge, (newPoints) => {
-  if (newPoints && newPoints.length > 0) {
+// 监听案例标题变化：只有当教案切换时，才自动更新所有 Agent 的待分类知识点
+watch(() => props.caseTitle, (newTitle, oldTitle) => {
+  if (newTitle && newTitle !== oldTitle) {
     agents.value.forEach(agent => {
-      // 只有当 agent 的待分类知识点是默认值或为空时才自动覆盖
-      // 或者您可以选择直接覆盖，取决于业务逻辑。这里我们采取“有新数据就更新”的策略
-      agent.unclassifiedKnowledge = [...newPoints];
+      agent.unclassifiedKnowledge = [...props.theoreticalKnowledge];
       
-      // 同时清空已分类的，因为新案例的知识点完全不同
+      // 清空已分类的，因为新案例的知识点完全不同
       agent.classifiedKnowledge = {
         competent: [],
         novice: [],
         layman: []
       };
     });
-    ElMessage.success('已根据教案更新 Agent 知识背景库');
+    ElMessage.success('已加载新案例知识背景库');
   }
 }, { immediate: true });
+
+// 全局更新知识点名称
+const renameKnowledgeGlobal = (oldName, newName) => {
+  if (!newName || oldName === newName) return;
+  
+  // 1. 更新后端 Case JSON
+  if (updateKnowledge) updateKnowledge(oldName, newName);
+
+  // 2. 更新本地 agents 的知识点
+  agents.value.forEach(agent => {
+    agent.unclassifiedKnowledge = agent.unclassifiedKnowledge.map(n => n === oldName ? newName : n);
+    for (const key in agent.classifiedKnowledge) {
+      agent.classifiedKnowledge[key] = agent.classifiedKnowledge[key].map(n => n === oldName ? newName : n);
+    }
+  });
+};
+
+// 全局新增知识点
+const addNewKnowledgeGlobal = (name) => {
+  if (!name) return;
+
+  // 1. 更新后端 Case JSON
+  if (addKnowledge) addKnowledge(name);
+
+  // 2. 添加到所有 Agent 的 unclassified (如果不存在)
+  agents.value.forEach(agent => {
+    if (!agent.unclassifiedKnowledge.includes(name)) {
+      agent.unclassifiedKnowledge.push(name);
+    }
+  });
+};
+
+// 全局删除知识点
+const deleteKnowledgeGlobal = (name) => {
+  if (!name) return;
+
+  // 1. 更新后端 Case JSON
+  if (deleteKnowledge) deleteKnowledge(name);
+
+  // 2. 从所有 Agent 的列表中移除
+  agents.value.forEach(agent => {
+    agent.unclassifiedKnowledge = agent.unclassifiedKnowledge.filter(n => n !== name);
+    for (const key in agent.classifiedKnowledge) {
+      agent.classifiedKnowledge[key] = agent.classifiedKnowledge[key].filter(n => n !== name);
+    }
+  });
+};
+
+// 提供给 AgentCard 使用
+provide('knowledgeActions', {
+  renameKnowledge: renameKnowledgeGlobal,
+  addKnowledge: addNewKnowledgeGlobal,
+  deleteKnowledge: deleteKnowledgeGlobal
+});
 
 const addAgent = () => {
   agents.value.push(createDefaultAgent(agents.value.length));

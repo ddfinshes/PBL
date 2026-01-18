@@ -201,10 +201,8 @@ const filteredMessages = computed(() => {
 });
 
 const handleMessageClick = (msg) => {
-  // 点击消息触发回退过程
-  if (confirm(`确定要回退到 ${getAgentName(msg.agent)} 的这条消息并重新开始讨论吗？`)) {
-    rollbackTo(msg.id);
-  }
+  // 点击消息直接触发回退过程，不再进行弹窗确认
+  rollbackTo(msg.id);
 };
 
 // 自动滚动到底部

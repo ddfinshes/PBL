@@ -107,10 +107,33 @@
                   :key="index"
                   draggable="true"
                   @dragstart="onDragStart($event, item, 'unclassified')"
-                  class="theory-tag">
-               {{ item }}
+                  @dblclick="startEditKnowledge('unclassified', index, item)"
+                  class="theory-tag group relative">
+               <template v-if="editingKnowledge.category === 'unclassified' && editingKnowledge.index === index">
+                 <input v-model="editingKnowledge.value" class="tag-input" v-focus @blur="finishEditKnowledge" @keyup.enter="finishEditKnowledge" />
+               </template>
+               <template v-else>
+                 <span class="tag-text">{{ item }}</span>
+                 <span class="delete-tag-btn opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" 
+                       @click.stop="deleteKnowledgeItem(item)">×</span>
+               </template>
              </div>
-             <div v-if="!modelValue.unclassifiedKnowledge?.length" class="empty-hint">暂无待分类知识点</div>
+             
+             <!-- 新增知识点入口 -->
+             <div v-if="!isAddingKnowledge" 
+                  class="add-theory-tag" 
+                  @click="isAddingKnowledge = true" 
+                  title="自定义添加知识点">+</div>
+             <div v-else class="theory-tag editing">
+               <input v-model="newKnowledgeName" 
+                      class="tag-input" 
+                      v-focus 
+                      @blur="submitAddKnowledge" 
+                      @keyup.enter="submitAddKnowledge" 
+                      placeholder="新知识点..." />
+             </div>
+
+             <div v-if="!modelValue.unclassifiedKnowledge?.length && !isAddingKnowledge" class="empty-hint">暂无待分类知识点</div>
           </div>
 
           <!-- 右侧：三个分类框 (纵向排列) -->
@@ -125,8 +148,16 @@
               <div class="items-list">
                 <div v-for="(item, idx) in modelValue.classifiedKnowledge.competent" :key="idx"
                      draggable="true" @dragstart="onDragStart($event, item, 'competent')"
-                     class="mini-item good-bg">
-                  {{ item }}
+                     @dblclick="startEditKnowledge('competent', idx, item)"
+                     class="mini-item good-bg group relative">
+                  <template v-if="editingKnowledge.category === 'competent' && editingKnowledge.index === idx">
+                    <input v-model="editingKnowledge.value" class="tag-input" v-focus @blur="finishEditKnowledge" @keyup.enter="finishEditKnowledge" />
+                  </template>
+                  <template v-else>
+                    <span class="tag-text">{{ item }}</span>
+                    <span class="delete-tag-btn mini opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" 
+                          @click.stop="deleteKnowledgeItem(item)">×</span>
+                  </template>
                 </div>
               </div>
             </div>
@@ -141,8 +172,16 @@
               <div class="items-list">
                 <div v-for="(item, idx) in modelValue.classifiedKnowledge.novice" :key="idx"
                      draggable="true" @dragstart="onDragStart($event, item, 'novice')"
-                     class="mini-item medium-bg">
-                  {{ item }}
+                     @dblclick="startEditKnowledge('novice', idx, item)"
+                     class="mini-item medium-bg group relative">
+                  <template v-if="editingKnowledge.category === 'novice' && editingKnowledge.index === idx">
+                    <input v-model="editingKnowledge.value" class="tag-input" v-focus @blur="finishEditKnowledge" @keyup.enter="finishEditKnowledge" />
+                  </template>
+                  <template v-else>
+                    <span class="tag-text">{{ item }}</span>
+                    <span class="delete-tag-btn mini opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" 
+                          @click.stop="deleteKnowledgeItem(item)">×</span>
+                  </template>
                 </div>
               </div>
             </div>
@@ -157,8 +196,16 @@
               <div class="items-list">
                 <div v-for="(item, idx) in modelValue.classifiedKnowledge.layman" :key="idx"
                      draggable="true" @dragstart="onDragStart($event, item, 'layman')"
-                     class="mini-item bad-bg">
-                  {{ item }}
+                     @dblclick="startEditKnowledge('layman', idx, item)"
+                     class="mini-item bad-bg group relative">
+                  <template v-if="editingKnowledge.category === 'layman' && editingKnowledge.index === idx">
+                    <input v-model="editingKnowledge.value" class="tag-input" v-focus @blur="finishEditKnowledge" @keyup.enter="finishEditKnowledge" />
+                  </template>
+                  <template v-else>
+                    <span class="tag-text">{{ item }}</span>
+                    <span class="delete-tag-btn mini opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" 
+                          @click.stop="deleteKnowledgeItem(item)">×</span>
+                  </template>
                 </div>
               </div>
             </div>
@@ -191,7 +238,6 @@
             <!-- 已选中部分（支持排序） -->
             <div v-for="(opt, idx) in modelValue.cognitive[category]" :key="'sel-' + opt" 
                  class="selectable-box is-active"
-                 :style="{ backgroundColor: getOptionColor(opt) }"
                  @click="toggleCognitive(category, opt)">
               <div class="box-content-row">
                  <span class="box-text">{{ subDimensionTranslations[opt] || opt }}</span>
@@ -202,10 +248,9 @@
               </div>
             </div>
 
-            <!-- 未选中推荐部分（排到第一位/优先展示） -->
+            <!-- 未选中推荐部分（已精简） -->
             <div v-for="opt in getSortedOptionsForCategory(category).recommended" :key="'rec-' + opt" 
                  class="selectable-box is-related"
-                 :style="{ borderColor: getOptionColor(opt), color: getOptionColor(opt) }"
                  @click="toggleCognitive(category, opt)">
               {{ subDimensionTranslations[opt] || opt }}
             </div>
@@ -217,38 +262,6 @@
               {{ subDimensionTranslations[opt] || opt }}
             </div>
           </div>
-        </div>
-
-        <!-- 组合类型展示区域 -->
-        <div class="archetypes-container">
-          <span class="archetype-label">关联组合：</span>
-           <div v-for="(info, name) in archetypes" :key="name" 
-                class="archetype-tag"
-                :class="{'is-highlighted': isRelatedToHighlighted(name)}"
-                :style="{ backgroundColor: isRelatedToHighlighted(name) ? info.color : '' }"
-                @click="selectedArchetype = {name, ...info}">
-              {{ name }}
-           </div>
-        </div>
-
-        <!-- 特征解释弹窗 -->
-        <div v-if="selectedArchetype" class="type-modal-overlay" @click="selectedArchetype = null">
-           <div class="type-modal-content" @click.stop>
-              <h4 class="modal-title">{{ selectedArchetype.name }}</h4>
-              <div class="modal-composition">
-                 <div class="modal-sub-label">构成要素：</div>
-                 <div class="comp-tags-flex">
-                   <span v-for="item in selectedArchetype.composition" :key="item" class="mini-comp-tag">
-                      {{ subDimensionTranslations[item] || item }}
-                   </span>
-                 </div>
-              </div>
-              <div class="modal-description">
-                 <div class="modal-sub-label">特征描述：</div>
-                 <p class="modal-desc-text">{{ selectedArchetype.description }}</p>
-              </div>
-              <button class="close-modal-btn" @click="selectedArchetype = null">我知道了</button>
-           </div>
         </div>
       </section>
 
@@ -323,7 +336,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, inject } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -334,8 +347,55 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'delete']);
 
+const knowledgeActions = inject('knowledgeActions', {});
+
 const editingField = ref(null);
 const dragOverField = ref(null);
+
+// 知识点编辑状态
+const editingKnowledge = ref({ category: null, index: null, value: '' });
+
+const startEditKnowledge = (category, index, value) => {
+  editingKnowledge.value = { category, index, value };
+};
+
+const finishEditKnowledge = () => {
+  if (editingKnowledge.value.category) {
+    const { category, index, value } = editingKnowledge.value;
+    let oldName = '';
+    if (category === 'unclassified') {
+      oldName = props.modelValue.unclassifiedKnowledge[index];
+    } else {
+      oldName = props.modelValue.classifiedKnowledge[category][index];
+    }
+    if (value && value !== oldName) {
+      if (knowledgeActions.renameKnowledge) {
+        knowledgeActions.renameKnowledge(oldName, value);
+      }
+    }
+  }
+  editingKnowledge.value = { category: null, index: null, value: '' };
+};
+
+// 新增知识点状态
+const isAddingKnowledge = ref(false);
+const newKnowledgeName = ref('');
+
+const submitAddKnowledge = () => {
+  if (newKnowledgeName.value) {
+    if (knowledgeActions.addKnowledge) {
+      knowledgeActions.addKnowledge(newKnowledgeName.value);
+    }
+  }
+  isAddingKnowledge.value = false;
+  newKnowledgeName.value = '';
+};
+
+const deleteKnowledgeItem = (item) => {
+  if (knowledgeActions.deleteKnowledge) {
+    knowledgeActions.deleteKnowledge(item);
+  }
+};
 
 // --- 认知倾向：中文翻译与 archetypes 字典 ---
 const cognitiveLabels = {
@@ -370,36 +430,6 @@ const plasticityTranslations = {
   'high': '灵活'
 };
 
-// 手动添加区域！！！！！自定义
-const archetypes = {
-  "经验直觉型": {
-    "composition": ["patient_events", "familiarity_driven", "cues_driven"],
-    "color": "#7895CB",
-    "description": "该型学生倾向于依靠直觉和患者呈现的表象进行快速判断，习惯于匹配过往经验而非深究病理机制。"
-  },
-  "系统生理型": {
-    "composition": ["symptoms", "mechanism", "linear_causality"],
-    "color": "#6EA6B3",
-    "description": "该型学生擅长从生理机制出发，通过逻辑严密的线性因果链条来推导病情，注重理论知识的系统应用。"
-  },
-  "风险感知型": {
-    "composition": ["social_cues", "risk_perception", "multi_concurrent"],
-    "color": "#8A87C1",
-    "description": "该型学生对环境和社会线索敏感，在推理过程中会优先考虑潜在风险和多重并发因素的影响。"
-  }
-};
-
-const getOptionColor = (opt) => {
-  // 查找该 opt 属于哪个 Archetype
-  for (let name in archetypes) {
-    if (archetypes[name].composition.includes(opt)) {
-      return archetypes[name].color;
-    }
-  }
-  return "#8095CA"; // 统一蓝色
-};
-
-const selectedArchetype = ref(null);
 const isDeleteMode = ref(false);
 
 const toggleDeleteMode = () => {
@@ -425,25 +455,7 @@ const toggleCognitive = (category, opt) => {
     }
   } else {
     if (index === -1) {
-      // 选中逻辑：如果点击的维度属于某个 Archetype，则该 Archetype 的所有成员进入“选中候选/高亮”或直接选中
-      // 根据用户要求：直接进入选中模式
       props.modelValue.cognitive[category].push(opt);
-      
-      // 联动：查找包含此 opt 的所有组合，并把它们的成员也设为选中（如果还没选中的话）
-      for (let name in archetypes) {
-        if (archetypes[name].composition.includes(opt)) {
-          archetypes[name].composition.forEach(comp => {
-            // 需要找到这个 comp 属于哪个 category
-            for (let catKey in props.cognitiveOptions) {
-              if (props.cognitiveOptions[catKey].includes(comp)) {
-                if (!props.modelValue.cognitive[catKey].includes(comp)) {
-                  props.modelValue.cognitive[catKey].push(comp);
-                }
-              }
-            }
-          });
-        }
-      }
     } else {
       props.modelValue.cognitive[category].splice(index, 1);
     }
@@ -463,84 +475,13 @@ const getSortedOptionsForCategory = (category) => {
   const options = props.cognitiveOptions[category] || [];
   const selected = props.modelValue.cognitive[category] || [];
   
-  // 1. 已经选中的（按选中的顺序/用户排序后的顺序）
-  // 2. 被推荐的（属于已选中项相关组合的成员）
-  // 3. 其他
-  
-  const recommended = [];
-  selected.forEach(s => {
-    for (let name in archetypes) {
-      if (archetypes[name].composition.includes(s)) {
-        archetypes[name].composition.forEach(c => {
-          if (options.includes(c) && !selected.includes(c) && !recommended.includes(c)) {
-            recommended.push(c);
-          }
-        });
-      }
-    }
-  });
-
-  const remaining = options.filter(o => !selected.includes(o) && !recommended.includes(o));
+  const remaining = options.filter(o => !selected.includes(o));
   
   return {
     selected: selected,
-    recommended: recommended,
+    recommended: [],
     others: remaining
   };
-};
-
-const isOptionRelated = (opt) => {
-  for (let name in archetypes) {
-    if (isRelatedToHighlighted(name)) {
-      if (archetypes[name].composition.includes(opt)) return true;
-    }
-  }
-  return false;
-};
-
-const isRelatedToHighlighted = (typeName) => {
-  const type = archetypes[typeName];
-  if (!type) return false;
-  
-  // 检查当前选中的任何一个子维度是否在组合中
-  for (let cat in props.modelValue.cognitive) {
-    const selectedList = Array.isArray(props.modelValue.cognitive[cat]) 
-      ? props.modelValue.cognitive[cat] 
-      : [props.modelValue.cognitive[cat]];
-      
-    if (selectedList.some(item => type.composition.includes(item))) return true;
-  }
-  return false;
-};
-
-// --- 拖拽逻辑实现 ---
-const onDragStart = (e, item, source) => {
-  e.dataTransfer.dropEffect = 'move';
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', item);
-  e.dataTransfer.setData('sourceCategory', source);
-};
-
-const onDrop = (e, targetCategory) => {
-  dragOverField.value = null;
-  const item = e.dataTransfer.getData('text/plain');
-  const sourceCategory = e.dataTransfer.getData('sourceCategory');
-  
-  if (!item || sourceCategory === targetCategory) return;
-
-  if (sourceCategory === 'unclassified') {
-    props.modelValue.unclassifiedKnowledge = props.modelValue.unclassifiedKnowledge.filter(i => i !== item);
-  } else {
-    props.modelValue.classifiedKnowledge[sourceCategory] = props.modelValue.classifiedKnowledge[sourceCategory].filter(i => i !== item);
-  }
-
-  if (targetCategory === 'unclassified') {
-    if (!props.modelValue.unclassifiedKnowledge) props.modelValue.unclassifiedKnowledge = [];
-    props.modelValue.unclassifiedKnowledge.push(item);
-  } else {
-    if (!props.modelValue.classifiedKnowledge[targetCategory]) props.modelValue.classifiedKnowledge[targetCategory] = [];
-    props.modelValue.classifiedKnowledge[targetCategory].push(item);
-  }
 };
 
 const vFocus = {
@@ -552,6 +493,8 @@ const vFocus = {
 
 const resetEditing = () => {
   editingField.value = null;
+  editingKnowledge.value = { category: null, index: null, value: '' };
+  isAddingKnowledge.value = false;
 };
 
 defineExpose({ resetEditing });
@@ -855,6 +798,67 @@ defineExpose({ resetEditing });
   cursor: move;
   transition: background-color 0.2s;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theory-tag.editing {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tag-input {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+  outline: none;
+}
+
+.delete-tag-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.delete-tag-btn.mini {
+  font-size: 12px;
+  right: 4px;
+}
+
+.delete-tag-btn:hover {
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.add-theory-tag {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #D9D9D9;
+  color: #ffffff;
+  border: 1px dashed #A5A8AC;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 20px;
+  transition: all 0.2s;
+}
+
+.add-theory-tag:hover {
+  background-color: rgba(255, 255, 255, 0.4);
 }
 
 .theory-tag:hover {
@@ -953,6 +957,7 @@ defineExpose({ resetEditing });
   border-radius: 9999px;
   display: flex;
   align-items: center;
+  justify-content: center;
   white-space: nowrap;
   max-width: 100%;
   background-color: rgba(255, 255, 255, 0.35);
@@ -1033,7 +1038,7 @@ defineExpose({ resetEditing });
 }
 
 .selectable-box.is-active {
-  background-color: #8095CA;
+  background-color: #7F96CB;
   color: white;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   font-weight: bold;
@@ -1076,119 +1081,9 @@ defineExpose({ resetEditing });
 }
 
 .selectable-box.is-related {
-  border: 1.5px dashed #FFB74D;
-  background-color: rgba(255, 183, 77, 0.1);
-  color: #E67E22;
-}
-
-/* 组合类型样式 */
-.archetypes-container {
-  margin-top: 2rem;
-  padding: 0 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.archetype-label {
-  font-size: 13px;
-  font-weight: bold;
-  color: #6C6565;
-}
-
-.archetype-tag {
-  font-size: 12px;
-  padding: 0.25rem 0.75rem;
-  background-color: #ECEFF4;
-  border: 1px solid #D1D9E6;
-  border-radius: 4px;
+  border: 1.5px dashed #B0C4DE;
+  background-color: rgba(176, 196, 222, 0.1);
   color: #7F8C8D;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.archetype-tag.is-highlighted {
-  border-color: #F39C12;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  font-weight: bold;
-}
-
-/* 弹窗样式 */
-.type-modal-overlay {
-  position: absolute;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  border-radius: 20px;
-}
-
-.type-modal-content {
-  background-color: white;
-  width: 80%;
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-title {
-  text-align: center;
-  font-weight: bold;
-  font-size: 18px;
-  margin-bottom: 1rem;
-  color: #2C3E50;
-}
-
-.modal-sub-label {
-  font-size: 11px;
-  color: #95A5A6;
-  margin-bottom: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.comp-tags-flex {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.mini-comp-tag {
-  font-size: 11px;
-  background-color: #F0F3F7;
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
-  color: #34495E;
-}
-
-.modal-desc-text {
-  font-size: 13px;
-  line-height: 1.6;
-  color: #34495E;
-  margin-bottom: 1.5rem;
-}
-
-.close-modal-btn {
-  background-color: #8095CA;
-  color: white;
-  border: none;
-  padding: 0.6rem;
-  border-radius: 6px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.close-modal-btn:hover {
-  background-color: #6D8DBE;
 }
 
 /* =========================================

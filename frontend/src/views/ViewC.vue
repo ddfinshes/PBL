@@ -43,8 +43,8 @@
               </div>
               
               <div class="teacher-content-wrapper">
-                <div v-if="currentScene.trigger_questions?.length" class="sub-block">
-                  <ul class="question-list">
+                <div class="sub-block">
+                  <ul v-if="currentScene.trigger_questions?.length" class="question-list">
                     <!-- 列表项修改：增加 flex 布局 -->
                     <li 
                       v-for="(q, qIdx) in currentScene.trigger_questions" 
@@ -93,10 +93,25 @@
                               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                           </button>
+                          <button 
+                            class="delete-item-btn"
+                            @click.stop="deleteQuestion(qIdx)"
+                            title="删除问题"
+                          >
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5">
+                              <path d="M18 6L6 18M6 6l12 12"></path>
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </li>
                   </ul>
+                  
+                  <!-- Add Trigger Question Button -->
+                  <div class="add-question-btn-wrapper" @click="addQuestion">
+                    <div class="plus-icon">+</div>
+                    <div class="add-text">Add Question</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -164,7 +179,7 @@ import { ref, computed, watch, defineEmits, inject } from 'vue'
 import MarkdownIt from 'markdown-it'
 
 // --- 配置与 Props ---
-const API_BASE_URL = 'http://localhost:8000'
+const API_BASE_URL = 'http://127.0.0.1:8000'
 
 const props = defineProps({
   caseData: { type: Object, default: null },
@@ -232,6 +247,110 @@ const previewImage = (img) => {
 
 const handleImageError = (imgIdx, sceneIdx) => {
   failedImages.value.add(`${sceneIdx}_${imgIdx}`)
+}
+
+/**
+ * 添加新引导问题
+ */
+async function addQuestion() {
+  if (!props.caseData || !props.caseData.case_title) {
+    alert('无法获取案例信息，请重试');
+    return;
+  }
+
+  const defaultText = "";
+  
+  try {
+    const caseName = props.caseData.case_title;
+    const sceneIdx = currentIndex.value;
+
+    const response = await fetch(`${API_BASE_URL}/api/add-question`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseName: caseName,
+        sceneIndex: sceneIdx,
+        questionText: defaultText
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.detail || result.message || '添加失败');
+    }
+
+    // 更新本地状态
+    if (!currentScene.value.trigger_questions) {
+      currentScene.value.trigger_questions = [];
+    }
+    
+    // 为了响应式，重新分配数组
+    currentScene.value.trigger_questions = [...currentScene.value.trigger_questions, { question: defaultText }];
+    
+    // 自动进入新问题的编辑模式
+    const newIdx = currentScene.value.trigger_questions.length - 1;
+    startEdit(defaultText, newIdx);
+    
+    console.log('✓ 问题已添加到后端并更新 UI');
+  } catch (error) {
+    console.error('Add question error:', error);
+    alert(`添加失败: ${error.message}`);
+  }
+}
+
+/**
+ * 删除问题
+ */
+async function deleteQuestion(qIdx) {
+  if (!props.caseData || !props.caseData.case_title) {
+    alert('无法获取案例信息，请重试');
+    return;
+  }
+  
+  try {
+    const caseName = props.caseData.case_title;
+    const sceneIdx = currentIndex.value;
+    
+    console.log(`Deleting question: Case=${caseName}, Scene=${sceneIdx}, Index=${qIdx}`);
+
+    const response = await fetch(`${API_BASE_URL}/api/delete-question`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseName: caseName,
+        sceneIndex: sceneIdx,
+        questionIndex: qIdx
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.detail || result.message || '删除失败');
+    }
+
+    // 更新本地状态
+    if (currentScene.value && currentScene.value.trigger_questions) {
+      currentScene.value.trigger_questions.splice(qIdx, 1);
+    }
+    
+    // 如果删除的是当前选中的问题
+    if (activeQuestionInfo.value.sceneIndex === sceneIdx && activeQuestionInfo.value.questionIndex === qIdx) {
+      if (currentScene.value.trigger_questions.length > 0) {
+        onInspectQuestion(currentScene.value.trigger_questions[0], 0);
+      } else {
+        activeQuestionInfo.value = { sceneIndex: -1, questionIndex: -1 };
+      }
+    } else if (activeQuestionInfo.value.sceneIndex === sceneIdx && activeQuestionInfo.value.questionIndex > qIdx) {
+      activeQuestionInfo.value.questionIndex--;
+    }
+
+    alert('问题已成功删除');
+  } catch (error) {
+    console.error('Delete error:', error);
+    alert(`删除失败: ${error.message}`);
+  }
 }
 
 /**
@@ -658,6 +777,59 @@ watch(currentIndex, (newIdx) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.delete-item-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-item-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Add Question Button (ViewB style) */
+.add-question-btn-wrapper {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  gap: 12px;
+  padding: 10px 24px;
+  border-radius: 9999px;
+  border: 2px dashed #8095CA;
+  background-color: rgba(128, 149, 202, 0.1);
+  transition: all 0.3s ease;
+}
+
+.add-question-btn-wrapper:hover {
+  background-color: rgba(128, 149, 202, 0.2);
+  transform: translateY(-2px);
+}
+
+.add-question-btn-wrapper .plus-icon {
+  font-size: 28px;
+  color: #8095CA;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.add-question-btn-wrapper .add-text {
+  font-size: 15px;
+  color: #d1d5db;
+  font-weight: 700;
 }
 
 /* 图片堆栈 */

@@ -79,6 +79,34 @@ class SaveSummaryRequest(BaseModel):
     summary_data: dict
 
 
+class UpdateKnowledgeRequest(BaseModel):
+    pdf_filename: str
+    old_name: str
+    new_name: str
+
+
+class AddKnowledgeRequest(BaseModel):
+    pdf_filename: str
+    knowledge_point: str
+
+
+class DeleteKnowledgeRequest(BaseModel):
+    pdf_filename: str
+    knowledge_point: str
+
+
+class DeleteQuestionRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+
+
+class AddQuestionRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionText: str
+
+
 app_fastapi = FastAPI()
 
 # --- CORS 中间件配置 ---
@@ -399,6 +427,109 @@ async def api_save_case(request_data: dict):
         return {"status": "error", "detail": str(e)}, 500
 
 
+@app_fastapi.post("/api/delete-question")
+async def api_delete_question(request: DeleteQuestionRequest):
+    """从案例 JSON 中删除某个场景下的一条问题"""
+    try:
+        case_name = request.caseName
+        scene_idx = request.sceneIndex
+        question_idx = request.questionIndex
+
+        # 改进：先尝试直接查找，失败则模糊匹配
+        json_path = CASE_STORAGE_DIR / f"{case_name}.json"
+
+        if not json_path.exists():
+            # 模糊匹配
+            matching_files = list(CASE_STORAGE_DIR.glob("*.json"))
+            json_path = None
+            for f in matching_files:
+                try:
+                    with open(f, 'r', encoding='utf-8') as file:
+                        data = json.load(file)
+                        if data.get("case_title") == case_name:
+                            json_path = f
+                            break
+                except Exception:
+                    continue
+
+            if not json_path:
+                return {"status": "error", "detail": f"案例文件不存在: {case_name}"}, 404
+
+        # 读取JSON文件
+        with open(json_path, 'r', encoding='utf-8') as f:
+            case_data = json.load(f)
+
+        if scene_idx >= len(case_data.get("scenes", [])):
+            return {"status": "error", "detail": f"场景索引越界: {scene_idx}"}, 400
+
+        scene = case_data["scenes"][scene_idx]
+        if question_idx >= len(scene.get("trigger_questions", [])):
+            return {"status": "error", "detail": f"问题索引越界: {question_idx}"}, 400
+
+        # 删除问题
+        scene["trigger_questions"].pop(question_idx)
+
+        # 保存回JSON文件
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success", "message": "问题已删除"}
+
+    except Exception as e:
+        logger.error(f"删除问题失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/add-question")
+async def api_add_question(request: AddQuestionRequest):
+    """向某个场景添加一条引导问题"""
+    try:
+        case_name = request.caseName
+        scene_idx = request.sceneIndex
+        question_text = request.questionText
+
+        json_path = CASE_STORAGE_DIR / f"{case_name}.json"
+
+        if not json_path.exists():
+            # 模糊匹配
+            matching_files = list(CASE_STORAGE_DIR.glob("*.json"))
+            json_path = None
+            for f in matching_files:
+                try:
+                    with open(f, 'r', encoding='utf-8') as file:
+                        data = json.load(file)
+                        if data.get("case_title", "").strip() == case_name.strip():
+                            json_path = f
+                            break
+                except Exception:
+                    continue
+
+            if not json_path:
+                return {"status": "error", "detail": f"案例文件不存在: {case_name}"}, 404
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            case_data = json.load(f)
+
+        if scene_idx >= len(case_data.get("scenes", [])):
+            return {"status": "error", "detail": "场景索引越界"}, 400
+
+        scene = case_data["scenes"][scene_idx]
+        if "trigger_questions" not in scene:
+            scene["trigger_questions"] = []
+
+        # 添加新问题
+        scene["trigger_questions"].append({"question": question_text})
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success", "message": "问题已添加"}
+
+    except Exception as e:
+        logger.error(f"添加问题失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
 @app_fastapi.post("/update_personas")
 # async def update_personas(request: Dict[str, Dict]):
 #     """接收前端配置，清空、注册所有 agent，并重新编译图。"""
@@ -513,6 +644,102 @@ async def update_personas_v1(request: Dict[str, Dict]):
     except Exception as e:
         logger.error(f"Failed to update personas: {e}")
         return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/update-knowledge")
+async def api_update_knowledge(request: UpdateKnowledgeRequest):
+    """更新案例 JSON 中的知识点名称"""
+    base_name = extract_base_filename(request.pdf_filename)
+    json_path = CASE_STORAGE_DIR / f"{base_name}.json"
+    if not json_path.exists():
+        return {"status": "error", "message": "Case not found"}, 404
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # 1. 更新 theoretical_knowledge_points
+        if "theoretical_knowledge_points" in data:
+            data["theoretical_knowledge_points"] = [
+                request.new_name if p == request.old_name else p
+                for p in data["theoretical_knowledge_points"]
+            ]
+
+        # 2. 更新 knowledge_alignments
+        if "knowledge_alignments" in data:
+            for alignment in data["knowledge_alignments"]:
+                if alignment.get("point") == request.old_name:
+                    alignment["point"] = request.new_name
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to update knowledge: {e}")
+        return {"status": "error", "message": str(e)}, 500
+
+
+@app_fastapi.post("/api/add-knowledge")
+async def api_add_knowledge(request: AddKnowledgeRequest):
+    """在案例 JSON 中新增知识点"""
+    base_name = extract_base_filename(request.pdf_filename)
+    json_path = CASE_STORAGE_DIR / f"{base_name}.json"
+    if not json_path.exists():
+        return {"status": "error", "message": "Case not found"}, 404
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        if "theoretical_knowledge_points" not in data:
+            data["theoretical_knowledge_points"] = []
+
+        if request.knowledge_point not in data["theoretical_knowledge_points"]:
+            data["theoretical_knowledge_points"].append(
+                request.knowledge_point)
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to add knowledge: {e}")
+        return {"status": "error", "message": str(e)}, 500
+
+
+@app_fastapi.post("/api/delete-knowledge")
+async def api_delete_knowledge(request: DeleteKnowledgeRequest):
+    """从案例 JSON 中删除知识点"""
+    base_name = extract_base_filename(request.pdf_filename)
+    json_path = CASE_STORAGE_DIR / f"{base_name}.json"
+    if not json_path.exists():
+        return {"status": "error", "message": "Case not found"}, 404
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # 1. 从 theoretical_knowledge_points 删除
+        if "theoretical_knowledge_points" in data:
+            data["theoretical_knowledge_points"] = [
+                p for p in data["theoretical_knowledge_points"] if p != request.knowledge_point
+            ]
+
+        # 2. 从 knowledge_alignments 删除
+        if "knowledge_alignments" in data:
+            data["knowledge_alignments"] = [
+                a for a in data["knowledge_alignments"] if a.get("point") != request.knowledge_point
+            ]
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to delete knowledge: {e}")
+        return {"status": "error", "message": str(e)}, 500
+
 
 # 存储每个 session 的后台任务，用于处理 LangGraph 流输出
 session_tasks = {}
