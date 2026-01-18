@@ -397,6 +397,65 @@ const deleteKnowledgeItem = (item) => {
   }
 };
 
+// 拖拽相关 - 用于存储拖拽的数据
+let draggedData = null;
+
+const onDragStart = (event, item, sourceCategory) => {
+  draggedData = { item, sourceCategory };
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', item);
+};
+
+const onDrop = (event, targetCategory) => {
+  event.preventDefault();
+  if (!draggedData) return;
+  
+  const { item, sourceCategory } = draggedData;
+  
+  // 如果目标和源相同，不做任何操作
+  if (sourceCategory === targetCategory) {
+    draggedData = null;
+    dragOverField.value = null;
+    return;
+  }
+  
+  // 确保classifiedKnowledge结构存在
+  if (!props.modelValue.classifiedKnowledge) {
+    props.modelValue.classifiedKnowledge = {
+      competent: [],
+      novice: [],
+      layman: []
+    };
+  }
+  
+  // 从源类别移除
+  if (sourceCategory === 'unclassified') {
+    const index = props.modelValue.unclassifiedKnowledge.indexOf(item);
+    if (index > -1) {
+      props.modelValue.unclassifiedKnowledge.splice(index, 1);
+    }
+  } else {
+    const index = props.modelValue.classifiedKnowledge[sourceCategory].indexOf(item);
+    if (index > -1) {
+      props.modelValue.classifiedKnowledge[sourceCategory].splice(index, 1);
+    }
+  }
+  
+  // 添加到目标类别
+  if (targetCategory === 'unclassified') {
+    if (!props.modelValue.unclassifiedKnowledge.includes(item)) {
+      props.modelValue.unclassifiedKnowledge.push(item);
+    }
+  } else {
+    if (!props.modelValue.classifiedKnowledge[targetCategory].includes(item)) {
+      props.modelValue.classifiedKnowledge[targetCategory].push(item);
+    }
+  }
+  
+  draggedData = null;
+  dragOverField.value = null;
+};
+
 // --- 认知倾向：中文翻译与 archetypes 字典 ---
 const cognitiveLabels = {
   0: '注意力锚点',

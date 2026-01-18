@@ -1,18 +1,17 @@
 {
-  "a": {
-    "name": "a",
+  "A": {
+    "name": "A",
     "age": "",
-    "major": "",
+    "major": "临床八年制度",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
-        "病理学",
-        "生理学",
         "药理学",
         "诊断学",
-        "zyc",
+        "病理学",
+        "生理学",
         "医学伦理学"
       ],
       "medium": [],
@@ -21,24 +20,29 @@
     "cognitive_orientation": {
       "attentional_anchor": [
         "symptoms",
-        "present_illness"
+        "present_illness",
+        "physicochemical_parameters",
+        "past_medical_history"
       ],
-      "reasoning_entry": [],
+      "reasoning_entry": [
+        "risk_perception",
+        "familiarity_driven"
+      ],
       "causal_structure": [
-        "linear_causality"
+        "multi_concurrent"
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
+      "verbal_confidence": "high",
+      "language_register": "high",
       "interaction_role": "leader"
     },
-    "learning_adaptivity": "medium"
+    "learning_adaptivity": "high"
   },
-  "b": {
-    "name": "b",
+  "B": {
+    "name": "B",
     "age": "",
-    "major": "",
+    "major": "医学五年制",
     "avatar": "avatar1.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
@@ -49,27 +53,36 @@
         "生理学",
         "药理学",
         "诊断学",
-        "医学伦理学",
-        "zyc"
+        "医学伦理学"
       ],
       "low": []
     },
     "cognitive_orientation": {
-      "attentional_anchor": [],
-      "reasoning_entry": [],
-      "causal_structure": []
+      "attentional_anchor": [
+        "symptoms",
+        "physicochemical_parameters",
+        "past_medical_history",
+        "present_illness"
+      ],
+      "reasoning_entry": [
+        "symptom_significance",
+        "familiarity_driven"
+      ],
+      "causal_structure": [
+        "linear_causality"
+      ]
     },
     "social_interaction_style": {
       "verbal_confidence": "medium",
       "language_register": "medium",
-      "interaction_role": "leader"
+      "interaction_role": "follower"
     },
     "learning_adaptivity": "medium"
   },
-  "Student_2": {
-    "name": "",
+  "C": {
+    "name": "C",
     "age": "",
-    "major": "",
+    "major": "计算机科学",
     "avatar": "avatar1.png",
     "color": "#D2FBCE",
     "cardColor": "#D2FBCE",
@@ -81,20 +94,28 @@
         "生理学",
         "药理学",
         "诊断学",
-        "医学伦理学",
-        "zyc"
+        "医学伦理学"
       ]
     },
     "cognitive_orientation": {
-      "attentional_anchor": [],
-      "reasoning_entry": [],
-      "causal_structure": []
+      "attentional_anchor": [
+        "physicochemical_parameters",
+        "symptoms",
+        "present_illness",
+        "past_medical_history"
+      ],
+      "reasoning_entry": [
+        "irrelevant_factors"
+      ],
+      "causal_structure": [
+        "undefined"
+      ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
-      "interaction_role": "leader"
+      "verbal_confidence": "low",
+      "language_register": "low",
+      "interaction_role": "critical"
     },
-    "learning_adaptivity": "medium"
+    "learning_adaptivity": "low"
   }
 }
