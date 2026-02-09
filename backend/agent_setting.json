@@ -1,110 +1,69 @@
 {
-  "A": {
-    "name": "A",
-    "age": "26",
-    "major": "Internal Medicine",
-    "avatar": "avatar2.png",
-    "color": "#9CB2E2",
-    "cardColor": "#9CB2E2",
+  "zz": {
+    "name": "zz",
+    "age": "",
+    "major": "",
+    "avatar": "avatar1.png",
+    "color": "#CEDCFB",
+    "cardColor": "#CEDCFB",
     "knowledge_background": {
       "high": [
-        "Pathology",
-        "Physiology",
-        "Pharmacology",
-        "Medical Ethics",
-        "Internal Medicine",
-        "Diagnostic"
+        "病理生理学",
+        "生理学",
+        "药理学",
+        "内科学（肾脏病学）",
+        "诊断学",
+        "医学伦理学"
       ],
       "medium": [],
       "low": []
     },
     "cognitive_orientation": {
       "attentional_anchor": [
-        "present_illness",
         "symptoms",
+        "present_illness",
         "physicochemical_parameters",
         "past_medical_history"
       ],
       "reasoning_entry": [
         "risk_perception",
-        "familiarity_driven"
+        "familiarity_driven",
+        "symptom_significance"
       ],
       "causal_structure": [
         "multi_concurrent"
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "high",
-      "language_register": "high",
-      "interaction_role": "leader"
-    },
-    "learning_adaptivity": "medium"
-  },
-  "B": {
-    "name": "B",
-    "age": "24",
-    "major": "Surgery",
-    "avatar": "avatar3.png",
-    "color": "#FFC2D4",
-    "cardColor": "#FFC2D4",
-    "knowledge_background": {
-      "high": [
-        "Medical Ethics"
-      ],
-      "medium": [
-        "Pathology",
-        "Pharmacology",
-        "Diagnostic"
-      ],
-      "low": [
-        "Physiology",
-        "Internal Medicine"
-      ]
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "physicochemical_parameters",
-        "symptoms",
-        "past_medical_history",
-        "present_illness"
-      ],
-      "reasoning_entry": [
-        "familiarity_driven"
-      ],
-      "causal_structure": [
-        "linear_causality"
-      ]
-    },
-    "social_interaction_style": {
-      "verbal_confidence": "high",
+      "verbal_confidence": "medium",
       "language_register": "medium",
-      "interaction_role": "follower"
+      "interaction_role": "leader",
+      "participation": "medium"
     },
     "learning_adaptivity": "medium"
   },
-  "C": {
-    "name": "C",
-    "age": "22",
-    "major": "Pediatrics",
+  "Student_1": {
+    "name": "",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
-    "color": "#B6EAA3",
-    "cardColor": "#B6EAA3",
+    "color": "#FBCEDC",
+    "cardColor": "#FBCEDC",
     "knowledge_background": {
       "high": [],
       "medium": [],
       "low": [
-        "Pathology",
-        "Physiology",
-        "Pharmacology",
-        "Medical Ethics",
-        "Internal Medicine",
-        "Diagnostic"
+        "病理生理学",
+        "生理学",
+        "药理学",
+        "内科学（肾脏病学）",
+        "诊断学",
+        "医学伦理学"
       ]
     },
     "cognitive_orientation": {
       "attentional_anchor": [
         "symptoms",
-        "past_medical_history",
         "present_illness"
       ],
       "reasoning_entry": [
@@ -115,10 +74,11 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "low",
-      "language_register": "low",
-      "interaction_role": "leader"
+      "verbal_confidence": "medium",
+      "language_register": "medium",
+      "interaction_role": "leader",
+      "participation": "medium"
     },
-    "learning_adaptivity": "high"
+    "learning_adaptivity": "medium"
   }
 }

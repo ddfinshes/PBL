@@ -92,6 +92,30 @@
 
     <!-- Main Content Container -->
     <div class="card-content-wrapper">
+      <!-- Quick Profile Selector -->
+      <div class="quick-profile-bar">
+        <button
+          class="quick-pill"
+          :class="{ 'is-active': activeQuickProfile === 'good' }"
+          @click="applyQuickProfile('good')"
+        >
+          Top Student
+        </button>
+        <button
+          class="quick-pill"
+          :class="{ 'is-active': activeQuickProfile === 'medium' }"
+          @click="applyQuickProfile('medium')"
+        >
+          Average Student
+        </button>
+        <button
+          class="quick-pill"
+          :class="{ 'is-active': activeQuickProfile === 'bad' }"
+          @click="applyQuickProfile('bad')"
+        >
+          Struggling Student
+        </button>
+      </div>
       
       <!-- Knowledge Background Section -->
       <section class="panel-section knowledge-panel">
@@ -549,6 +573,70 @@ const resetEditing = () => {
   isAddingKnowledge.value = false;
 };
 
+const getAllKnowledgePoints = () => {
+  const unclassified = props.modelValue.unclassifiedKnowledge || [];
+  const classified = props.modelValue.classifiedKnowledge || {
+    competent: [],
+    novice: [],
+    layman: []
+  };
+  return [
+    ...unclassified,
+    ...(classified.competent || []),
+    ...(classified.novice || []),
+    ...(classified.layman || [])
+  ];
+};
+
+const activeQuickProfile = ref(null);
+
+const applyQuickProfile = (level) => {
+  activeQuickProfile.value = level;
+  const allKnowledge = getAllKnowledgePoints();
+  props.modelValue.unclassifiedKnowledge = [];
+  props.modelValue.classifiedKnowledge = {
+    competent: [],
+    novice: [],
+    layman: []
+  };
+
+  if (level === 'good') {
+    props.modelValue.classifiedKnowledge.competent = [...allKnowledge];
+    props.modelValue.cognitive[0] = [
+      'symptoms',
+      'present_illness',
+      'physicochemical_parameters',
+      'past_medical_history'
+    ];
+    props.modelValue.cognitive[1] = [
+      'risk_perception',
+      'familiarity_driven',
+      'symptom_significance'
+    ];
+    props.modelValue.cognitive[2] = ['multi_concurrent'];
+  } else if (level === 'medium') {
+    props.modelValue.classifiedKnowledge.novice = [...allKnowledge];
+    props.modelValue.cognitive[0] = [
+      'symptoms',
+      'present_illness',
+      'past_medical_history'
+    ];
+    props.modelValue.cognitive[1] = [
+      'familiarity_driven',
+      'symptom_significance'
+    ];
+    props.modelValue.cognitive[2] = ['linear_causality'];
+  } else {
+    props.modelValue.classifiedKnowledge.layman = [...allKnowledge];
+    props.modelValue.cognitive[0] = [
+      'symptoms',
+      'present_illness'
+    ];
+    props.modelValue.cognitive[1] = ['irrelevant_factors'];
+    props.modelValue.cognitive[2] = ['undefined'];
+  }
+};
+
 defineExpose({ resetEditing });
 </script>
 
@@ -585,6 +673,36 @@ defineExpose({ resetEditing });
   display: flex;
   flex-direction: column;
   gap: 0.7rem; /* 压缩内部模块间的间距 */
+}
+
+.quick-profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 20px;
+  border: 2px dashed color-mix(in srgb, var(--base-card-color) 70%, #ffffff 30%);
+  background: color-mix(in srgb, var(--base-card-color) 18%, #ffffff 82%);
+}
+
+.quick-pill {
+  flex: 1;
+  border: none;
+  background: rgba(255, 255, 255, 0.8);
+  color: #7A7A7A;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.quick-pill.is-active,
+.quick-pill:hover {
+  background: var(--base-card-color);
+  color: #ffffff;
 }
 
 /* =========================================
