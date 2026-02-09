@@ -1,11 +1,11 @@
 <template>
   <div class="placeholder-view h-full flex flex-col">
     <!-- Header -->
-    <header class="border-b border-gray-600 shadow-sm z-10">
-      <div class="px-4 py-3 flex justify-between items-center">
-        <h1 class="text-lg font-bold text-gray-200">PBL 模拟讨论</h1>
+    <header class="view-f-header">
+      <div class="flex justify-between items-center">
+        <h1 class="view-title">Discussion Simulation</h1>
         <div class="flex items-center space-x-2">
-          <span class="text-sm font-medium text-gray-300">阶段: {{ discussionStage }}</span>
+          <span class="text-sm font-medium text-gray-600">Stage: {{ discussionStage }}</span>
           
           <div class="flex items-center space-x-1">
             <span class="relative flex h-3 w-3">
@@ -16,24 +16,24 @@
                 :class="[isConnected ? 'bg-[#7fbf4c]' : 'bg-[#fc8d59]', 'relative inline-flex rounded-full h-3 w-3']"
               ></span>
             </span>
-            <span class="text-xs font-medium text-gray-300">{{ isConnected ? '已连接' : '未连接' }}</span>
+            <span class="text-xs font-medium text-gray-600">{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
           </div>
         </div>
       </div>
     </header>
 
     <!-- Chat Area -->
-    <main ref="chatContainer" class="flex-1 overflow-y-auto p-4">
+    <main ref="chatContainer" class="flex-1 overflow-y-auto p-4" style="background: #ECECEC;">
       <!-- Initial State / Start Button -->
       <div v-if="filteredMessages.length === 0" class="text-center py-12">
-        <h2 class="text-xl font-semibold text-gray-200">讨论尚未开始</h2>
-        <p class="mt-2 text-gray-400">点击下方按钮，以上述病例开始一场新的 PBL 讨论。</p>
+        <h2 class="text-xl font-semibold text-gray-800">Discussion Not Started Yet</h2>
+        <p class="mt-2 text-gray-600">Click the button below to start a new PBL discussion based on the case file above.</p>
         <button
           @click="handleStartDiscussion"
           :disabled="!isConnected"
           class="mt-6 px-6 py-3 bg-[#8095CA] text-white font-semibold rounded-lg shadow-md hover:bg-[#6D8DBE] focus:outline-none disabled:bg-gray-400"
         >
-          开始讨论
+          Start Discussion
         </button>
       </div>
 
@@ -42,8 +42,9 @@
         <div 
           v-for="message in filteredMessages" 
           :key="message.id" 
-          class="relative mb-4 transition-all duration-300"
+          class="relative mb-4 transition-all duration-300 cursor-pointer"
           :class="{ 'scale-[1.01] z-10': message.isCurrentTopic }"
+          @click.stop="handleMessageClick(message)"
         >
           <!-- 呼吸边框特效 -->
           <div 
@@ -95,6 +96,7 @@ const {
   startDiscussion, 
   togglePause, 
   sendTeacherIntervention,
+  rollbackTo,
   selectedTopic,
   selectedNodeLeafId,
   activeMessageId,
@@ -213,7 +215,7 @@ const handleStartDiscussion = async () => {
   let qIdx = 0
 
   if (props.activeContext) {
-    textToSend = `${props.activeContext.story}\n\n引导问题：${props.activeContext.question}\n请各位同学开始讨论。`
+    textToSend = `${props.activeContext.story}\n Trigger Question: ${props.activeContext.question}\nPlease start your discussion.`
     sIdx = activeQuestionInfo.value.sceneIndex
     qIdx = activeQuestionInfo.value.questionIndex
   }
@@ -226,6 +228,10 @@ const handleTeacherIntervention = (messageText) => {
   sendTeacherIntervention(messageText)
 }
 
+const handleMessageClick = (message) => {
+  rollbackTo(message.id)
+}
+
 // =====================
 // Lifecycle
 // =====================
@@ -236,9 +242,22 @@ onMounted(() => {
 
 <style scoped>
 .placeholder-view {
-  background: #1a1f3a; 
-  color: white;
+  background: #ECECEC; 
+  color: #333333;
   border-radius: 12px;
+  overflow: hidden;
+}
+.view-f-header {
+  background: #000000;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.view-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  text-align: left;
 }
 
 @keyframes chat-pulse {

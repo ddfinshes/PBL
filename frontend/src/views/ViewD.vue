@@ -1,24 +1,24 @@
 <template>
-  <div class="view-d-container h-full w-full relative overflow-hidden bg-[#0C0E27] rounded-xl border border-[#8095CA]/20">
-    <div class="absolute top-4 left-4 z-10 flex items-center gap-4">
-      <h2 class="text-[18px] text-white font-bold">讨论主题演化路径</h2>
+  <div class="view-d-container h-full w-full relative overflow-hidden bg-[#ECECEC] rounded-xl border border-gray-300">
+    <div class="view-d-header">
+      <h2 class="view-title">Topic Evolution Path</h2>
       <button 
         @click="isHighlightingFlags = !isHighlightingFlags"
         class="px-3 py-1 text-xs rounded-full border transition-all duration-300"
-        :class="isHighlightingFlags ? 'bg-[#EF4444] text-white border-[#EF4444]' : 'text-[#8095CA] border-[#8095CA] hover:bg-[#8095CA]/10'"
+        :class="isHighlightingFlags ? 'bg-[#EF4444] text-white border-[#EF4444]' : 'text-gray-600 border-gray-400 hover:bg-gray-200'"
       >
-        {{ isHighlightingFlags ? '取消' : '演化复盘' }}
+        {{ isHighlightingFlags ? 'Cancel' : 'Review' }}
       </button>
     </div>
     <div ref="svgWrapper" class="w-full h-full">
       <svg ref="svgRef" class="w-full h-full"></svg>
     </div>
 
-    <!-- 总结弹窗 -->
+    <!-- Summary Modal -->
     <div v-if="showSummaryModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8">
-      <div class="bg-[#1a1f3a] border border-[#8095CA]/40 rounded-2xl w-full max-w-2xl max-h-[80%] flex flex-col shadow-2xl">
-        <div class="p-4 border-b border-[#8095CA]/20 flex justify-between items-center">
-          <h4 class="text-[#E0E7FF] font-bold">教师介入点深度分析</h4>
+      <div class="bg-white border border-gray-300 rounded-2xl w-full max-w-2xl max-h-[80%] flex flex-col shadow-2xl">
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+          <h4 class="text-gray-800 font-bold">In-Depth Analysis of Instructor Intervention Points</h4>
           <button @click="showSummaryModal = false" class="text-gray-400 hover:text-white">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -26,47 +26,47 @@
         
         <div class="flex-1 overflow-y-auto p-6 space-y-4">
           <div v-if="summaryLoading" class="flex flex-col items-center justify-center py-12 space-y-4">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8095CA]"></div>
-            <p class="text-[#8095CA] text-sm italic">正在调用 Qwen 专家系统进行并行分析...</p>
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            <p class="text-gray-600 text-sm italic">Waiting for Analysis...</p>
           </div>
           <div v-else-if="currentSummaryParts.context || currentSummaryParts.action || currentSummaryParts.consequence" class="space-y-4">
             <div class="space-y-2">
-              <label class="text-xs text-[#8095CA] font-medium uppercase tracking-wider">介入前：讨论状态总结</label>
+              <label class="text-xs text-blue-600 font-medium uppercase tracking-wider">Before Intervention: Discussion Status Summary</label>
               <textarea 
                 v-model="currentSummaryParts.context"
-                class="w-full h-24 bg-[#0C0E27] text-gray-200 p-3 rounded-xl border border-[#8095CA]/20 focus:border-[#8095CA]/60 outline-none text-sm leading-relaxed"
+                class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-blue-200 focus:border-blue-400 outline-none text-sm leading-relaxed"
               ></textarea>
             </div>
             
             <div class="space-y-2">
-              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">介入：教师行为描述</label>
+              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">Intervention: Instructor Action Description</label>
               <textarea 
                 v-model="currentSummaryParts.action"
-                class="w-full h-24 bg-[#0C0E27] text-gray-200 p-3 rounded-xl border border-[#EF4444]/20 focus:border-[#EF4444]/60 outline-none text-sm leading-relaxed"
+                class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-red-200 focus:border-red-400 outline-none text-sm leading-relaxed"
               ></textarea>
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs text-green-400 font-medium uppercase tracking-wider">介入后：即时互动变化</label>
+              <label class="text-xs text-green-600 font-medium uppercase tracking-wider">After Intervention: Immediate Interaction Changes</label>
               <textarea 
                 v-model="currentSummaryParts.consequence"
-                class="w-full h-24 bg-[#0C0E27] text-gray-200 p-3 rounded-xl border border-green-400/20 focus:border-green-400/60 outline-none text-sm leading-relaxed"
+                class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-green-200 focus:border-green-400 outline-none text-sm leading-relaxed"
               ></textarea>
             </div>
           </div>
           <div v-else class="flex flex-col items-center justify-center py-12">
-             <p class="text-[#8095CA] text-sm italic">等待数据载入...</p>
+             <p class="text-gray-600 text-sm italic">Waiting for data to load...</p>
           </div>
         </div>
 
-        <div class="p-4 border-t border-[#8095CA]/20 flex justify-end gap-3">
-          <button @click="showSummaryModal = false" class="px-4 py-2 text-sm text-gray-400 hover:text-white">取消</button>
+        <div class="p-4 border-t border-gray-200 flex justify-end gap-3">
+          <button @click="showSummaryModal = false" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-800">Cancel</button>
           <button 
             v-if="currentSummaryParts.context"
             @click="saveSummary" 
-            class="px-6 py-2 bg-[#8095CA] text-white rounded-lg text-sm hover:bg-[#6D8DBE] transition-colors"
+            class="px-6 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
           >
-            确认并归档
+            Save
           </button>
         </div>
       </div>
@@ -89,7 +89,9 @@ const {
   interventionSummaries,
   personas,
   getAgentColor,
-  fetchPersonas
+  fetchPersonas,
+  isPaused,
+  switchNodeFocus
 } = inject('pblSocket', {});
 const sessionId = inject('sessionId');
 const svgRef = ref(null);
@@ -158,10 +160,10 @@ const saveSummary = async () => {
     // 更新本地缓存以便即时回显
     interventionSummaries.value[summaryInterventionId.value] = summaryData;
 
-    alert('总结已保存');
+    alert('Save successful!');
     showSummaryModal.value = false;
   } catch (err) {
-    alert('保存失败: ' + err.message);
+    alert('Failed to save: ' + err.message);
   }
 };
 
@@ -352,8 +354,8 @@ const graphData = computed(() => {
 
   // 4. 映射消息到节点
   questionMessages.forEach((msg) => {
-    let topicName = msg.topic || (msg.agent === 'teacher' ? '教师干预' : '待识别');
-    if (topicName === '待识别' || topicName === '开始讨论') return;
+    let topicName = msg.topic || (msg.agent === 'teacher' ? 'Convention' : 'Unrecognized');
+    if (topicName === 'Unrecognized' || topicName === 'Start Discussion') return;
 
     const branch = msg.branch_id || 'main';
     let shouldStartNewNode = false;
@@ -367,8 +369,8 @@ const graphData = computed(() => {
       if (!pMsg) {
         shouldStartNewNode = true;
       } else {
-        const ptName = pMsg.topic || (pMsg.agent === 'teacher' ? '教师干预' : '待识别');
-        const isSystemParent = (ptName === '待识别' || ptName === '开始讨论');
+        const ptName = pMsg.topic || (pMsg.agent === 'teacher' ? 'Convention' : 'Unrecognized');
+        const isSystemParent = (ptName === 'Unrecognized' || ptName === 'Convention');
         pNodeId = msgToNodeIdMap.get(msg.parent_id);
 
         // 判断是否应该创建新节点：
@@ -386,9 +388,9 @@ const graphData = computed(() => {
 
     let nodeId;
     if (shouldStartNewNode) {
-      // 确定是否为"老话题"
+      // 确定是否为“old topic”
       const isOldTopic = childCountMap.get(msg.parent_id) > 1 && !activePath.has(msg.id);
-      const nodeLabelPrefix = isOldTopic ? '老话题-' : '';
+      const nodeLabelPrefix = isOldTopic ? 'Old Topic-' : '';
       const nodeLabel = nodeLabelPrefix + topicName;
       
       // 生成唯一的节点 ID：对于旧话题，使用第一条消息的 ID 以聚合同一分叉的旧消息
@@ -529,7 +531,7 @@ const initGraph = () => {
     .attr('markerUnits', 'userSpaceOnUse') // 关键：不随线宽缩放
     .append('path')
     .attr('d', 'M 0,-3 L 7,0 L 0,3') // 更尖锐的箭头
-    .attr('fill', '#4a5568');
+    .attr('fill', '#374151');
 
   // 定义高亮箭头
   defs.append('marker')
@@ -543,7 +545,7 @@ const initGraph = () => {
     .attr('markerUnits', 'userSpaceOnUse') // 关键：固定大小
     .append('path')
     .attr('d', 'M 0,-4 L 9,0 L 0,4')
-    .attr('fill', '#60A5FA');
+    .attr('fill', '#2563EB');
 
   // 定义老师干预的红旗图标
   const flagMarker = defs.append('g').attr('id', 'teacher-flag');
@@ -626,7 +628,7 @@ const updateGraph = () => {
     .append('path')
     .attr('class', 'topic-link')
     .attr('fill', 'none')
-    .attr('stroke', '#4a5568')
+    .attr('stroke', '#6B7280')
     .attr('stroke-width', 2)
     .attr('stroke-dasharray', '5,5')
     .attr('marker-end', 'url(#arrowhead)');
@@ -657,11 +659,20 @@ const updateGraph = () => {
       selectedTopic.value = d.id;
       
       // 更新该节点关联的最末端消息 ID，用于 ViewE/ViewF 过滤和下次教师干预
+      let leafId = d.id;
       if (d.turnsList && d.turnsList.length > 0) {
-        selectedNodeLeafId.value = d.turnsList[d.turnsList.length - 1].id;
+        leafId = d.turnsList[d.turnsList.length - 1].id;
+        selectedNodeLeafId.value = leafId;
       } else {
         // 如果是教师干预节点或其他特殊节点，优先使用存储的 interventionId
-        selectedNodeLeafId.value = d.interventionId || d.id;
+        leafId = d.interventionId || d.id;
+        selectedNodeLeafId.value = leafId;
+      }
+
+      // 【新增】当暂停时，点击节点需要切换后端的焦点，使其能从该节点恢复讨论
+      if (isPaused && leafId) {
+        console.log('Switching focus to node leaf:', leafId, 'branch:', d.branch);
+        switchNodeFocus(leafId, d.branch || 'main');
       }
     })
     .call(d3.drag()
@@ -674,7 +685,7 @@ const updateGraph = () => {
     .attr('class', 'pulse-ring')
     .attr('r', 40)
     .attr('fill', 'none')
-    .attr('stroke', '#60A5FA')
+    .attr('stroke', '#3B82F6')
     .attr('stroke-width', 2)
     .attr('opacity', 0)
     .attr('pointer-events', 'none');
@@ -682,8 +693,8 @@ const updateGraph = () => {
   // 节点主体 (核心圆)
   nodeEnter.append('circle')
     .attr('class', 'core-circle')
-    .attr('fill', '#1a1f3a')
-    .attr('stroke', '#8095CA')
+    .attr('fill', '#FFFFFF')
+    .attr('stroke', '#3B82F6')
     .attr('stroke-width', 3)
     .style('filter', 'url(#glow)');
 
@@ -693,13 +704,13 @@ const updateGraph = () => {
   labelGroup.append('rect')
     .attr('rx', 4)
     .attr('ry', 4)
-    .attr('fill', '#1a1f3a')
-    .attr('stroke', '#8095CAAA')
+    .attr('fill', '#F3F4F6')
+    .attr('stroke', '#9CA3AF')
     .attr('stroke-width', 1);
 
   labelGroup.append('text')
     .attr('text-anchor', 'middle')
-    .attr('fill', '#E0E7FF')
+    .attr('fill', '#1F2937')
     .attr('font-size', '12px')
     .attr('font-weight', 'bold');
 
@@ -738,12 +749,18 @@ const updateGraph = () => {
     
     // 直接显示所有 turns，不做过滤
     const displayTurns = d.turnsList;
-
     const totalTurns = displayTurns.length;
-    const anglePerSlot = (Math.PI * 2) / Math.max(1, totalTurns);
-    
-    const gapAngle = totalTurns > 1 ? Math.min(0.08, anglePerSlot * 0.15) : 0;
 
+    const totalTokens = displayTurns.reduce((sum, t) => sum + (t.tokens || 0), 0);
+    const fallbackWeight = totalTokens === 0 ? 1 : 0;
+    const weights = displayTurns.map(t => (t.tokens && t.tokens > 0) ? t.tokens : fallbackWeight);
+    const weightSum = weights.reduce((sum, w) => sum + w, 0) || 1;
+
+    const gapAngle = totalTurns > 1 ? Math.min(0.08, (Math.PI * 2) * 0.01) : 0;
+    const totalGap = gapAngle * totalTurns;
+    const availableAngle = Math.max(0, (Math.PI * 2) - totalGap);
+
+    let cursor = 0;
     const ticks = nodeG.selectAll('.turn-tick')
       .data(displayTurns, (v) => v.id);
 
@@ -752,9 +769,12 @@ const updateGraph = () => {
     ticks.enter().append('path')
       .attr('class', 'turn-tick')
       .merge(ticks)
-      .attr('d', (v, i) => { // 取消 d 的过渡，直接更新，避免插值产生非法路径
-        const startA = i * anglePerSlot;
-        const endA = startA + anglePerSlot - gapAngle;
+      .attr('d', (v, i) => {
+        const fraction = weights[i] / weightSum;
+        const arcLen = availableAngle * fraction;
+        const startA = cursor;
+        const endA = cursor + arcLen;
+        cursor = endA + gapAngle;
         return d3.arc()
           .innerRadius(tickInnerRadius)
           .outerRadius(tickOuterRadius)
@@ -775,7 +795,7 @@ const updateGraph = () => {
       .attr('y1', -tickInnerRadius + 2)
       .attr('x2', 0)
       .attr('y2', -tickOuterRadius - 4)
-      .attr('stroke', '#D9D9D9')
+      .attr('stroke', '#6B7280')
       .attr('stroke-width', 4)
       .attr('stroke-linecap', 'round');
 
@@ -844,7 +864,7 @@ watch([selectedTopic, mainPathSet, isHighlightingFlags], ([newTopic, newPath, is
     .transition().duration(600).ease(d3.easeCubicInOut)
     .attr('stroke', d => {
         if (isReviving && d.hasTeacherFlag) return '#EF4444';
-        return (d.id === newTopic) ? '#FBBF24' : '#8095CA';
+        return (d.id === newTopic) ? '#F59E0B' : '#3B82F6';
     })
     .attr('stroke-width', d => {
         if (isReviving && d.hasTeacherFlag) return 6;
@@ -889,7 +909,23 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.view-d-container{background-color: #1a1f3a;}
+.view-d-container{background-color: #ECECEC;}
+.view-d-header {
+  background: #000000;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+}
+.view-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  text-align: left;
+}
 .node-group { cursor: grab; }
 .node-group:active { cursor: grabbing; }
 .topic-link { transition: stroke-dashoffset 0.5s; }

@@ -1,26 +1,27 @@
 {
   "A": {
     "name": "A",
-    "age": "",
-    "major": "临床八年制度",
-    "avatar": "avatar1.png",
-    "color": "#CEDCFB",
-    "cardColor": "#CEDCFB",
+    "age": "26",
+    "major": "Internal Medicine",
+    "avatar": "avatar2.png",
+    "color": "#9CB2E2",
+    "cardColor": "#9CB2E2",
     "knowledge_background": {
       "high": [
-        "药理学",
-        "诊断学",
-        "病理学",
-        "生理学",
-        "医学伦理学"
+        "Pathology",
+        "Physiology",
+        "Pharmacology",
+        "Medical Ethics",
+        "Internal Medicine",
+        "Diagnostic"
       ],
       "medium": [],
       "low": []
     },
     "cognitive_orientation": {
       "attentional_anchor": [
-        "symptoms",
         "present_illness",
+        "symptoms",
         "physicochemical_parameters",
         "past_medical_history"
       ],
@@ -37,35 +38,37 @@
       "language_register": "high",
       "interaction_role": "leader"
     },
-    "learning_adaptivity": "high"
+    "learning_adaptivity": "medium"
   },
   "B": {
     "name": "B",
-    "age": "",
-    "major": "医学五年制",
-    "avatar": "avatar1.png",
-    "color": "#FBCEDC",
-    "cardColor": "#FBCEDC",
+    "age": "24",
+    "major": "Surgery",
+    "avatar": "avatar3.png",
+    "color": "#FFC2D4",
+    "cardColor": "#FFC2D4",
     "knowledge_background": {
-      "high": [],
-      "medium": [
-        "病理学",
-        "生理学",
-        "药理学",
-        "诊断学",
-        "医学伦理学"
+      "high": [
+        "Medical Ethics"
       ],
-      "low": []
+      "medium": [
+        "Pathology",
+        "Pharmacology",
+        "Diagnostic"
+      ],
+      "low": [
+        "Physiology",
+        "Internal Medicine"
+      ]
     },
     "cognitive_orientation": {
       "attentional_anchor": [
-        "symptoms",
         "physicochemical_parameters",
+        "symptoms",
         "past_medical_history",
         "present_illness"
       ],
       "reasoning_entry": [
-        "symptom_significance",
         "familiarity_driven"
       ],
       "causal_structure": [
@@ -73,7 +76,7 @@
       ]
     },
     "social_interaction_style": {
-      "verbal_confidence": "medium",
+      "verbal_confidence": "high",
       "language_register": "medium",
       "interaction_role": "follower"
     },
@@ -81,28 +84,28 @@
   },
   "C": {
     "name": "C",
-    "age": "",
-    "major": "计算机科学",
+    "age": "22",
+    "major": "Pediatrics",
     "avatar": "avatar1.png",
-    "color": "#D2FBCE",
-    "cardColor": "#D2FBCE",
+    "color": "#B6EAA3",
+    "cardColor": "#B6EAA3",
     "knowledge_background": {
       "high": [],
       "medium": [],
       "low": [
-        "病理学",
-        "生理学",
-        "药理学",
-        "诊断学",
-        "医学伦理学"
+        "Pathology",
+        "Physiology",
+        "Pharmacology",
+        "Medical Ethics",
+        "Internal Medicine",
+        "Diagnostic"
       ]
     },
     "cognitive_orientation": {
       "attentional_anchor": [
-        "physicochemical_parameters",
         "symptoms",
-        "present_illness",
-        "past_medical_history"
+        "past_medical_history",
+        "present_illness"
       ],
       "reasoning_entry": [
         "irrelevant_factors"
@@ -114,8 +117,8 @@
     "social_interaction_style": {
       "verbal_confidence": "low",
       "language_register": "low",
-      "interaction_role": "critical"
+      "interaction_role": "leader"
     },
-    "learning_adaptivity": "low"
+    "learning_adaptivity": "high"
   }
 }

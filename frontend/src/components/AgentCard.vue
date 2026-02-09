@@ -17,7 +17,7 @@
             <div 
               class="avatar-icon cursor-pointer hover:scale-105 transition-transform shadow-sm" 
               :style="{ backgroundImage: `url('/avatar/${modelValue.avatar || 'avatar1.png'}')` }"
-              title="点击更换头像"
+              title="Click to change avatar"
             ></div>
           </template>
           <div class="avatar-selector-grid">
@@ -33,17 +33,17 @@
           </div>
         </el-popover>
         
-        <!-- 姓名交互区域 -->
+        <!-- Name Interaction Area -->
         <div class="name-interactive-area">
           <div v-if="editingField !== 'name'" 
                @click.stop="editingField = 'name'" 
                class="name-display"
                :class="{'is-empty': !modelValue.name}">
-            {{ modelValue.name || '请输入' }}
+            {{ modelValue.name || 'Enter Name' }}
           </div>
           <input v-else 
                  v-model="modelValue.name" 
-                 placeholder="请输入"
+                 placeholder="Enter Name"
                  @blur="editingField = null" 
                  @keyup.enter="editingField = null"
                  v-focus
@@ -51,16 +51,16 @@
         </div>
       </div>
 
-      <!-- 右侧元数据列 (年龄, 专业) -->
+      <!-- Right Side Metadata Column (Age, Major) -->
       <div class="metadata-column">
         <div class="meta-item-box" @click.stop="editingField = 'age'">
-          <span class="meta-label">年龄:</span>
+          <span class="meta-label">Age:</span>
           <div v-if="editingField !== 'age'" class="meta-value" :class="{'is-empty': !modelValue.age}">
-            {{ modelValue.age || '请输入' }}
+            {{ modelValue.age || 'Enter Age' }}
           </div>
           <input v-else 
                  v-model="modelValue.age" 
-                 placeholder="请输入"
+                 placeholder="Enter Age"
                  @blur="editingField = null" 
                  @keyup.enter="editingField = null"
                  v-focus
@@ -68,13 +68,13 @@
         </div>
 
         <div class="meta-item-box" @click.stop="editingField = 'major'">
-          <span class="meta-label">专业:</span>
+          <span class="meta-label">Major:</span>
           <div v-if="editingField !== 'major'" class="meta-value" :class="{'is-empty': !modelValue.major}">
-            {{ modelValue.major || '请输入' }}
+            {{ modelValue.major || 'Enter Major' }}
           </div>
           <input v-else 
                  v-model="modelValue.major" 
-                 placeholder="请输入"
+                 placeholder="Enter Major"
                  @blur="editingField = null" 
                  @keyup.enter="editingField = null"
                  v-focus
@@ -82,24 +82,24 @@
         </div>
       </div>
 
-      <!-- 删除按钮 -->
-      <button class="delete-agent-btn" @click.stop="$emit('delete')" title="删除此角色">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+      <!-- Delete Button -->
+      <button class="delete-agent-btn" @click.stop="$emit('delete')" title="Delete this agent">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M18 6L6 18M6 6l12 12"></path>
         </svg>
       </button>
     </header>
 
-    <!-- 主体内容容器 -->
+    <!-- Main Content Container -->
     <div class="card-content-wrapper">
       
-      <!-- 知识背景区块 -->
+      <!-- Knowledge Background Section -->
       <section class="panel-section knowledge-panel">
-        <h3 class="panel-title">知识背景分类</h3>
+        <h3 class="panel-title">Knowledge Base</h3>
         
 
         <div class="panel-body row-layout">
-          <!-- 左侧：未分类知识点 -->
+          <!-- Left: Unclassified Knowledge Points -->
           <div class="theoretical-tags-container"
                @dragover.prevent
                @drop="onDrop($event, 'unclassified')">
@@ -119,24 +119,24 @@
                </template>
              </div>
              
-             <!-- 新增知识点入口 -->
+             <!-- Add Knowledge Point Entry -->
              <div v-if="!isAddingKnowledge" 
                   class="add-theory-tag" 
                   @click="isAddingKnowledge = true" 
-                  title="自定义添加知识点">+</div>
+                  title="Customize and add knowledge points">+</div>
              <div v-else class="theory-tag editing">
                <input v-model="newKnowledgeName" 
                       class="tag-input" 
                       v-focus 
                       @blur="submitAddKnowledge" 
                       @keyup.enter="submitAddKnowledge" 
-                      placeholder="新知识点..." />
+                      placeholder="New knowledge point..." />
              </div>
 
-             <div v-if="!modelValue.unclassifiedKnowledge?.length && !isAddingKnowledge" class="empty-hint">暂无待分类知识点</div>
+             <div v-if="!modelValue.unclassifiedKnowledge?.length && !isAddingKnowledge" class="empty-hint">No unclassified knowledge points</div>
           </div>
 
-          <!-- 右侧：三个分类框 (纵向排列) -->
+          <!-- Right: Three Classification Boxes (Vertical Layout) -->
           <div class="classification-zones-grid">
             <!-- Competent (Good) -->
             <div class="drop-zone good-zone"
@@ -144,7 +144,7 @@
                  @dragover.prevent="dragOverField = 'competent'"
                  @dragleave="dragOverField = null"
                  @drop="onDrop($event, 'competent')">
-              <div class="zone-label good-text">掌握程度：高</div>
+              <div class="zone-label good-text">Good</div>
               <div class="items-list">
                 <div v-for="(item, idx) in modelValue.classifiedKnowledge.competent" :key="idx"
                      draggable="true" @dragstart="onDragStart($event, item, 'competent')"
@@ -168,7 +168,7 @@
                  @dragover.prevent="dragOverField = 'novice'"
                  @dragleave="dragOverField = null"
                  @drop="onDrop($event, 'novice')">
-              <div class="zone-label medium-text">掌握程度：中</div>
+              <div class="zone-label medium-text">Medium</div>
               <div class="items-list">
                 <div v-for="(item, idx) in modelValue.classifiedKnowledge.novice" :key="idx"
                      draggable="true" @dragstart="onDragStart($event, item, 'novice')"
@@ -192,7 +192,7 @@
                  @dragover.prevent="dragOverField = 'layman'"
                  @dragleave="dragOverField = null"
                  @drop="onDrop($event, 'layman')">
-              <div class="zone-label bad-text">掌握程度：低</div>
+              <div class="zone-label bad-text">Bad</div>
               <div class="items-list">
                 <div v-for="(item, idx) in modelValue.classifiedKnowledge.layman" :key="idx"
                      draggable="true" @dragstart="onDragStart($event, item, 'layman')"
@@ -213,20 +213,9 @@
         </div>
       </section>
 
-      <!-- 认知倾向区块 -->
+      <!-- Cognitive Tendency Section -->
       <section class="panel-section cognitive-panel" :class="{'is-delete-mode': isDeleteMode}">
-        <h3 class="panel-title">认知倾向</h3>
-        
-        <!-- 暂且注释掉删除模式按钮，由排序和直选逻辑替代
-        <div class="header-actions">
-          <span v-if="isDeleteMode" class="delete-mode-hint animate-pulse">正在进入删除模式...再次点击取消</span>
-          <button class="reset-selection-btn" 
-                  @click="toggleDeleteMode" 
-                  :class="{'is-active': isDeleteMode}"
-                  title="切换删除模式"></button>
-        </div>
-        -->
-
+        <h3 class="panel-title">Cognitive Orientation</h3>
         <div class="orientation-labels">
            <div v-for="(label, key) in cognitiveLabels" :key="key" class="label-text">
              {{ label }}
@@ -265,69 +254,61 @@
         </div>
       </section>
 
-      <!-- 社交与学习综合区块 -->
+      <!-- Social and Learning Integration Section -->
       <section class="panel-section combined-panel">
-        <div class="combined-content-row">
-          <!-- 左侧：社交属性 (2/3) -->
-          <div class="social-side-column">
-            <h3 class="panel-title mb-1">社交属性</h3>
-            <div class="social-side-body">
-              <div class="sliders-sub-column">
-                <!-- 言语自信度 -->
-                <div class="level-select-group">
-                   <div class="level-title">言语自信度</div>
-                   <div class="level-options">
-                     <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
-                          class="level-btn"
-                          :class="{'is-active': modelValue.social.confidence === lv}"
-                          @click="modelValue.social.confidence = lv">
-                       {{ levelTranslations[lv] }}
-                     </div>
-                   </div>
-                </div>
-                <!-- 语言正式度 -->
-                <div class="level-select-group mt-1">
-                   <div class="level-title">语言正式度</div>
-                   <div class="level-options">
-                     <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
-                          class="level-btn"
-                          :class="{'is-active': modelValue.social.register === lv}"
-                          @click="modelValue.social.register = lv">
-                       {{ levelTranslations[lv] }}
-                     </div>
-                   </div>
+        <!-- Top Row: Social Attributes -->
+        <h3 class="panel-title mb-1">Social-Interaction Style</h3>
+        <div class="social-attributes-row">
+          <!-- Left Column: Two Selection Groups -->
+          <div class="social-left-column">
+            <div class="social-item">
+              <div class="level-title">Verbal Confidence</div>
+              <div class="level-options">
+                <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
+                     class="level-btn"
+                     :class="{'is-active': modelValue.social.confidence === lv}"
+                     @click="modelValue.social.confidence = lv">
+                  {{ levelTranslations[lv] }}
                 </div>
               </div>
+            </div>
 
-              <div class="role-sub-column">
-                <div class="role-selection-horizontal">
-                   <div v-for="role in interactionRoles" :key="role.value" class="role-choice-item" @click="modelValue.social.role = role.value">
-                      <div class="role-illus" :style="{backgroundImage: `url('/${role.icon}')`}"></div>
-                      <div class="role-name-text">{{ role.name }}</div>
-                      <div class="mini-checkbox" :class="{'is-checked': modelValue.social.role === role.value}">
-                        <span v-if="modelValue.social.role === role.value" class="check-mark">✓</span>
-                      </div>
-                   </div>
+            <div class="social-item">
+              <div class="level-title">Language Register</div>
+              <div class="level-options">
+                <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
+                     class="level-btn"
+                     :class="{'is-active': modelValue.social.register === lv}"
+                     @click="modelValue.social.register = lv">
+                  {{ levelTranslations[lv] }}
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 分割线 -->
-          <div class="vertical-divider"></div>
-
-          <!-- 右侧：学习可塑性 (1/3) -->
-          <div class="learning-side-column">
-            <h3 class="panel-title mb-1">学习可塑性</h3>
-            <div class="plasticity-vertical-options">
-               <div v-for="lv in ['low', 'medium', 'high']" 
-                    :key="lv"
-                    class="p-level-card"
-                    :class="{'is-active': modelValue.plasticity === lv}"
-                    @click="modelValue.plasticity = lv">
-                 <div class="p-level-name">{{ plasticityTranslations[lv] }}</div>
-               </div>
+          <!-- Right Column: Role Selection -->
+          <div class="social-right-column">
+            <div class="role-selection-grid">
+              <div v-for="role in interactionRoles" :key="role.value" class="role-choice-item" @click="modelValue.social.role = role.value">
+                <div class="role-illus" :style="{backgroundImage: `url('/${role.icon}')`}"></div>
+                <div class="role-name-text">{{ role.name }}</div>
+                <div class="mini-checkbox" :class="{'is-checked': modelValue.social.role === role.value}">
+                  <span v-if="modelValue.social.role === role.value" class="check-mark">✓</span>
+                </div>
+              </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Bottom Row: Learning Plasticity -->
+        <h3 class="panel-title mb-1 mt-2">Learning Plasticity</h3>
+        <div class="plasticity-horizontal-options">
+          <div v-for="lv in ['low', 'medium', 'high']" 
+               :key="lv"
+               class="p-level-card"
+               :class="{'is-active': modelValue.plasticity === lv}"
+               @click="modelValue.plasticity = lv">
+            <div class="p-level-name">{{ plasticityTranslations[lv] }}</div>
           </div>
         </div>
       </section>
@@ -456,37 +437,37 @@ const onDrop = (event, targetCategory) => {
   dragOverField.value = null;
 };
 
-// --- 认知倾向：中文翻译与 archetypes 字典 ---
+// --- Cognitive Tendency: Chinese Translation & archetypes Dictionary ---
 const cognitiveLabels = {
-  0: '注意力锚点',
-  1: '推理起点',
-  2: '因果结构'
+  0: 'Attentional Anchor',
+  1: 'Reasoning Entry',
+  2: 'Reasoning Style'
 };
 
 const subDimensionTranslations = {
-  'symptoms': '症状体征',
-  'present_illness': '现病史',
-  'past_medical_history': '既往史',
-  'physicochemical_parameters': '理化指标',
-  'familiarity_driven': '熟悉感驱动（模式/经验）',
-  'symptom_significance': '症状显著性',
-  'risk_perception': '风险感知',
-  'irrelevant_factors': '无关因素',
-  'linear_causality': '单线因果模型',
-  'multi_concurrent': '多因并列模型',
-  'undefined': '未定义'
+  'symptoms': 'Symptoms',
+  'present_illness': 'Present Illness',
+  'past_medical_history': 'Past Medical History',
+  'physicochemical_parameters': 'Physicochemical Parameters',
+  'familiarity_driven': 'Familiarity Driven',
+  'symptom_significance': 'Symptom Significance',
+  'risk_perception': 'Risk Perception',
+  'irrelevant_factors': 'Irrelevant Factors',
+  'linear_causality': 'Linear Causality',
+  'multi_concurrent': 'Multi Concurrent',
+  'undefined': 'Undefined'
 };
 
 const levelTranslations = {
-  'low': '低',
-  'medium': '中',
-  'high': '高'
+  'low': 'Low',
+  'medium': 'Medium',
+  'high': 'High'
 };
 
 const plasticityTranslations = {
-  'low': '保守',
-  'medium': '稳健',
-  'high': '灵活'
+  'low': 'Rigid',
+  'medium': 'Steady',
+  'high': 'Adaptive'
 };
 
 const isDeleteMode = ref(false);
@@ -568,7 +549,7 @@ defineExpose({ resetEditing });
   width: 100%;
   max-width: 100%;
   height: auto;
-  min-height: 900px;
+  min-height: 850px;
   flex-shrink: 0;
   transition: all 0.3s ease;
   user-select: none;
@@ -587,11 +568,11 @@ defineExpose({ resetEditing });
 .card-content-wrapper {
   position: relative;
   z-index: 10;
-  padding: 1rem 1rem 1.5rem; /* 减小上方 padding (1.5rem -> 1rem) */
-  height: calc(100% - 70px); /* 同步头部高度的修改 (80px -> 70px) */
+  padding: 0.6rem 0.6rem 0.8rem; /* 进一步压缩左右 padding */
+  height: calc(100% - 60px); /* 同步头部高度的修改 */
   display: flex;
   flex-direction: column;
-  gap: 1rem; /* 压缩内部模块间的间距 (1.5rem -> 1rem) */
+  gap: 0.7rem; /* 压缩内部模块间的间距 */
 }
 
 /* =========================================
@@ -609,10 +590,10 @@ defineExpose({ resetEditing });
 
 .delete-agent-btn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 26px;
-  height: 26px;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.3);
   color: #6C6565;
@@ -635,7 +616,7 @@ defineExpose({ resetEditing });
 .identity-info-left {
   display: flex;
   align-items: center;
-  gap: 1.5rem; /* gap-6 */
+  gap: 1rem; /* gap-4 */
 }
 
 .avatar-selector-grid {
@@ -673,8 +654,8 @@ defineExpose({ resetEditing });
 }
 
 .avatar-icon {
-  width: 45px;
-  height: 45px;
+  width: 40px;
+  height: 40px;
   background-size: contain;
   background-repeat: no-repeat;
   border-radius: 50%; /* 圆形头像 */
@@ -687,7 +668,7 @@ defineExpose({ resetEditing });
 
 .name-display {
   font-weight: bold;
-  font-size: 18px;
+  font-size: 16px;
   color: #6C6565;
   cursor: text;
   padding: 0 0.5rem;
@@ -707,7 +688,7 @@ defineExpose({ resetEditing });
 
 .name-input {
   font-weight: bold;
-  font-size: 18px;
+  font-size: 16px;
   color: #6C6565;
   background-color: rgba(255, 255, 255, 0.5);
   border: none;
@@ -720,14 +701,14 @@ defineExpose({ resetEditing });
 .metadata-column {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem; /* gap-3 */
+  gap: 0.5rem; /* gap-2 */
 }
 
 .meta-item-box {
-  width: 140px; /* 缩小宽度 */
-  height: 28px;
+  width: 130px; /* 缩小宽度 */
+  height: 24px;
   background-color: rgba(255, 255, 255, 0.35);
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   padding: 0 0.75rem;
@@ -735,14 +716,14 @@ defineExpose({ resetEditing });
 }
 
 .meta-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: bold;
   color: #6C6565;
   margin-right: 0.5rem;
 }
 
 .meta-value {
-  font-size: 13px;
+  font-size: 11px;
   color: #6C6565;
   flex: 1;
   overflow: hidden;
@@ -771,7 +752,7 @@ defineExpose({ resetEditing });
   background-color: rgba(255, 255, 255, 0.45);
   box-shadow: 0 4px 4px rgba(0, 0, 0, 0.15);
   border-radius: 20px;
-  padding: 0.2rem 0rem 0.3rem; /* 更加紧凑的内边距 */
+  padding: 0.15rem 0rem 0.2rem; /* 进一步压缩内边距 */
   display: flex;
   flex-direction: column;
 }
@@ -782,7 +763,7 @@ defineExpose({ resetEditing });
 .panel-title {
   margin: 0;
   padding: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
   text-align: center;
   line-height: 1.2;
@@ -796,14 +777,14 @@ defineExpose({ resetEditing });
   flex-direction: row;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem; /* 减小间距以适应窄屏 */
+  gap: 0.8rem; /* 进一步减小间距 */
 }
 
 /* =========================================
    4. 知识背景部分 (Knowledge Background)
    ========================================= */
 .knowledge-panel {
-  height: 350px;
+  height: 300px;
 }
 
 .competence-legend {
@@ -835,14 +816,14 @@ defineExpose({ resetEditing });
 
 .theoretical-tags-container {
   flex: 1.2;
-  height: 280px;
+  height: 250px;
   background-color: rgba(255, 255, 255, 0.4);
   border-radius: 12px;
-  padding: 0.75rem;
+  padding: 0.6rem;
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 0.75rem;
+  gap: 0.6rem;
   overflow-y: auto;
   border: 1px dashed rgba(0, 0, 0, 0.1);
 }
@@ -850,9 +831,9 @@ defineExpose({ resetEditing });
 .theory-tag {
   background-color: #717171;
   border: 1px solid #A5A8AC;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border-radius: 9999px;
-  font-size: 13px;
+  font-size: 12px;
   color: #fff;
   cursor: move;
   transition: background-color 0.2s;
@@ -902,8 +883,8 @@ defineExpose({ resetEditing });
 }
 
 .add-theory-tag {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -912,7 +893,7 @@ defineExpose({ resetEditing });
   border: 1px dashed #A5A8AC;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 16px;
   transition: all 0.2s;
 }
 
@@ -934,14 +915,14 @@ defineExpose({ resetEditing });
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .drop-zone {
-  height: 85px;
+  height: 75px;
   border: none;                  /* 去掉边框 */
   border-radius: 14px;           /* 更像 card，而不是框 */
-  padding: 0.75rem;
+  padding: 0.6rem;
   display: flex;
   flex-direction: column;
   transition: background-color 0.15s ease, transform 0.15s ease;
@@ -950,19 +931,19 @@ defineExpose({ resetEditing });
 
 
 .zone-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
 .items-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
   width: 100%;
   overflow-y: auto;
   align-content: flex-start;
-  padding: 0.25rem;
+  padding: 0.15rem;
 }
 
 /* 分类框色彩变体 */
@@ -1011,8 +992,8 @@ defineExpose({ resetEditing });
 
 
 .mini-item {
-  font-size: 11px;
-  padding: 0.25rem 0.75rem;
+  font-size: 10px;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
   display: flex;
   align-items: center;
@@ -1032,7 +1013,7 @@ defineExpose({ resetEditing });
    5. 认知倾向部分 (Cognitive Orientation)
    ========================================= */
 .cognitive-panel {
-  height: 360px;
+  height: 320px;
   position: relative;
   margin-bottom: 0.2rem;
   margin-top: 0;
@@ -1050,9 +1031,9 @@ defineExpose({ resetEditing });
 .orientation-labels {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  column-gap: 1rem;
+  column-gap: 0.8rem;
   margin-top: 5px; /* 紧凑排列 */
-  padding: 0 0.5rem;
+  padding: 0 0.3rem;
 }
 
 .label-text {
@@ -1065,24 +1046,24 @@ defineExpose({ resetEditing });
 .options-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
+  gap: 0.8rem;
   margin-top: 5px; /* 紧凑排列 */
-  height: 200px;
-  padding: 0 1rem;
+  height: 180px;
+  padding: 0 0.8rem;
 }
 
 .option-column {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .selectable-box {
   background-color: rgba(255, 255, 255, 0.45);
   border-radius: 8px;
-  min-height: 32px;
-  font-size: 12px;
-  padding: 0.75rem;
+  min-height: 28px;
+  font-size: 11px;
+  padding: 0.6rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1149,14 +1130,57 @@ defineExpose({ resetEditing });
    6. 社交与学习综合部分 (Combined Social & Learning)
    ========================================= */
 .combined-panel {
-  height: 250px;
-  padding: 1.25rem;
+  height: auto;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.social-attributes-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.8rem;
+  width: 100%;
+}
+
+.social-left-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.social-right-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.role-selection-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0.4rem;
+  gap: 0.3rem;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+}
+
+.plasticity-horizontal-options {
+  display: flex;
+  flex-direction: row;
+  gap: 0.6rem;
+  width: 100%;
+  justify-content: space-around;
 }
 
 .combined-content-row {
   display: flex;
   height: 100%;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .social-side-column {
@@ -1177,7 +1201,7 @@ defineExpose({ resetEditing });
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .level-select-group {
@@ -1187,7 +1211,7 @@ defineExpose({ resetEditing });
 }
 
 .level-title {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: bold;
   color: #6C6565;
 }
@@ -1202,8 +1226,8 @@ defineExpose({ resetEditing });
 }
 
 .level-btn {
-  padding: 3px 12px;
-  font-size: 11px;
+  padding: 2px 10px;
+  font-size: 10px;
   border-radius: 18px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1224,7 +1248,8 @@ defineExpose({ resetEditing });
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 0.5rem;
+  padding: 0.3rem;
+  gap: 3px;
   background-color: rgba(255, 255, 255, 0.4);
   border-radius: 12px;
 }
@@ -1235,17 +1260,17 @@ defineExpose({ resetEditing });
   align-items: center;
   cursor: pointer;
   width: 50px;
-  height: 90px;
+  height: auto;
   justify-content: center;
   transition: all 0.2s;
 }
 
 .role-illus {
-  width: 2rem;
-  height: 2rem;
+  width: 1.4rem;
+  height: 1.4rem;
   background-size: contain;
   background-repeat: no-repeat;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.2rem;
   transition: transform 0.2s;
 }
 
@@ -1254,10 +1279,11 @@ defineExpose({ resetEditing });
 }
 
 .role-name-text {
-  font-size: 11px;
+  font-size: 10px;
   color: #6C6565;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
   font-weight: bold;
+  text-align: center;
 }
 
 .mini-checkbox {
@@ -1298,19 +1324,20 @@ defineExpose({ resetEditing });
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .p-level-card {
-  width: 100%;
-  height: 38px;
+  width: auto;
+  flex: 1;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: rgba(255, 255, 255, 0.45);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: #7F8C8D;
   cursor: pointer;
   transition: all 0.2s;

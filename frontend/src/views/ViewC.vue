@@ -1,6 +1,14 @@
 <template>
   <div class="view-c">
-    <!-- 空状态提示 -->
+    <!-- Top: Scene Title (Always Visible) -->
+    <div class="scene-header">
+      <h2 class="view-title">Original Case</h2>
+      <div v-if="currentScene" class="scene-badges">
+        <span class="badge-index">Scene {{ currentIndex + 1 }} / {{ totalScenes }}</span>
+      </div>
+    </div>
+
+    <!-- Empty State Hint -->
     <div v-if="!currentScene" class="empty-state">
       <div class="empty-content">
         <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -10,114 +18,23 @@
           <line x1="16" y1="17" x2="8" y2="17"></line>
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
-        <p>请在左侧上传原始的案例文件</p>
+        <p>Please upload the original case file on the left</p>
       </div>
     </div>
 
-    <!-- 内容区域 -->
-    <div v-else class="scene-container">
-      <!-- 顶部：场景标题 -->
-      <div class="scene-header">
-        <div class="header-main">
-          <h2 class="view-title">原始案例</h2>
-        </div>
-        <div class="scene-badges">
-          <span class="badge-index">场景 {{ currentIndex + 1 }} / {{ totalScenes }}</span>
-        </div>
-      </div>
+    <!-- Content Area -->
+    <div v-else class="scene-container-content">
 
-      <!-- 中间：滚动内容区 -->
+      <!-- Middle: Scrollable Content Area -->
       <div class="scene-content-scroll">
-        <div class="content-wrapper">
-          <!-- 左侧：文字内容 -->
+        <!-- Top Half: Story + Images -->
+        <div class="top-half">
           <div class="content-left">
-            <!-- 1. 剧情/病情描述 (Markdown) -->
             <div class="section-card story-section">
               <div class="markdown-body" v-html="renderMarkdown(currentScene.story_content)"></div>
             </div>
-
-            <!-- 2. 教师指引/触发问题 -->
-            <div class="section-card teacher-section">
-              <div class="section-title">
-                引导问题
-              </div>
-              
-              <div class="teacher-content-wrapper">
-                <div class="sub-block">
-                  <ul v-if="currentScene.trigger_questions?.length" class="question-list">
-                    <!-- 列表项修改：增加 flex 布局 -->
-                    <li 
-                      v-for="(q, qIdx) in currentScene.trigger_questions" 
-                      :key="qIdx" 
-                      class="question-item"
-                      :class="{ 'active-item': activeQuestionInfo.sceneIndex === currentIndex && activeQuestionInfo.questionIndex === qIdx }"
-                    >
-                      <!-- 【编辑模式】 -->
-                      <div v-if="editingQuestion?.sceneIdx === currentIndex && editingQuestion?.qIdx === qIdx" class="edit-mode">
-                        <textarea 
-                          v-model="editingQuestion.text"
-                          class="edit-textarea"
-                          placeholder="编辑问题内容..."
-                        ></textarea>
-                        <div class="edit-actions">
-                          <button class="edit-btn save" @click="saveQuestion(qIdx)">保存</button>
-                          <button class="edit-btn cancel" @click="cancelEdit">取消</button>
-                        </div>
-                      </div>
-
-                      <!-- 【查看模式】 -->
-                      <div v-else class="view-mode">
-                        <div class="q-main">
-                          <span class="q-marker">Q{{ qIdx + 1 }}</span>
-                          <span class="q-text">{{ q.question }}</span>
-                        </div>
-                        <div class="q-actions">
-                          <button 
-                            class="inspect-btn" 
-                            :class="{ 'active-inspect': activeQuestionInfo.sceneIndex === currentIndex && activeQuestionInfo.questionIndex === qIdx }"
-                            @click.stop="onInspectQuestion(q, qIdx)"
-                            title="查看详细解析或关联位置"
-                          >
-                            <svg viewBox="0 0 24 24" width="18" height="14" stroke="currentColor" fill="none" stroke-width="2.5">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                              <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                          </button>
-                          <button 
-                            class="edit-icon-btn"
-                            @click.stop="startEdit(q.question, qIdx)"
-                            title="编辑问题"
-                          >
-                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                          </button>
-                          <button 
-                            class="delete-item-btn"
-                            @click.stop="deleteQuestion(qIdx)"
-                            title="删除问题"
-                          >
-                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5">
-                              <path d="M18 6L6 18M6 6l12 12"></path>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  </ul>
-                  
-                  <!-- Add Trigger Question Button -->
-                  <div class="add-question-btn-wrapper" @click="addQuestion">
-                    <div class="plus-icon">+</div>
-                    <div class="add-text">Add Question</div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <!-- 右侧：图片内容 -->
           <div v-if="currentImages.length > 0" class="content-right">
             <div class="image-stack">
               <div 
@@ -134,9 +51,87 @@
             </div>
           </div>
         </div>
+
+        <!-- Bottom Half: Trigger Questions -->
+        <div class="bottom-half">
+          <div class="section-card teacher-section">
+            <div class="section-title">
+              Trigger Questions
+            </div>
+            
+            <div class="teacher-content-wrapper">
+              <div class="sub-block">
+                <ul v-if="currentScene.trigger_questions?.length" class="question-list">
+                  <li 
+                    v-for="(q, qIdx) in currentScene.trigger_questions" 
+                    :key="qIdx" 
+                    class="question-item"
+                    :class="{ 'active-item': activeQuestionInfo.sceneIndex === currentIndex && activeQuestionInfo.questionIndex === qIdx }"
+                  >
+                    <div v-if="editingQuestion?.sceneIdx === currentIndex && editingQuestion?.qIdx === qIdx" class="edit-mode">
+                      <textarea 
+                        v-model="editingQuestion.text"
+                        class="edit-textarea"
+                        placeholder="Edit question content..."
+                      ></textarea>
+                      <div class="edit-actions">
+                        <button class="edit-btn save" @click="saveQuestion(qIdx)">Save</button>
+                        <button class="edit-btn cancel" @click="cancelEdit">Cancel</button>
+                      </div>
+                    </div>
+
+                    <div v-else class="view-mode">
+                      <div class="q-main">
+                        <span class="q-marker">Q{{ qIdx + 1 }}</span>
+                        <span class="q-text">{{ q.question }}</span>
+                      </div>
+                      <div class="q-actions">
+                        <button 
+                          class="inspect-btn" 
+                          :class="{ 'active-inspect': activeQuestionInfo.sceneIndex === currentIndex && activeQuestionInfo.questionIndex === qIdx }"
+                          @click.stop="onInspectQuestion(q, qIdx)"
+                          title="View detailed analysis or related location"
+                        >
+                          <svg viewBox="0 0 24 24" width="18" height="14" stroke="currentColor" fill="none" stroke-width="2.5">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        </button>
+                        <button 
+                          class="edit-icon-btn"
+                          @click.stop="startEdit(q.question, qIdx)"
+                          title="Edit question"
+                        >
+                          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                        </button>
+                        <button 
+                          class="delete-item-btn"
+                          @click.stop="deleteQuestion(qIdx)"
+                          title="Delete question"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.5">
+                            <path d="M18 6L6 18M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+                
+                <div class="add-question-btn-wrapper" @click="addQuestion">
+                  <div class="plus-icon">+</div>
+                  <div class="add-text">Add Question</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- 底部：导航按钮 -->
+      <!-- Bottom: Navigation Buttons -->
       <div class="scene-footer">
         <button 
           class="nav-btn prev" 
@@ -146,7 +141,7 @@
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
-          上一幕
+          Previous
         </button>
 
         <div class="progress-dots">
@@ -164,7 +159,7 @@
           :disabled="currentIndex === totalScenes - 1"
           @click="nextScene"
         >
-          下一幕
+          Next
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
@@ -196,6 +191,7 @@ const currentIndex = ref(0)
 // const activeQuestionInfo = ref({ sceneIdx: -1, qIdx: -1 })
 const showTeacherGuide = ref(true)
 const failedImages = ref(new Set())
+const existingImages = ref(new Set())  // 存储实际存在的图片列表
 // 编辑状态：{ sceneIdx, qIdx, text }
 const editingQuestion = ref(null)
 const isSaving = ref(false)
@@ -215,19 +211,52 @@ const currentImages = computed(() => {
   if (currentScene.value.image_urls?.length) {
     images = currentScene.value.image_urls.map((url, idx) => ({
       src: `${API_BASE_URL}${url}`,
-      index: idx
+      index: idx,
+      filename: url.split('/').pop()  // 提取文件名
     }))
   } else if (currentScene.value.images_base64?.length) {
     images = currentScene.value.images_base64.map((base64Url, idx) => ({
       src: base64Url,
-      index: idx
+      index: idx,
+      filename: null
     }))
   }
-  return images.filter((img, idx) => !failedImages.value.has(`${currentIndex.value}_${idx}`))
+  // 过滤：只保留没有加载失败的图片
+  // 如果已有实际图片列表，则进一步过滤不存在的图片
+  return images.filter((img, idx) => {
+    // 先检查是否加载失败
+    if (failedImages.value.has(`${currentIndex.value}_${idx}`)) {
+      return false
+    }
+    // 如果有实际图片列表且是URL图片，检查是否存在
+    if (existingImages.value.size > 0 && img.filename) {
+      return existingImages.value.has(img.filename)
+    }
+    // base64图片或existingImages还未加载时，显示
+    return true
+  })
 })
 
 // --- 方法 ---
 const renderMarkdown = (text) => text ? md.render(text) : ''
+
+/**
+ * 获取案例文件夹中实际存在的图片列表
+ */
+const fetchExistingImages = async () => {
+  if (!props.caseData?.case_title) return
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/case-images/${props.caseData.case_title}`)
+    const data = await response.json()
+    if (data.images) {
+      existingImages.value = new Set(data.images)
+      console.log('✓ 已加载存在的图片列表:', data.images)
+    }
+  } catch (error) {
+    console.error('获取图片列表失败:', error)
+  }
+}
 
 const nextScene = () => {
   if (currentIndex.value < totalScenes.value - 1) {
@@ -246,7 +275,17 @@ const previewImage = (img) => {
 }
 
 const handleImageError = (imgIdx, sceneIdx) => {
-  failedImages.value.add(`${sceneIdx}_${imgIdx}`)
+  // 获取失败的图片信息
+  if (currentImages.value[imgIdx]) {
+    const failedImg = currentImages.value[imgIdx]
+    // 标记为加载失败
+    failedImages.value.add(`${sceneIdx}_${imgIdx}`)
+    // 从existing列表中移除，防止再次尝试加载
+    if (failedImg.filename) {
+      existingImages.value.delete(failedImg.filename)
+      console.log(`✗ 图片加载失败，已从列表中移除: ${failedImg.filename}`)
+    }
+  }
 }
 
 /**
@@ -459,6 +498,9 @@ watch(() => props.caseData, (newData) => {
   currentIndex.value = 0;
   failedImages.value.clear();
   
+  // 获取案例的实际图片列表
+  fetchExistingImages();
+  
   // 如果新数据存在，手动触发第一幕第一个问题的激活
   if (newData?.scenes?.[0]?.trigger_questions?.[0]) {
     setTimeout(() => {
@@ -484,8 +526,8 @@ watch(currentIndex, (newIdx) => {
 <style scoped>
 /* 基础布局 */
 .view-c {
-  background: #1a1f3a;
-  color: #e5e7eb;
+  background: #ECECEC;
+  color: #333333;
   width: 100%;
   height: 100%;
   border-radius: 12px;
@@ -497,7 +539,7 @@ watch(currentIndex, (newIdx) => {
 
 /* 空状态 */
 .empty-state {
-  height: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -517,30 +559,29 @@ watch(currentIndex, (newIdx) => {
 }
 
 /* 场景容器 */
-.scene-container {
+.scene-container-content {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  overflow: hidden;
 }
 
 /* 头部 */
 .scene-header {
-  padding: 12px 20px;
-  background: transparent;
+  padding: 8px 12px;
+  background: #000000;
   flex-shrink: 0;
   position: relative;
-}
-.header-main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
 }
 .view-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: #ffffff;
   margin: 0;
+  text-align: left;
 }
 .view-tag {
   width: 32px;
@@ -560,11 +601,11 @@ watch(currentIndex, (newIdx) => {
   gap: 12px;
 }
 .badge-index {
-  background: #3b3f61;
-  color: white;
-  padding: 4px 14px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #000000;
+  padding: 3px 10px;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -572,7 +613,7 @@ watch(currentIndex, (newIdx) => {
 .scene-content-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 0 20px;
+  padding: 0 14px;
 }
 
 .content-wrapper {
@@ -597,27 +638,28 @@ watch(currentIndex, (newIdx) => {
 
 /* 通用卡片 */
 .section-card {
-  background: #151728;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #ffffff;
+  border: 1px solid #d1d5db;
   border-radius: 12px;
-  padding: 20px;
+  padding: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 12px;
+  color: #1f2937;
+  margin-bottom: 10px;
 }
 
 /* Markdown 内容样式 */
 :deep(.markdown-body) {
   font-size: 15px;
   line-height: 1.6;
-  color: #e5e7eb;
+  color: #1f2937;
 }
 
 /* 教师指引与问题列表 */
@@ -634,20 +676,21 @@ watch(currentIndex, (newIdx) => {
 }
 
 .question-item {
-  background: #1c1e36;
-  padding: 12px 16px;
+  background: #f3f4f6;
+  padding: 8px 12px;
   border-radius: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid #d1d5db;
   transition: all 0.2s;
 }
 
 .question-item.active-item {
-  background: #2d3154;
-  border-color: rgba(143, 161, 255, 0.3);
+  background: #dbeafe;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .view-mode {
@@ -670,10 +713,10 @@ watch(currentIndex, (newIdx) => {
   width: 100%;
   min-height: 80px;
   padding: 10px;
-  border: 1px solid rgba(143, 161, 255, 0.3);
+  border: 1px solid #d1d5db;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.3);
-  color: #d1d5db;
+  background: #ffffff;
+  color: #1f2937;
   font-size: 13px;
   line-height: 1.5;
   font-family: inherit;
@@ -682,8 +725,8 @@ watch(currentIndex, (newIdx) => {
 
 .edit-textarea:focus {
   outline: none;
-  border-color: #8fa1ff;
-  box-shadow: 0 0 8px rgba(143, 161, 255, 0.2);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .edit-actions {
@@ -727,7 +770,7 @@ watch(currentIndex, (newIdx) => {
   display: flex;
   gap: 12px;
   font-size: 15px;
-  color: #fff;
+  color: #1f2937;
   flex: 1;
   min-width: 0;
 }
@@ -737,7 +780,7 @@ watch(currentIndex, (newIdx) => {
 }
 
 .q-marker {
-  color: #a5b4fc;
+  color: #3b82f6;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -770,13 +813,19 @@ watch(currentIndex, (newIdx) => {
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  background: #182235;
-  border: 1px solid #4a5d8a;
-  color: #8fa1ff;
+  background: #e0e7ff;
+  border: 1px solid #818cf8;
+  color: #4f46e5;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-icon-btn:hover {
+  background: #c7d2fe;
+  border-color: #6366f1;
 }
 
 .delete-item-btn {
@@ -828,7 +877,7 @@ watch(currentIndex, (newIdx) => {
 
 .add-question-btn-wrapper .add-text {
   font-size: 15px;
-  color: #d1d5db;
+  color: #4b5563;
   font-weight: 700;
 }
 
@@ -842,8 +891,9 @@ watch(currentIndex, (newIdx) => {
   border-radius: 8px;
   overflow: hidden;
   cursor: zoom-in;
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 .image-item-vertical img {
   width: 100%;
@@ -852,7 +902,7 @@ watch(currentIndex, (newIdx) => {
 
 /* 底部导航 */
 .scene-footer {
-  padding: 16px 20px;
+  padding: 10px 14px;
   background: transparent;
   display: flex;
   align-items: center;
@@ -862,24 +912,26 @@ watch(currentIndex, (newIdx) => {
 .nav-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(37, 40, 69, 0.8);
-  color: #e5e7eb;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 .nav-btn:hover:not(:disabled) {
-  background: rgba(37, 40, 69, 1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 .nav-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
+  background: #f3f4f6;
 }
 
 .progress-dots {
@@ -887,15 +939,18 @@ watch(currentIndex, (newIdx) => {
   gap: 12px;
 }
 .dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: #d1d5db;
   cursor: pointer;
   transition: all 0.2s;
 }
+.dot:hover {
+  background: #9ca3af;
+}
 .dot.active {
-  background: #a5b4fc;
+  background: #3b82f6;
   transform: scale(1.2);
 }
 
@@ -904,8 +959,14 @@ watch(currentIndex, (newIdx) => {
 
 /* 滚动条美化 */
 .scene-content-scroll::-webkit-scrollbar { width: 5px; }
+.scene-content-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
 .scene-content-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: #d1d5db;
   border-radius: 10px;
+}
+.scene-content-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 </style>

@@ -1,23 +1,23 @@
 <template>
-  <div class="view-e-container h-full flex flex-col bg-[#0C0E27] rounded-xl border border-[#8095CA]/20 overflow-hidden relative p-6">
+  <div class="view-e-container h-full flex flex-col bg-[#ECECEC] rounded-xl border border-gray-300 overflow-hidden">
     <!-- Header -->
-    <div class="mb-6 z-10">
-      <h2 class="text-[18px] text-white font-bold">讨论故事线</h2>
+    <div class="view-e-header">
+      <h2 class="view-title">Reflection</h2>
     </div>
 
     <!-- Timeline Content -->
-    <div ref="container" class="flex-1 overflow-y-auto timeline-scroll pr-4 relative" @click="selectedTopic = null">
+    <div ref="container" class="flex-1 overflow-y-auto timeline-scroll pr-4 relative px-6 pt-4" @click="selectedTopic = null">
       <div class="relative min-h-full">
         <!-- 竖线：强化颜色、宽度，并确保贯穿整个滚动区域 -->
         <div 
-          class="absolute left-[24px] top-4 w-[4px] bg-[#8095CA] z-0 rounded-full shadow-[0_0_10px_rgba(128,149,202,0.3)]"
+          class="absolute left-[24px] top-4 w-[4px] bg-[#333333] z-0 rounded-full shadow-[0_0_10px_rgba(51,51,51,0.2)]"
           :style="{ bottom: filteredMessages.length > 0 ? '40px' : '0' }"
         ></div>
         
         <!-- 末端箭头：在最后一条消息下方显示 -->
         <div 
           v-if="filteredMessages.length > 0"
-          class="absolute left-[18px] w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#8095CA] z-0"
+          class="absolute left-[18px] w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#333333] z-0"
           :style="{ top: 'calc(100% - 30px)' }"
         ></div>
 
@@ -25,12 +25,11 @@
           <div 
             v-for="(msg, index) in filteredMessages" 
             :key="msg.id"
-            class="flex items-start group cursor-pointer transition-all duration-300 relative rounded-2xl"
+            class="flex items-start group transition-all duration-300 relative rounded-2xl"
             :class="{ 
               'scale-[1.03] z-20': msg.isCurrentTopic,
               'pulse-highlight': msg.isCurrentTopic
             }"
-            @click.stop="handleMessageClick(msg)"
           >
           <!-- 选中消息的高亮边框特效 -->
           <div 
@@ -46,7 +45,7 @@
             >
               <img :src="getAgentAvatar(msg.agent)" class="w-full h-full object-cover">
             </div>
-            <span class="text-[10px] text-gray-400 font-bold truncate w-full text-center">
+            <span class="text-[10px] text-gray-600 font-bold truncate w-full text-center">
               {{ getAgentName(msg.agent) }}
             </span>
           </div>
@@ -60,7 +59,7 @@
                 opacity: 0.85
               }"
             >
-              <p class="text-[#0C0E27] text-sm leading-relaxed font-bold italic">
+              <p class="text-[#000000] text-sm leading-relaxed font-bold italic">
                 “{{ msg.summary || msg.text }}”
               </p>
               
@@ -75,15 +74,8 @@
         </div>
       </div>
     </div>
-
-    <!-- 如果没有消息时的占位 -->
-    <div v-if="filteredMessages.length === 0" class="h-full flex flex-center items-center justify-center">
-      <p class="text-gray-500 text-sm italic">讨论尚未开始，等待生成故事线...</p>
-    </div>
   </div>
 
-  <!-- 底部渐变遮罩 -->
-  <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#0C0E27] to-transparent pointer-events-none"></div>
 </div>
 </template>
 
@@ -97,7 +89,6 @@ const {
   selectedNodeLeafId,
   activeMessageId, 
   activeQuestionInfo,
-  rollbackTo,
   personas,
   getAgentColor,
   getAgentName,
@@ -200,10 +191,6 @@ const filteredMessages = computed(() => {
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 });
 
-const handleMessageClick = (msg) => {
-  // 点击消息直接触发回退过程，不再进行弹窗确认
-  rollbackTo(msg.id);
-};
 
 // 自动滚动到底部
 watch(() => filteredMessages.value.length, () => {
@@ -223,6 +210,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.view-e-container {
+  background-color: #ECECEC;
+}
+.view-e-header {
+  background: #000000;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  margin: 0;
+}
+.view-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  text-align: left;
+}
 .timeline-scroll::-webkit-scrollbar {
   width: 4px;
 }

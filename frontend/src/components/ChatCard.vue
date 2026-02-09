@@ -38,11 +38,13 @@ const isTeacher = computed(() => {
 });
 
 const agentNameDisplay = computed(() => {
-  if (isTeacher.value) return '指导老师';
+  if (isTeacher.value) return 'Instructor';
   return props.agentConfig?.name || props.message.agent;
 });
 
 const avatarUrl = computed(() => {
+  // case_introduction 使用default.png
+  if (props.message.agent === 'case_introduction') return '/avatar/default.png';
   if (isTeacher.value) return '/avatar/teacher.png';
   // 确保头像路径正确，增加容错
   const avatarName = props.agentConfig?.avatar || 'avatar1.png';

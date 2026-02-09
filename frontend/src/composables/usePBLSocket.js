@@ -9,10 +9,10 @@ import axios from 'axios';
 export function usePBLSocket(sessionId, onScrollToBottom) {
   // --- 响应式状态 ---
   const messages = ref([]);
-  const currentTopic = ref('待识别');
+  const currentTopic = ref('Undefined');
   const isConnected = ref(false);
   const isPaused = ref(false); // 新增：记录是否处于持续暂停状态
-  const discussionStage = ref('等待开始'); // 初始阶段
+  const discussionStage = ref('Waiting to Start'); // 初始阶段
   const activeMessageId = ref(null); // 当前活跃的消息节点 ID
   const selectedTopic = ref(null); // 当前选中的主题（用于过滤）
   const selectedNodeLeafId = ref(null); // 当前选中主题节点的最新一条消息 ID
@@ -46,8 +46,8 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   };
 
   const getAgentName = (agentKey) => {
-    if (agentKey === 'teacher' || agentKey === 'teacher_handler') return '指导老师';
-    if (agentKey === 'case_introduction') return '案例背景';
+    if (agentKey === 'teacher' || agentKey === 'teacher_handler') return 'Teacher';
+    if (agentKey === 'case_introduction') return 'Case Introduction';
     const config = getAgentConfig(agentKey);
     return config.name || agentKey;
   };
@@ -151,7 +151,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
 
       if (data.type === 'teacher_intervention_ack') {
         console.log('Teacher intervention ack received, resetting topic.');
-        currentTopic.value = '待识别';
+        currentTopic.value = 'Undefined';
         selectedTopic.value = null; // 教师干预后取消选中，以便看到最新的分支动态
         selectedNodeLeafId.value = null;
       }
@@ -168,7 +168,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
 
         let hasChanged = false;
         messages.value.forEach(msg => {
-          if (msg.topic === '待识别' || msg.topic === '开始讨论' || !msg.topic) {
+          if (msg.topic === 'Undefined' || msg.topic === 'start_discussion' || !msg.topic) {
             msg.topic = data.topic;
             hasChanged = true;
           }
@@ -185,7 +185,16 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       }
 
       if (data.type === 'stage_update' && data.stage_name) {
-        discussionStage.value = data.stage_name.split('】')[0].replace('【', '');
+        // 翻译中文阶段名到英文
+        const stageNameCn = data.stage_name.split('】')[0].replace('【', '');
+        const stageMap = {
+          '问题识别': 'Problem Identification',
+          '知识激活': 'Knowledge Activation',
+          '诊断推理': 'Diagnostic Reasoning',
+          '治疗计划': 'Treatment Plan',
+          '总结反思': 'Summary & Reflection'
+        };
+        discussionStage.value = stageMap[stageNameCn] || stageNameCn;
         console.log('Stage updated:', data.stage_name);
       }
     };
@@ -225,13 +234,13 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         id: 'case-intro-' + Date.now(),
         agent: 'case_introduction',
         text: initialCase,
-        topic: '待识别',
+        topic: 'Undefined',
         sceneIndex,
         questionIndex
       };
       messages.value.push(introMsg);
 
-      discussionStage.value = '阶段一：问题识别';
+      discussionStage.value = 'Phase 1: Problem Identification';
       socket.send(JSON.stringify({
         action: 'start_discussion',
         initial_case: initialCase,
@@ -302,6 +311,22 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     }
   };
 
+  /**
+   * 在暂停时切换节点焦点（用于切换分支后恢复讨论）
+   * @param {string} targetId - 目标消息 ID
+   * @param {string} branchId - 目标分支 ID
+   */
+  const switchNodeFocus = (targetId, branchId = 'main') => {
+    if (socket && isConnected.value && isPaused.value) {
+      console.log('Switching node focus to:', targetId, 'on branch:', branchId);
+      socket.send(JSON.stringify({
+        action: 'switch_node_focus',
+        target_id: targetId,
+        branch_id: branchId
+      }));
+    }
+  };
+
   // --- 生命周期钩子 ---
   onUnmounted(() => {
     if (socket) {
@@ -335,7 +360,8 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     startDiscussion,
     togglePause,
     sendTeacherIntervention,
-    rollbackTo
+    rollbackTo,
+    switchNodeFocus
   };
 }
 

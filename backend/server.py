@@ -336,6 +336,28 @@ def api_get_case_by_name(case_name: str):
         return {"detail": str(e)}, 500
 
 
+@app_fastapi.get("/api/case-images/{case_name}")
+def api_get_case_images(case_name: str):
+    """获取案例文件夹中实际存在的图片列表"""
+    case_img_dir = CASES_DATA_DIR / case_name / "img"
+    if not case_img_dir.exists():
+        return {"images": []}
+
+    try:
+        # 获取所有图片文件
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+        existing_images = []
+
+        for file_path in sorted(case_img_dir.iterdir()):
+            if file_path.suffix.lower() in image_extensions:
+                existing_images.append(file_path.name)
+
+        return {"images": existing_images}
+    except Exception as e:
+        logger.error(f"获取案例图片列表失败: {e}")
+        return {"detail": str(e)}, 500
+
+
 @app_fastapi.post("/api/set-active-scene")
 async def set_active_scene(request: ActiveSceneRequest):
     from .pbl_info import update_pbl_info
@@ -885,9 +907,9 @@ async def api_generate_intervention_summary(request: InterventionSummaryRequest)
             resp = await llm.ainvoke(prompt_content)
             return resp.content
 
-        prompt_context = f"你是一名 PBL 教育专家。请根据提供的学生讨论上下文，总结在此教师介入前的讨论状态（包含主题趋势、学生观点分布、是否存在僵局或不均等）。\n上下文：\n{context_text}\n要求：客观、简练，直接输出总结，不要包含开头。"
-        prompt_action = f"你是一名 PBL 教育专家。请对以下教师的干预行为进行客观的‘形式性描述’（如：提问、复述、指出证据、点名等）。\n干预内容：\n{intervention_msg['content']}\n要求：去意图化，仅描述事实，直接输出。"
-        prompt_consequence = f"你是一名 PBL 教育专家。请根据教师介入后的后续讨论，总结即时的互动变化（是否产生了新假设、讨论是否聚焦、语气变化等）。\n后续讨论：\n{consequence_text}\n要求：客观简练，直接输出。"
+        prompt_context = f"你是一名 PBL 教育专家。请根据提供的学生讨论上下文，总结在此教师介入前的讨论状态（包含主题趋势、学生观点分布、是否存在僵局或不均等）。\n上下文：\n{context_text}\n要求：客观、简练，直接输出总结，不要包含开头。输出英文"
+        prompt_action = f"你是一名 PBL 教育专家。请对以下教师的干预行为进行客观的‘形式性描述’（如：提问、复述、指出证据、点名等）。\n干预内容：\n{intervention_msg['content']}\n要求：去意图化，仅描述事实，直接输出。输出英文"
+        prompt_consequence = f"你是一名 PBL 教育专家。请根据教师介入后的后续讨论，总结即时的互动变化（是否产生了新假设、讨论是否聚焦、语气变化等）。\n后续讨论：\n{consequence_text}\n要求：客观简练，直接输出。输出英文"
 
         # 并行执行
         results = await asyncio.gather(
@@ -1053,6 +1075,24 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
         sh["active_id"] = active_id
         sh["current_branch"] = branch
 
+    def ensure_branch_for_new_message(s_idx, q_idx, parent_id):
+        """If parent already has children, create a new branch to avoid merging paths."""
+        if not parent_id:
+            return sh.get("current_branch", "main")
+
+        has_children = any(
+            m.get("parent_id") == parent_id for m in sh["messages_map"].values()
+        )
+        if has_children:
+            new_branch_name = f"branch_{str(uuid.uuid4())[:4]}"
+            update_q_state(s_idx, q_idx, parent_id, new_branch_name)
+            logger.info(
+                f"Auto-branching: parent {parent_id} already has children, switching to {new_branch_name}"
+            )
+            return new_branch_name
+
+        return sh.get("current_branch", "main")
+
     # 状态管理
     current_state = None
     graph_task = None
@@ -1099,7 +1139,9 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             # 分支管理：生成 ID
                             msg_id = str(uuid.uuid4())[:8]
                             parent_id = sh["active_id"]
-                            branch_id = sh["current_branch"]
+                            branch_id = ensure_branch_for_new_message(
+                                s_idx, q_idx, parent_id
+                            )
 
                             # 存储到历史
                             msg_data = {
@@ -1290,6 +1332,30 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
                     await websocket.send_json({"type": "rollback_ack", "target_id": target_id})
 
+            elif action == "switch_node_focus":
+                """【新增】在暂停期间切换节点焦点，用于切换分支后恢复讨论"""
+                target_id = msg.get("target_id")
+                branch_id = msg.get("branch_id", "main")
+
+                if target_id and target_id in sh["messages_map"]:
+                    sh["active_id"] = target_id
+                    sh["current_branch"] = branch_id
+
+                    from . import pbl_info
+                    update_q_state(pbl_info.active_scene_index,
+                                   pbl_info.active_question_index, target_id, branch_id)
+
+                    logger.info(
+                        f"✓ Switched node focus to: {target_id} on branch: {branch_id}")
+                    await websocket.send_json({
+                        "type": "node_focus_switched",
+                        "target_id": target_id,
+                        "branch_id": branch_id
+                    })
+                else:
+                    logger.warning(
+                        f"✗ Failed to switch focus: target_id {target_id} not found")
+
             elif action == "teacher_intervention":
                 teacher_content = msg.get("content", "")
                 # 优先使用前端传入的 parent_id，实现点击节点后分支
@@ -1335,7 +1401,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     "content": teacher_content,
                     "summary": teacher_content[:30],
                     "langchain_msg": teacher_msg,
-                    "topic": "教师干预",
+                    "topic": "Teacher Intervention",
                     "scene_index": pbl_info.active_scene_index,
                     "question_index": pbl_info.active_question_index,
                     "is_convention": True
@@ -1358,7 +1424,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     "node": "teacher",
                     "content": teacher_content,
                     "summary": teacher_content[:30],
-                    "topic": "教师干预",
+                    "topic": "Teacher Intervention",
                     "scene_index": pbl_info.active_scene_index,
                     "question_index": pbl_info.active_question_index
                 })
@@ -1415,10 +1481,38 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 if output_task:
                     output_task.cancel()
 
-                # 恢复时传入 None，astream 会自动从 checkpoint 恢复
+                # 【修复】恢复时，需要重新构建到当前 active_id 的完整链条
+                # 这样能保证即使切换了分支，LangGraph 也能从正确的消息链恢复
                 from . import pbl_info
+
+                # 构建完整的消息链
+                chain = []
+                curr_ptr = sh["active_id"]
+                while curr_ptr:
+                    m_data = sh["messages_map"].get(curr_ptr)
+                    if not m_data:
+                        logger.warning(
+                            f"Message {curr_ptr} not found in map during resume")
+                        break
+                    chain.append(m_data["langchain_msg"])
+                    curr_ptr = m_data.get("parent_id")
+                chain.reverse()
+
+                # 如果链条为空，说明只有初始消息，使用 None 让 checkpoint 恢复
+                resume_state = None
+                if chain:
+                    resume_state = {
+                        "messages": chain,
+                        "next_speaker": "router"
+                    }
+                    logger.info(
+                        f"Resuming with {len(chain)} historical messages from {sh['active_id']} on branch {sh['current_branch']}")
+                else:
+                    logger.info(
+                        f"No messages to resume, using checkpoint recovery on branch {sh['current_branch']}")
+
                 graph_task = asyncio.create_task(stream_langgraph(
-                    None, pbl_info.active_scene_index, pbl_info.active_question_index))
+                    resume_state, pbl_info.active_scene_index, pbl_info.active_question_index))
                 output_task = asyncio.create_task(output_processor())
                 await websocket.send_json({"type": "discussion_resumed"})
 

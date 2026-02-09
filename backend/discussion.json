@@ -1,290 +1,333 @@
 {
-  "pbl-session-1768550171923": {
+  "pbl-session-1769002423099": {
     "q_0_0": {
       "messages": [
         {
-          "id": "init_0_0_664f",
+          "id": "init_0_0_4df0",
           "parent_id": null,
           "branch_id": "main",
           "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\n请各位同学开始讨论。",
+          "content": "Uncle Jin is 60 years old and has just retired. His health has never been very good, and he has a history of hypertension and diabetes. He often chats with his old friends and sighs that it was because he worked too hard when he was young and failed to take good care of his body—smoking and drinking—that he ended up with so many health problems today. Nowadays, Uncle Jin pays great attention to health maintenance: practicing tai chi and Baduanjin, living a relaxed and comfortable life. Last week, the weather suddenly turned cold. Uncle Jin failed to add extra clothing in time and caught a chill. He developed a cough with sputum and occasionally felt chest tightness. His wife urged him to go to the hospital, but Uncle Jin had heard that it was a period of widespread COVID-19 infection. He was worried about getting infected again if he went to the hospital and refused to go no matter what. \n Uncle Jin rummaged through the house and found some “vitamin C effervescent tablets” that his daughter had bought last year. The instructions stated that one tablet should be taken daily, but he thought that since it was a health supplement, taking more would boost his immunity. So he dissolved three tablets in water and drank them at once. Unexpectedly, after taking them for three consecutive days, his cough did not improve and instead became worse. He could not sleep well at night, felt exhausted, and his lower legs became increasingly swollen—his shoes even felt tighter. His wife grew very worried and quickly contacted their daughter, who took Uncle Jin to see a doctor.\n Trigger Question: What is edema? What are the causes of edema? How is edema differentiated in clinical diagnosis?\nPlease start your discussion.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "e00e134b",
-          "parent_id": "init_0_0_664f",
+          "id": "68cada4f",
+          "parent_id": "init_0_0_4df0",
           "branch_id": "main",
-          "agent": "Alice",
-          "content": "我注意到金大爷有“两条小腿越来越胀、鞋子变小”这个表现，这应该就是下肢水肿。结合他有高血压、糖尿病这些慢性病，又在感冒后症状加重，还吃了超量的维生素C泡腾片……我想知道，这种水肿是心源性的？肾性的？还是可能和他乱吃保健品有关？我们需要搞清楚水肿的类型和诱因。",
+          "agent": "A",
+          "content": "I notice Uncle Jin has bilateral lower leg swelling, worsening cough with sputum, chest tightness, fatigue, and poor sleep. His history includes hypertension, diabetes, smoking, and recent overuse of vitamin C effervescent tablets—which often contain high sodium. Key questions: Could this edema be cardiac, renal, or medication-induced? And does his acute decompensation suggest heart failure triggered by infection or volume overload?",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "5f1ec860",
-          "parent_id": "e00e134b",
+          "id": "85e40f42",
+          "parent_id": "68cada4f",
           "branch_id": "main",
-          "agent": "Bob",
-          "content": "我同意Alice提到的下肢水肿，但想补充一点：金大爷还有“晚上睡不好、没力气、咳嗽加重”这些症状，可能不只是局部问题。我想问，维生素C泡腾片含钠吗？吃多了会不会导致水钠潴留，加重水肿？这算不算一个需要排查的因素？",
+          "agent": "B",
+          "content": "I agree with A that the edema is likely linked to his chronic conditions or recent behaviors. Uncle Jin’s swelling started after a respiratory infection and high-dose vitamin C intake—many effervescent tablets contain significant sodium, which could worsen fluid retention. Given his hypertension and diabetes, we should also consider if his heart or kidneys are failing. But before jumping to heart failure, we need to ask: is the edema pitting? Is it symmetric? And has he had any recent weight gain or shortness of breath when lying flat? These details would help narrow the cause.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "teacher_e21ed5",
-          "parent_id": "5f1ec860",
+          "id": "teacher_5d2ba4",
+          "parent_id": "85e40f42",
           "branch_id": "main",
           "agent": "teacher",
-          "content": "请查询维生素C泡腾片含量",
-          "summary": "请查询维生素C泡腾片含量",
-          "topic": "教师干预",
+          "content": "What are the benefits of vitamin C?",
+          "summary": "What are the benefits of vitam",
+          "topic": "Teacher Intervention",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": true
         },
         {
-          "id": "ab4a0352",
-          "parent_id": "teacher_e21ed5",
+          "id": "4e7f4919",
+          "parent_id": "teacher_5d2ba4",
           "branch_id": "main",
-          "agent": "Alice",
-          "content": "查了一下，常见的维生素C泡腾片每片含钠约400-500毫克，有的甚至更高。金大爷一次吃三片，一天可能摄入超过1500毫克钠——这差不多接近或超过高血压患者每日推荐上限了。所以，高钠摄入很可能导致水钠潴留，加重水肿，尤其在他本身有心肾基础病的情况下。这确实是个不能忽视的因素。",
+          "agent": "C",
+          "content": "Uh, well… vitamin C is good for the immune system, right? Like, it helps you fight colds—though I’ve heard that’s kind of overstated. It also helps with wound healing and absorbing iron from food. But I’m not sure if taking a lot actually boosts immunity like Uncle Jin thought… especially since those effervescent tablets might have a bunch of salt in them, which seems more relevant here.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_943736",
+          "parent_id": "85e40f42",
+          "branch_id": "branch_de65",
+          "agent": "teacher",
+          "content": "What are the benefits of vitamin C?",
+          "summary": "What are the benefits of vitam",
+          "topic": "Teacher Intervention",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": true
+        },
+        {
+          "id": "263daf0b",
+          "parent_id": "teacher_943736",
+          "branch_id": "branch_de65",
+          "agent": "A",
+          "content": "Vitamin C supports immune function and acts as an antioxidant, but in Uncle Jin’s case, the effervescent form likely contains high sodium—so the risk of volume overload may outweigh any theoretical benefit, especially given his heart and kidney risks.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "f0bf3a53",
+          "parent_id": "4e7f4919",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "Actually, while vitamin C does support immune cell function and collagen synthesis, mega-dosing doesn’t prevent colds in most people—and in Uncle Jin’s case, the real issue is likely the high sodium content in those effervescent tablets. Three a day could’ve added over 1,200 mg of sodium, which in someone with hypertension and possible heart or kidney dysfunction, easily tips him into fluid overload and edema. So it’s not the vitamin C itself, but the salt load that’s dangerous here.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ],
+      "intervention_summaries": {}
+    }
+  },
+  "pbl-session-1769002550938": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_494f",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "Uncle Jin is 60 years old and has just retired. His health has never been very good, and he has a history of hypertension and diabetes. He often chats with his old friends and sighs that it was because he worked too hard when he was young and failed to take good care of his body—smoking and drinking—that he ended up with so many health problems today. Nowadays, Uncle Jin pays great attention to health maintenance: practicing tai chi and Baduanjin, living a relaxed and comfortable life. Last week, the weather suddenly turned cold. Uncle Jin failed to add extra clothing in time and caught a chill. He developed a cough with sputum and occasionally felt chest tightness. His wife urged him to go to the hospital, but Uncle Jin had heard that it was a period of widespread COVID-19 infection. He was worried about getting infected again if he went to the hospital and refused to go no matter what. \n Uncle Jin rummaged through the house and found some “vitamin C effervescent tablets” that his daughter had bought last year. The instructions stated that one tablet should be taken daily, but he thought that since it was a health supplement, taking more would boost his immunity. So he dissolved three tablets in water and drank them at once. Unexpectedly, after taking them for three consecutive days, his cough did not improve and instead became worse. He could not sleep well at night, felt exhausted, and his lower legs became increasingly swollen—his shoes even felt tighter. His wife grew very worried and quickly contacted their daughter, who took Uncle Jin to see a doctor.\n Trigger Question: What is edema? What are the causes of edema? How is edema differentiated in clinical diagnosis?\nPlease start your discussion.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "8d24a038",
+          "parent_id": "init_0_0_494f",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "I notice Uncle Jin has bilateral lower leg swelling, worsening cough with sputum, chest tightness, fatigue, and poor sleep. His history includes hypertension, diabetes, smoking, and recent overuse of vitamin C effervescent tablets—which often contain high sodium. Key questions: Could this edema be cardiac, renal, or due to medication? And how does his acute respiratory symptom relate to the fluid retention?",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "25421ade",
+          "parent_id": "8d24a038",
+          "branch_id": "main",
+          "agent": "B",
+          "content": "I agree with A—Uncle Jin’s leg swelling, or edema, is definitely a red flag. Given his history of hypertension and diabetes, plus the recent cold exposure and worsening cough, I’m wondering if this could be heart failure triggered by a respiratory infection. Also, those vitamin C effervescent tablets often have a lot of sodium; taking three a day might’ve caused fluid retention on top of everything else. We need to figure out whether this edema is from his heart, kidneys, or just too much salt.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "2c2af0fd",
+          "parent_id": "25421ade",
+          "branch_id": "main",
+          "agent": "C",
+          "content": "Yeah, I was also thinking about the sodium in those effervescent tablets—some brands have like 500 mg per tablet, so three a day could add over a gram of extra salt. But wait, his cough got worse *after* starting the vitamins, and he’s now super tired with swollen legs... Could this be more than just fluid overload? Like, maybe the infection stressed his heart, and the salt just made it tip over? I’m not sure how to tell if it’s cardiac or renal yet.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_e5f110",
+          "parent_id": "2c2af0fd",
+          "branch_id": "main",
+          "agent": "teacher",
+          "content": "What are the benefits of vitamin C?",
+          "summary": "What are the benefits of vitam",
+          "topic": "Teacher Intervention",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": true
+        },
+        {
+          "id": "b054a802",
+          "parent_id": "teacher_e5f110",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "Vitamin C supports immune function, acts as an antioxidant, and helps with collagen synthesis—but in Uncle Jin’s case, the high sodium content in those effervescent tablets likely outweighed any benefit, especially given his heart and kidney risks.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "ba56bd80",
+          "parent_id": "b054a802",
+          "branch_id": "main",
+          "agent": "B",
+          "content": "Right, so even if vitamin C helps immunity, Uncle Jin’s worsening cough, chest tightness, and now leg swelling after three days of high-dose effervescent tablets—plus his history of hypertension and diabetes—makes me think this isn’t just a cold. The timing suggests the extra salt might have tipped him into heart failure, especially since he already had cardiac risk factors and possibly some baseline heart strain from the infection.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "e551560a",
+          "parent_id": "ba56bd80",
+          "branch_id": "main",
+          "agent": "C",
+          "content": "Yeah, I was also wondering—could the swelling just be from the salt overload alone, or does it really point to his heart giving out? Like, maybe the infection stressed his system and the extra sodium pushed him over the edge. But I’m not totally sure if kidney issues could look similar here...",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_959682",
+          "parent_id": "ba56bd80",
+          "branch_id": "branch_5ba9",
+          "agent": "teacher",
+          "content": "Please provide hypotheses about what diseases Mr. Jin might have.",
+          "summary": "Please provide hypotheses abou",
+          "topic": "Teacher Intervention",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": true
+        },
+        {
+          "id": "503b49c7",
+          "parent_id": "teacher_959682",
+          "branch_id": "branch_5ba9",
+          "agent": "A",
+          "content": "Given his symptoms and history, I’d hypothesize acute decompensated heart failure—possibly triggered by the respiratory infection and exacerbated by high sodium intake from those effervescent tablets. His bilateral leg swelling, worsening dyspnea, and orthopnea-like symptoms (poor sleep due to breathlessness) all point toward fluid overload. We should also consider concomitant renal dysfunction, given his diabetes and hypertension, which could contribute to or worsen the edema. Pulmonary causes like pneumonia or COPD exacerbation are possible too, but the progressive edema and systemic signs suggest a cardiorenal component is central here.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         }
       ],
       "intervention_summaries": {
-        "teacher_e21ed5": {
+        "teacher_e5f110": {
           "parts": {
-            "context": "讨论聚焦于金大爷下肢水肿的可能病因，主题趋势集中在鉴别心源性、肾源性水肿与药物/保健品相关因素。学生观点分布较均衡：Alice提出需从慢性病基础（高血压、糖尿病）及感染诱因出发，考虑心、肾等系统性原因；Bob则关注维生素C泡腾片成分（如钠含量）是否导致水钠潴留，强调药物滥用的潜在影响。目前讨论未出现僵局或明显不均等，双方均围绕引导问题展开初步病因假设，但尚未深入探讨水肿的鉴别诊断路径。",
-            "action": "提问",
-            "consequence": "教师介入后，讨论迅速聚焦于高钠摄入与水肿的关联；Alice提出新假设——维生素C泡腾片中的高钠含量可能是导致金大爷水肿加重的关键因素；语气转为严谨、数据驱动，体现出基于证据的推理。"
+            "context": "The discussion has focused on identifying the potential causes of Uncle Jin’s bilateral lower extremity edema in the context of his comorbidities (hypertension, diabetes), recent respiratory infection, and excessive intake of vitamin C effervescent tablets—highlighting concerns about high sodium content contributing to fluid retention. All three students converge on a differential diagnosis centered on cardiac versus renal etiology, with strong emphasis on possible heart failure exacerbated by infection and sodium load. No significant disagreement or imbalance in participation is evident; however, the group has not yet progressed to discussing specific diagnostic criteria or clinical differentiation methods for edema, indicating a preliminary but aligned analytical stage without a clear path forward.",
+            "action": "Asking a question.",
+            "consequence": "The discussion became more focused on the specific health risks of sodium in effervescent vitamin C tablets for Uncle Jin. A new hypothesis emerged: that high sodium content, not vitamin C itself, was the primary concern. The tone remained analytical and evidence-based."
           },
-          "timestamp": 1768550303294
+          "timestamp": 1769002979912
         }
       }
-    },
-    "q_0_1": {
+    }
+  },
+  "pbl-session-1770122399355": {
+    "q_0_0": {
       "messages": [
         {
-          "id": "init_0_1_a342",
+          "id": "init_0_0_b929",
           "parent_id": null,
           "branch_id": "main",
           "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：咳嗽的问诊要点？\n请各位同学开始讨论。",
+          "content": "60岁男性金大爷，有高血压和糖尿病史。因天气转凉着凉后出现咳嗽、咳痰、胸闷，自行超量服用维生素C泡腾片（每日3粒，连服3天）。随后出现夜间咳嗽加重、乏力、双下肢水肿、鞋子变紧。由女儿带至医院就诊。\n Trigger Question: 什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\nPlease start your discussion.",
           "scene_index": 0,
-          "question_index": 1,
+          "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "908d3eef",
-          "parent_id": "init_0_1_a342",
+          "id": "fb173d92",
+          "parent_id": "init_0_0_b929",
           "branch_id": "main",
-          "agent": "Alice",
-          "content": "我注意到金大爷咳嗽、咳痰三天，逐渐加重，还出现胸闷、乏力和小腿肿胀。结合他有高血压、糖尿病、吸烟饮酒史，又在受凉后起病，可能不只是普通感冒。我想问：他的痰是什么颜色？有没有发热、夜间阵发性呼吸困难？小腿肿是凹陷性的吗？这些对判断心衰或感染很重要。",
+          "agent": "A",
+          "content": "I’ll start by listing what we know: a 60-year-old man with hypertension and diabetes developed cough, sputum production, and chest tightness after a cold. He took high-dose vitamin C effervescent tablets—three per day for three days—and then worsened with nocturnal cough aggravation, fatigue, and bilateral lower limb edema reported as “tight shoes.”  \n\nNow, regarding the trigger question: edema is abnormal fluid accumulation in interstitial spaces. But to answer how it arises here, we need to ask—could this be cardiac, renal, hepatic, or even drug-induced? And importantly, does his recent vitamin C intake matter? Some effervescent formulations contain high sodium, which might contribute. So my key questions are: What’s the timeline linking symptom onset to potential triggers? And what underlying organ systems could be failing?",
           "scene_index": 0,
-          "question_index": 1,
-          "is_convention": false
-        }
-      ],
-      "intervention_summaries": {}
-    },
-    "q_0_2": {
-      "messages": [
-        {
-          "id": "init_0_2_1bdd",
-          "parent_id": null,
-          "branch_id": "main",
-          "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：患者自行过量服用保健品是否合适？应该如何加强宣教？\n请各位同学开始讨论。",
-          "scene_index": 0,
-          "question_index": 2,
-          "is_convention": false
-        },
-        {
-          "id": "dc34ae80",
-          "parent_id": "init_0_2_1bdd",
-          "branch_id": "main",
-          "agent": "Alice",
-          "content": "我注意到金大爷有咳嗽、咳痰、胸闷，后来还出现乏力和小腿肿胀（鞋子变小），症状在三天内逐渐加重。他还有高血压、糖尿病病史，以及吸烟饮酒史。另外，他自行将维生素C泡腾片加量到每日三粒。\n\n我想问：小腿肿胀和乏力会不会跟心功能或肾功能有关？过量服用泡腾片是否可能因含钠高而加重水钠潴留？",
-          "scene_index": 0,
-          "question_index": 2,
-          "is_convention": false
-        }
-      ],
-      "intervention_summaries": {}
-    },
-    "q_0_3": {
-      "messages": [
-        {
-          "id": "init_0_3_bb36",
-          "parent_id": null,
-          "branch_id": "main",
-          "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：为了明确诊断，还需要询问哪些病史？需要完善哪些辅助检查？\n请各位同学开始讨论。",
-          "scene_index": 0,
-          "question_index": 3,
-          "is_convention": false
-        },
-        {
-          "id": "446b63e7",
-          "parent_id": "init_0_3_bb36",
-          "branch_id": "main",
-          "agent": "Alice",
-          "content": "我注意到金大爷有咳嗽、咳痰、胸闷，而且小腿越来越胀、鞋子变小——这可能是水肿。他还有高血压和糖尿病，又抽烟喝酒多年。我想问：他的胸闷是活动后加重吗？水肿是对称的吗？另外，他吃三倍维生素C泡腾片，会不会钠摄入过多？可能需要查心功能和肾功能。",
-          "scene_index": 0,
-          "question_index": 3,
-          "is_convention": false
-        },
-        {
-          "id": "49256edc",
-          "parent_id": "446b63e7",
-          "branch_id": "main",
-          "agent": "Bob",
-          "content": "Alice提到水肿和维生素C泡腾片的钠含量，这让我想到：很多泡腾片确实含钠高，但三天就导致明显水肿是不是太快了？会不会本来就有心衰或肾病基础？我们需要问清楚他平时有没有夜间阵发性呼吸困难、尿量减少，还有糖尿病肾病病史。",
-          "scene_index": 0,
-          "question_index": 3,
+          "question_index": 0,
           "is_convention": false
         }
       ],
       "intervention_summaries": {}
     }
   },
-  "pbl-session-1768552154346": {
+  "pbl-session-1770122798345": {
     "q_0_0": {
       "messages": [
         {
-          "id": "init_0_0_330d",
+          "id": "init_0_0_693d",
           "parent_id": null,
           "branch_id": "main",
           "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\n请各位同学开始讨论。",
+          "content": "60岁男性金大爷，有高血压和糖尿病史。因天气转凉着凉后出现咳嗽、咳痰、胸闷，自行超量服用维生素C泡腾片（每日3粒，连服3天）。随后出现夜间咳嗽加重、乏力、双下肢水肿、鞋子变紧。由女儿带至医院就诊。\n Trigger Question: 什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\nPlease start your discussion.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "960b1119",
-          "parent_id": "init_0_0_330d",
+          "id": "9c663e76",
+          "parent_id": "init_0_0_693d",
           "branch_id": "main",
-          "agent": "Alice",
-          "content": "我注意到金大爷有“两条小腿越来越胀，鞋子也变小了”，这应该是下肢水肿的表现。结合他有高血压、糖尿病，还有最近咳嗽加重、胸闷、乏力，我想知道：这个水肿是局部问题还是全身性疾病引起的？是不是心功能或肾功能出了问题？另外，他超量服用维生素C泡腾片，会不会也有影响？",
+          "agent": "A",
+          "content": "I notice the patient developed bilateral lower limb edema, worsening nocturnal cough, and fatigue after a respiratory infection and excessive vitamin C泡腾片 intake. Key issues to explore: What exactly is edema? What are its pathophysiological mechanisms—like increased capillary hydrostatic pressure, hypoalbuminemia, or sodium retention? And how do we differentiate cardiac, renal, hepatic, or medication-induced causes here?",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "66adecbd",
-          "parent_id": "960b1119",
+          "id": "c6d635b1",
+          "parent_id": "9c663e76",
           "branch_id": "main",
-          "agent": "Bob",
-          "content": "我同意Alice提到的下肢水肿，但想补充一点：金大爷还有夜间睡不好、胸闷加重，这会不会提示心源性水肿？另外，他超量吃的是维生素C泡腾片——很多这类产品含钠很高，会不会因为摄入太多盐导致水潴留？这点可能被忽略了。",
+          "agent": "B",
+          "content": "I agree with A’s point about possible causes like heart, kidney, or meds—but let’s not overlook the timeline: his symptoms started after a cold and got worse fast, especially at night. That makes me wonder if this is acute heart failure triggered by infection or fluid overload from those vitamin C泡腾片, which can have high sodium. We should ask: how much sodium is in each tablet? And did he gain weight suddenly?",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "teacher_2d3789",
-          "parent_id": "960b1119",
-          "branch_id": "branch_5daf",
+          "id": "52513b0e",
+          "parent_id": "c6d635b1",
+          "branch_id": "main",
+          "agent": "C",
+          "content": "Yeah, I was also thinking about the sodium in those vitamin C泡腾片—some brands pack like 500 mg per tablet, so three a day could add over a gram of sodium, which is a lot for someone with heart and kidney risks. And since he’s got long-standing hypertension and diabetes, his heart or kidneys might already be struggling. But wait, do we know if his edema is pitting? And is it symmetric? That’d help tell if it’s more cardiac or maybe venous. Also, did he have any recent weight gain or reduced urine output? Those details feel important before jumping to causes.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "a5dd95a2",
+          "parent_id": "52513b0e",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "Good points—since the edema is bilateral and he has nocturnal cough worsening, pitting would strongly support a cardiac or renal cause over venous. But we still need to clarify if there’s jugular venous distension or S3 gallop on exam, and whether his urine output dropped. Also, did his weight go up in the last few days? That’d hint at fluid retention versus other mechanisms.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "2b809e89",
+          "parent_id": "a5dd95a2",
+          "branch_id": "main",
+          "agent": "B",
+          "content": "Exactly—since he’s got bilateral pitting edema, nighttime cough, and a history of hypertension and diabetes, acute heart failure seems really likely. The cold might’ve stressed his system, and all that extra sodium from the vitamin C tablets could’ve pushed him into fluid overload. I’d say cardiac cause is top of the list unless we find something pointing strongly to kidneys or liver.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_d1dbf6",
+          "parent_id": "52513b0e",
+          "branch_id": "branch_4d16",
           "agent": "teacher",
-          "content": "为什么会怀疑心功能",
-          "summary": "为什么会怀疑心功能",
-          "topic": "教师干预",
+          "content": "Why not consider the infectious ones?",
+          "summary": "Why not consider the infectiou",
+          "topic": "Teacher Intervention",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": true
         },
         {
-          "id": "957d064f",
-          "parent_id": "teacher_2d3789",
-          "branch_id": "branch_5daf",
-          "agent": "Alice",
-          "content": "因为金大爷有高血压、糖尿病这些心血管高危因素，加上最近出现胸闷、夜间睡不好（可能平卧困难）、乏力，还有逐渐加重的下肢水肿——这些都可能是心功能不全的表现，比如心衰引起的体循环淤血。所以我才想到要排查心功能问题。",
+          "id": "df1c5c2a",
+          "parent_id": "teacher_d1dbf6",
+          "branch_id": "branch_4d16",
+          "agent": "A",
+          "content": "Good point—since he started with a cold, could this be pneumonia or even myocarditis from a viral infection? Infection might not just trigger heart failure but directly cause it. We should check for fever, inflammatory markers, and maybe troponin to rule out myocardial involvement.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "684fc2a5",
-          "parent_id": "957d064f",
-          "branch_id": "branch_5daf",
-          "agent": "Bob",
-          "content": "Alice提到心衰可能，但金大爷的水肿是不是也可能是肾的问题？他有糖尿病，会不会是糖尿病肾病导致的低蛋白血症引起水肿？另外，维生素C泡腾片含钠高，吃三倍剂量会不会加重水钠潴留？",
-          "scene_index": 0,
-          "question_index": 0,
-          "is_convention": false
-        },
-        {
-          "id": "128e9df2",
-          "parent_id": "684fc2a5",
-          "branch_id": "branch_5daf",
-          "agent": "Cindy",
-          "content": "我注意到金大爷除了下肢水肿，还有咳嗽、胸闷和夜间睡不好，这些确实更倾向心源性问题；不过Bob提到的肾性水肿和泡腾片高钠也不能忽视——我们需要明确水肿是对称性的吗？有没有颜面浮肿？这有助于鉴别心源性和肾源性水肿。",
-          "scene_index": 0,
-          "question_index": 0,
-          "is_convention": false
-        }
-      ],
-      "intervention_summaries": {}
-    },
-    "q_0_1": {
-      "messages": [
-        {
-          "id": "init_0_1_cc0b",
-          "parent_id": null,
-          "branch_id": "main",
-          "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：咳嗽的问诊要点？\n请各位同学开始讨论。",
-          "scene_index": 0,
-          "question_index": 1,
-          "is_convention": false
-        },
-        {
-          "id": "f5482b83",
-          "parent_id": "init_0_1_cc0b",
-          "branch_id": "main",
-          "agent": "Alice",
-          "content": "我注意到金大爷咳嗽、咳痰三天，逐渐加重，还出现胸闷、夜间不能平卧、乏力和小腿肿胀。这些症状是不是提示病情不只是普通感冒？我们需要搞清楚咳嗽的性质、痰的颜色量、有没有发热，还有胸闷和腿肿是不是同时加重的。",
-          "scene_index": 0,
-          "question_index": 1,
-          "is_convention": false
-        },
-        {
-          "id": "fdce8911",
-          "parent_id": "f5482b83",
-          "branch_id": "main",
-          "agent": "Bob",
-          "content": "我同意要问痰的颜色和量，但Alice提到“夜间不能平卧”原文没明确说，只说“晚上睡觉也睡不好”——这不一定就是端坐呼吸。另外，维生素C泡腾片含钠，他一天吃三粒，会不会加重水钠潴留？这点是不是该考虑进去？",
-          "scene_index": 0,
-          "question_index": 1,
-          "is_convention": false
-        }
-      ],
-      "intervention_summaries": {}
-    }
-  },
-  "pbl-session-1768714104840": {
-    "q_0_0": {
-      "messages": [
-        {
-          "id": "init_0_0_454d",
-          "parent_id": null,
-          "branch_id": "main",
-          "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\n请各位同学开始讨论。",
-          "scene_index": 0,
-          "question_index": 0,
-          "is_convention": false
-        },
-        {
-          "id": "d0aa0cdf",
-          "parent_id": "init_0_0_454d",
-          "branch_id": "main",
-          "agent": "a",
-          "content": "我注意到金大爷有“两条小腿越来越胀，鞋子也变小了”，这提示存在下肢水肿。结合他有高血压、糖尿病基础病，近期咳嗽、胸闷加重，夜间不能平卧（睡不好），还有乏力，这些可能是心功能不全的表现。我们需要搞清楚：这个水肿是心源性、肾源性，还是其他原因引起的？另外，他超量服用维生素C泡腾片，是否含钠较高，会不会加重水钠潴留？这值得进一步探究。",
+          "id": "3c9e0321",
+          "parent_id": "df1c5c2a",
+          "branch_id": "branch_4d16",
+          "agent": "C",
+          "content": "Right, so if it’s an infection like pneumonia or myocarditis, we’d probably see fever or elevated inflammatory markers—but the case doesn’t mention fever at all. Also, his symptoms started right after taking those high-sodium vitamin C tablets and getting a cold, so maybe the infection stressed a system already weakened by heart or kidney issues from his diabetes and hypertension. Should we clarify whether his chest tightness is more like heart failure or something else?",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
@@ -293,57 +336,255 @@
       "intervention_summaries": {}
     }
   },
-  "pbl-session-1768715884213": {
+  "pbl-session-1770609456121": {
     "q_0_0": {
       "messages": [
         {
-          "id": "init_0_0_010f",
+          "id": "init_0_0_9ad2",
           "parent_id": null,
           "branch_id": "main",
           "agent": "case_introduction",
-          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\n请各位同学开始讨论。",
+          "content": "60岁男性金大爷，有高血压和糖尿病史。因天气转凉着凉后出现咳嗽、咳痰、胸闷，自行超量服用维生素C泡腾片（每日3粒，连服3天）。随后出现夜间咳嗽加重、乏力、双下肢水肿、鞋子变紧。由女儿带至医院就诊。\n Trigger Question: 什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\nPlease start your discussion.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "16ed32a0",
-          "parent_id": "init_0_0_010f",
+          "id": "68ea80bf",
+          "parent_id": "init_0_0_9ad2",
           "branch_id": "main",
-          "agent": "a",
-          "content": "我先梳理一下病例中的关键信息：患者60岁，有高血压、糖尿病史，近期受凉后出现咳嗽、咳痰、胸闷，自行超量服用维生素C泡腾片三天，症状反而加重，并新出现夜间不能平卧、乏力和双小腿肿胀（鞋子变小提示凹陷性水肿）。  \n\n我想提出几个需要探究的问题：  \n1. 这种下肢水肿是局部问题还是全身性疾病的表现？  \n2. 超量服用维生素C泡腾片是否可能诱发或加重水肿？（尤其注意其钠含量）  \n3. 咳嗽、胸闷进行性加重伴夜间呼吸困难，是否提示心功能不全？  \n\n接下来我们是否应围绕“水肿的病因分类”展开，尤其关注心源性、肾源性及药物相关因素？",
+          "agent": "A",
+          "content": "Alright, let’s start by listing what we know: the patient is a 60-year-old man with hypertension and diabetes. He developed cough, sputum production, and chest tightness after a cold, then took high-dose vitamin C泡腾片—three tablets daily for three days. After that, he got worse: nocturnal cough intensified, he felt fatigued, and now has bilateral lower limb edema so noticeable his shoes feel tight.  \n\nKey questions we need to explore: What exactly is edema in physiological terms? What are the main pathophysiological mechanisms leading to edema—like increased capillary hydrostatic pressure, hypoalbuminemia, lymphatic obstruction, or sodium retention? And crucially, how do we differentiate cardiac, renal, hepatic, or medication-induced causes in this specific case? Also, could the vitamin C泡腾片—often high in sodium—have contributed to fluid retention given his comorbidities?",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "f521ecf9",
-          "parent_id": "16ed32a0",
+          "id": "353e2daa",
+          "parent_id": "68ea80bf",
           "branch_id": "main",
-          "agent": "b",
-          "content": "我同意a同学对关键信息的梳理。补充一点：患者“晚上睡觉睡不好”可能隐含端坐呼吸，这和夜间阵发性呼吸困难一样，是心功能不全的重要线索。另外，维生素C泡腾片常含较高钠盐，超量服用可能加重水钠潴留——这点值得我们深入查证。接下来是否应明确水肿的分类框架，比如按病因分为心源性、肾源性、肝源性、营养不良性和药物性等？",
+          "agent": "B",
+          "content": "I agree with A’s point about the vitamin C泡腾片 possibly containing high sodium—that’s a solid clue. Given his history of hypertension and diabetes, plus the recent worsening at night with leg swelling and tight shoes, I’m wondering if this is more than just a cold. The timing matters: symptoms started after an upper respiratory infection, then got worse *after* taking those tablets. So, what’s the link between his chronic conditions, the meds he took, and this new edema? We should ask: could this be heart failure triggered by infection or salt load?",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false
         },
         {
-          "id": "teacher_b11cd8",
-          "parent_id": "16ed32a0",
-          "branch_id": "branch_9a15",
+          "id": "teacher_c9a7ad",
+          "parent_id": "68ea80bf",
+          "branch_id": "branch_69df",
           "agent": "teacher",
-          "content": "围绕水肿的定义",
-          "summary": "围绕水肿的定义",
-          "topic": "教师干预",
+          "content": "总结",
+          "summary": "总结",
+          "topic": "Teacher Intervention",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": true
         },
         {
-          "id": "ff0ff495",
-          "parent_id": "teacher_b11cd8",
-          "branch_id": "branch_9a15",
-          "agent": "a",
-          "content": "好的，那我来回应老师的问题。  \n水肿是指过多的液体在组织间隙或体腔内积聚，临床上常见的是皮下组织水肿，比如金大爷小腿胀、鞋子变小，就提示可能存在凹陷性水肿。  \n我想接着问：水肿按分布可分为局部性和全身性，金大爷的双侧对称性下肢肿更倾向哪一类？这对我们后续鉴别病因有什么提示？",
+          "id": "769f15ed",
+          "parent_id": "teacher_c9a7ad",
+          "branch_id": "branch_69df",
+          "agent": "A",
+          "content": "I agree we need to clarify the definition and mechanisms of edema first. But specifically in this case, the timing is critical—his symptoms worsened *after* taking those vitamin C effervescent tablets, which are often loaded with sodium. Given his history of hypertension and diabetes, both of which predispose him to heart or kidney dysfunction, could this sodium load have tipped him into acute volume overload? That links directly to how we approach the differential: we must weigh cardiac versus renal causes, but also consider iatrogenic factors like high-sodium medication intake.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "ec9d436c",
+          "parent_id": "769f15ed",
+          "branch_id": "branch_69df",
+          "agent": "C",
+          "content": "Yeah, I was also wondering about that timing—like, did the edema really start right after those vitamin C tablets? And since he’s got high blood pressure and diabetes already, maybe his heart or kidneys were kind of on the edge, and all that extra sodium just pushed him over. But wait, how do we actually tell if it’s heart failure or kidney trouble causing the swelling? Like, what signs would point more to one than the other?",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "4563e91b",
+          "parent_id": "353e2daa",
+          "branch_id": "main",
+          "agent": "C",
+          "content": "Yeah, I’ve been thinking about the timing too—like, the cough started with a cold, but then the swelling and worse nighttime symptoms came *after* those vitamin C tablets. And since some of those fizzy tablets have a lot of sodium, maybe that pushed his body into holding more fluid, especially with his heart already at risk from high blood pressure and diabetes. But wait, could it also be his kidneys acting up? Or is this more likely heart-related? I’m not totally sure, but I think we need to figure out what kind of edema this is—like, is it pitting? Symmetric? That might help tell if it’s cardiac or something else.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ],
+      "intervention_summaries": {}
+    }
+  },
+  "pbl-session-1770612189384": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_747f",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "60岁男性金大爷，有高血压和糖尿病史。因天气转凉着凉后出现咳嗽、咳痰、胸闷，自行超量服用维生素C泡腾片（每日3粒，连服3天）。随后出现夜间咳嗽加重、乏力、双下肢水肿、鞋子变紧。由女儿带至医院就诊。\n Trigger Question: 什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\nPlease start your discussion.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "510c7ed4",
+          "parent_id": "init_0_0_747f",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "I notice the patient developed bilateral lower limb edema, worsening nocturnal cough, and fatigue after a respiratory infection and excessive vitamin C泡腾片 use. Given his history of hypertension and diabetes, we should ask: could this edema be cardiac, renal, or medication-related? Also, what’s the mechanism linking his symptoms to possible heart failure or kidney dysfunction?",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "f4a2cae2",
+          "parent_id": "510c7ed4",
+          "branch_id": "main",
+          "agent": "B",
+          "content": "I agree with A—this looks like fluid buildup, probably from heart failure given the nighttime cough and leg swelling. But we should also ask: did the vitamin C泡腾片 contribute? Those often contain a lot of sodium, which can worsen fluid retention, especially in someone with high blood pressure and diabetes. What’s the typical sodium load in these tablets?",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_95f46c",
+          "parent_id": "510c7ed4",
+          "branch_id": "branch_19da",
+          "agent": "teacher",
+          "content": "总结",
+          "summary": "总结",
+          "topic": "Teacher Intervention",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": true
+        },
+        {
+          "id": "3812730d",
+          "parent_id": "teacher_95f46c",
+          "branch_id": "branch_19da",
+          "agent": "A",
+          "content": "To clarify the trigger question: edema is abnormal fluid accumulation in interstitial spaces. Key causes include heart failure, kidney disease, liver cirrhosis, venous insufficiency, and certain medications. For this patient, we must explore whether his edema stems from acute decompensated heart failure triggered by infection, diabetic nephropathy, or sodium overload from the vitamin C泡腾片—which often contains high sodium. We need to ask: what’s the timing and symmetry of edema? Any orthopnea or PND? And crucially, what do his JVP, lung auscultation, and urine output show?",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "d0558cb4",
+          "parent_id": "3812730d",
+          "branch_id": "branch_19da",
+          "agent": "C",
+          "content": "I agree we need to clarify the cause of edema, but I’m a bit confused—could the vitamin C泡腾片 really cause so much swelling just from sodium? Also, since his cough got worse at night and he’s feeling more tired, maybe we should check if he’s having trouble breathing when lying flat or if his weight changed recently.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        }
+      ],
+      "intervention_summaries": {}
+    }
+  },
+  "pbl-session-1770612563911": {
+    "q_0_0": {
+      "messages": [
+        {
+          "id": "init_0_0_d9d3",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "60岁男性金大爷，有高血压和糖尿病史。因天气转凉着凉后出现咳嗽、咳痰、胸闷，自行超量服用维生素C泡腾片（每日3粒，连服3天）。随后出现夜间咳嗽加重、乏力、双下肢水肿、鞋子变紧。由女儿带至医院就诊。\n Trigger Question: 什么是水肿？水肿产生的原因有哪些？如何进行水肿的鉴别诊断？\nPlease start your discussion.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "e23ee11d",
+          "parent_id": "init_0_0_d9d3",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "I’ll start by listing what we know: a 60-year-old man with hypertension and diabetes developed cough, sputum production, and chest tightness after a cold. He took high-dose vitamin C effervescent tablets—three per day for three days—and then worsened with nocturnal cough, fatigue, and bilateral lower limb edema reported as “tight shoes.”  \n\nNow, regarding the trigger question: edema is abnormal fluid accumulation in interstitial spaces. But to answer *why* it’s happening here, we need to ask—could this be cardiac, renal, hepatic, or drug-induced? And importantly, could his recent high sodium intake from those effervescent tablets (which often contain lots of sodium bicarbonate) have precipitated volume overload on top of underlying heart or kidney dysfunction? That’s a key question we must explore.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "3e1c54ec",
+          "parent_id": "e23ee11d",
+          "branch_id": "main",
+          "agent": "B",
+          "content": "I agree with A—this looks like fluid overload, and the timing after taking those vitamin C tablets is suspicious. Each effervescent tablet can have nearly 500 mg of sodium, so three a day for three days adds up fast. In someone with hypertension and diabetes, his heart or kidneys might already be struggling. The nighttime cough and leg swelling really sound like heart failure worsening. But we need to ask: did he have shortness of breath when lying flat? That’d help tell if it’s cardiac.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "bc8eeeec",
+          "parent_id": "3e1c54ec",
+          "branch_id": "main",
+          "agent": "C",
+          "content": "Yeah, I was also wondering about orthopnea—like, does he need extra pillows to sleep? And another thing: since he’s diabetic and hypertensive, could his kidneys be leaking protein, causing low albumin and then edema? Or maybe the sodium load just tipped him into heart failure. We should also check if the swelling is pitting or not—that might help narrow it down.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_5039f2",
+          "parent_id": "e23ee11d",
+          "branch_id": "branch_c6da",
+          "agent": "teacher",
+          "content": "总结一下你的观点",
+          "summary": "总结一下你的观点",
+          "topic": "Teacher Intervention",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": true
+        },
+        {
+          "id": "737615ed",
+          "parent_id": "teacher_5039f2",
+          "branch_id": "branch_c6da",
+          "agent": "A",
+          "content": "My point is that this patient’s new-onset bilateral leg edema—along with worsening nocturnal cough and fatigue—likely reflects acute volume overload, possibly triggered by the high sodium load from vitamin C effervescent tablets, acting on a background of chronic hypertension and diabetes that may have already compromised his cardiac or renal function. We need to explore whether this is heart failure, kidney injury, or a combination.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "d9af7fd7",
+          "parent_id": "737615ed",
+          "branch_id": "branch_c6da",
+          "agent": "B",
+          "content": "I agree with A—this looks like volume overload, and the timing after those vitamin C tablets is suspicious. But we should also ask: did his cough start before or right after the cold? And how severe is the edema—pitting or not? That could help us tell if it’s more cardiac or maybe even venous.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "e9d91ab2",
+          "parent_id": "bc8eeeec",
+          "branch_id": "main",
+          "agent": "A",
+          "content": "Building on what B and C said, the pitting edema and nocturnal cough strongly point toward heart failure, especially given his risk profile. But we shouldn’t overlook that sodium overload from the tablets could have unmasked subclinical renal dysfunction too—so it might not be purely cardiac. We need to check both BNP and urine protein to untangle this.",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "f3fed383",
+          "parent_id": "e9d91ab2",
+          "branch_id": "main",
+          "agent": "B",
+          "content": "Right, so if we’re considering both heart and kidney involvement, we really need to clarify how vitamin C tablets—specifically their high sodium content—interact with pre-existing diabetic kidney disease or heart dysfunction. I think a key learning issue is: what’s the exact mechanism by which sodium overload triggers or worsens edema in patients with combined cardiac and renal risk? Also, how do we interpret BNP levels when renal function is impaired?",
+          "scene_index": 0,
+          "question_index": 0,
+          "is_convention": false
+        },
+        {
+          "id": "cff686a9",
+          "parent_id": "d9af7fd7",
+          "branch_id": "branch_c6da",
+          "agent": "C",
+          "content": "Yeah, I think A and B are onto something—especially the timing with those vitamin C tablets, which I didn’t even realize have a lot of sodium. But I’m still a bit confused: could this just be a bad cold turning into pneumonia, or is the edema really pointing more to heart or kidney trouble? Also, was his diabetes well-controlled before this? That might matter for kidney function.",
           "scene_index": 0,
           "question_index": 0,
           "is_convention": false

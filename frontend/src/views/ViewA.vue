@@ -1,12 +1,12 @@
 <template>
   <div class="view-a">
-    <!-- 标题 -->
+    <!-- Title -->
     <div class="header">
-      <h2>病例文件上传</h2>
-      <p class="subtitle">上传包含病例内容、场景拆分及问题标注的PDF文件</p>
+      <h2>Upload Files</h2>
+      <p class="subtitle">Upload PDF files containing case content, scenario breakdown and question annotations</p>
     </div>
 
-    <!-- 状态 1: 文件处理完成（已上传且已解析） -->
+    <!-- Status 1: File Processing Complete (Uploaded and Parsed) -->
     <div v-if="uploadedFile" class="uploaded-file">
       <div class="file-item">
         <div class="file-name">
@@ -23,16 +23,16 @@
         <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        已解析完成
+        Parsing Complete
       </div>
 
       <div class="file-actions">
-        <button class="remove-btn" @click="removeFile">移除</button>
-        <button class="reupload-btn" @click="reuploadFile">重新上传</button>
+        <button class="remove-btn" @click="removeFile">Remove</button>
+        <button class="reupload-btn" @click="reuploadFile">Re-upload</button>
       </div>
     </div>
 
-    <!-- 状态 2: 正在处理中（上传中 或 解析中） -->
+    <!-- Status 2: Processing (Uploading or Parsing) -->
     <div v-else-if="selectedFile" class="file-info">
       <div class="file-item">
         <div class="file-name">
@@ -44,25 +44,25 @@
         </div>
       </div>
 
-      <!-- 阶段 A: 上传进度 -->
+      <!-- Stage A: Upload Progress -->
       <div v-if="isUploading" class="progress-container">
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
         </div>
-        <p class="progress-text">文件上传中... {{ uploadProgress }}%</p>
+        <p class="progress-text">File uploading... {{ uploadProgress }}%</p>
       </div>
 
-      <!-- 阶段 B: AI 解析中 (新增部分) -->
+      <!-- Stage B: AI Parsing (New) -->
       <div v-else-if="isParsing" class="parsing-container">
         <div class="spinner"></div>
         <div class="parsing-content">
-          <p class="parsing-title">AI 正在阅读教案...</p>
-          <p class="parsing-subtitle">正在拆分情景、提取化验单与图像 (约需30-60秒)</p>
+          <p class="parsing-title">AI is reading the case file...</p>
+          <p class="parsing-subtitle">Splitting scenarios, extracting test results and images (approx 30-60 seconds)</p>
         </div>
       </div>
     </div>
 
-    <!-- 状态 3: 初始状态（拖拽上传区域） -->
+    <!-- Status 3: Initial State (Drag Upload Area) -->
     <div 
       v-else
       class="upload-area"
@@ -86,11 +86,11 @@
           <polyline points="17 8 12 3 7 8"></polyline>
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
-        <p class="drag-text">点击或拖拽PDF文件到此处</p>
+        <p class="drag-text">Click or drag PDF file here</p>
       </div>
     </div>
 
-    <!-- 错误提示 -->
+    <!-- Error Message -->
     <div v-if="errorMessage" class="error-message">
       <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <circle cx="12" cy="12" r="10"></circle>
@@ -98,7 +98,7 @@
         <line x1="12" y1="16" x2="12.01" y2="16"></line>
       </svg>
       <div>
-        <p class="error-title">操作失败</p>
+        <p class="error-title">Operation Failed</p>
         <p class="error-subtitle">{{ errorMessage }}</p>
       </div>
       <button class="close-error" @click="errorMessage = ''">×</button>
@@ -109,7 +109,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 
-// 定义向父组件发送的事件
+// Define events to emit to parent component
 const emit = defineEmits(['analysis-complete'])
 
 const fileInput = ref(null)
@@ -123,7 +123,7 @@ const errorMessage = ref('')
 
 const API_BASE = 'http://127.0.0.1:8000'
 
-// 监听selectedFile变化，自动开始流程
+// Watch selectedFile change, auto start flow
 watch(selectedFile, (newFile) => {
   if (newFile) {
     uploadFile()
@@ -298,29 +298,32 @@ const formatFileSize = (bytes) => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1a1f3a;
+  background: #ECECEC;
   border-radius: 12px;
-  padding: 20px;
-  gap: 15px;
-  overflow-y: auto;
+  overflow: hidden;
   color: #e5e7eb;
 }
 
 .header {
   flex-shrink: 0;
+  background: #000000;
+  padding: 8px 12px;
+  margin: 0;
 }
 
 .header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: #ffffff;
+  text-align: left;
 }
 
 .subtitle {
   margin: 5px 0 0 0;
   font-size: 12px;
-  color: #9ca3af;
+  color: #000000;
+  display: none;
 }
 
 /* Upload Area */
@@ -333,8 +336,9 @@ const formatFileSize = (bytes) => {
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-height: 120px;
+  min-height: 100px;
   background: rgba(75, 85, 99, 0.05);
+  margin: 12px;
 }
 
 .upload-area:hover {
@@ -368,7 +372,7 @@ const formatFileSize = (bytes) => {
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #e5e7eb;
+  color: #4b5563;
 }
 
 .or-text {
@@ -380,18 +384,19 @@ const formatFileSize = (bytes) => {
 /* File Info & Parsing States */
 .file-info, .uploaded-file {
   flex-shrink: 0;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid #4b5563;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid #6366f1;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
+  margin: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .uploaded-file {
-  background: rgba(34, 197, 94, 0.1);
-  border-color: #188941;
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #198842;
 }
 
 .file-item {
@@ -407,6 +412,12 @@ const formatFileSize = (bytes) => {
   gap: 8px;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #1f2937;
+  font-weight: 500;
 }
 
 .pdf-icon {
@@ -414,14 +425,6 @@ const formatFileSize = (bytes) => {
   height: 20px;
   color: #fc8d59;
   flex-shrink: 0;
-}
-
-.file-name > div:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: #e5e7eb;
 }
 
 .file-size {
@@ -464,7 +467,7 @@ const formatFileSize = (bytes) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(99, 102, 241, 0.1);
   padding: 10px;
   border-radius: 6px;
 }
@@ -488,7 +491,7 @@ const formatFileSize = (bytes) => {
 .parsing-title {
   font-size: 13px;
   font-weight: 500;
-  color: #e5e7eb;
+  color: #1f2937;
   margin: 0;
 }
 
@@ -553,10 +556,11 @@ const formatFileSize = (bytes) => {
   background: rgba(252, 141, 89, 0.1);
   border: 1px solid #fc8d59;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
+  margin: 12px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   animation: slideIn 0.3s ease;
   position: relative;
 }

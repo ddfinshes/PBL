@@ -1,8 +1,8 @@
 <template>
   <div class="view-b-container p-0 h-full flex flex-col" @mousedown="handleGlobalMouseDown">
-    <div class="header"><h2>Agent配置</h2></div>
+    <div class="header"><h2>Agent Configuration</h2></div>
     <!-- Scrollable Area for Cards -->
-    <div class="view-b-scroll-area flex-1 overflow-y-auto p-4 custom-scrollbar">
+    <div class="view-b-scroll-area flex-1 overflow-y-auto p-2 custom-scrollbar">
       <div class="view-b-content-wrapper w-full relative">
         <!-- 占位元素，用于撑开容器高度，使绝对定位的卡片堆叠有滚动空间 -->
         <div :style="{ height: stackHeight + 'px' }" class="stack-spacer transition-all duration-500"></div>
@@ -30,19 +30,17 @@
     </div>
 
     <!-- Fixed Actions Area at the Bottom -->
-    <div class="actions-wrapper w-full flex flex-row items-center justify-center gap-12 py-6 px-10 bg-[#1a1f3a]/80 backdrop-blur-md border-t border-[#8095CA]/20 shadow-[0_-10px_30px_rgba(0,0,0,0.3)] z-[300]">
+    <div class="actions-wrapper">
       <!-- Add Agent Action Area -->
-      <div class="add-agent-section-mini flex flex-row items-center justify-center cursor-pointer hover:bg-[#CEDCFB]/20 transition-all gap-4 px-8 py-3 rounded-full border-2 border-dashed border-[#8095CA]"
-        @click="addAgent"
-      >
-        <div class="plus-icon text-[32px] text-[#8095CA] font-light leading-none">+</div>
-        <div class="add-text text-[16px] text-gray-200 font-bold">Add Agent</div>
+      <div class="add-agent-section-mini" @click="addAgent">
+        <div class="plus-icon">+</div>
+        <div class="add-text">Add Agent</div>
       </div>
 
       <!-- Global Save Action -->
       <div class="global-actions">
-        <el-button type="primary" size="large" @click="syncPersona" class="save-button px-10 py-5 rounded-full text-lg shadow-xl">
-          保存所有配置
+        <el-button type="primary" size="small" @click="syncPersona" class="save-button">
+          Save
         </el-button>
       </div>
     </div>
@@ -79,9 +77,9 @@ const cognitiveOptions = {
 };
 
 const interactionRoles = [
-  { name: '负责人', value: 'leader', icon: 'leader.png' },
-  { name: '观察者', value: 'follower', icon: 'follower.png' },
-  { name: '质疑者', value: 'critical', icon: 'devil.png' }
+  { name: 'Leader', value: 'leader', icon: 'leader.png' },
+  { name: 'Follower', value: 'follower', icon: 'follower.png' },
+  { name: 'Advocate', value: 'critical', icon: 'devil.png' }
 ];
 
 const cardColors = ['#CEDCFB', '#FBCEDC', '#D2FBCE', '#FBE4CE', '#E5CEFB', '#CEFBE2'];
@@ -93,11 +91,11 @@ const createDefaultAgent = (index = 0) => ({
   major: '',
   avatar: 'avatar1.png',
   cardColor: cardColors[index % cardColors.length],
-  // 待分类知识点：优先使用 PDF 提取的内容
+  // Unclassified knowledge: prioritize using extracted PDF content
   unclassifiedKnowledge: props.theoreticalKnowledge.length > 0 
     ? [...props.theoreticalKnowledge] 
     : [], 
-  // 已分类知识点，对应三个档次
+  // Classified knowledge corresponding to three levels
   classifiedKnowledge: {
     competent: [], // Good
     novice: [],    // Medium
@@ -119,7 +117,7 @@ const createDefaultAgent = (index = 0) => ({
 const agents = ref([createDefaultAgent(0)]);
 
 const STACK_HEADER_HEIGHT = 85; 
-const EXPANDED_CARD_HEIGHT = 920; 
+const EXPANDED_CARD_HEIGHT = 870; 
 const VISIBLE_GAP_UP = 30;    // 上方堆叠露出的高度
 const VISIBLE_GAP_DOWN = 15;  // 下方堆叠露出的高度（更紧凑）
 
@@ -200,7 +198,7 @@ watch(() => props.caseTitle, (newTitle, oldTitle) => {
         layman: []
       };
     });
-    ElMessage.success('已加载新案例知识背景库');
+    // ElMessage.success('已加载新案例知识背景库');
   }
 }, { immediate: true });
 
@@ -344,12 +342,12 @@ const syncPersona = async () => {
 
     const response = await axios.post('http://127.0.0.1:8000/update_personas', payload);
     if (response.status === 200) {
-      ElMessage.success('配置保存成功！');
+      ElMessage.success('Successfully saved personas!');
       if (fetchPersonas) fetchPersonas();
     }
   } catch (error) {
     console.error('Error saving personas:', error);
-    ElMessage.error('配置保存失败');
+    ElMessage.error('Failed to save configuration');
   }
 };
 </script>
@@ -360,24 +358,28 @@ const syncPersona = async () => {
 }
 
 .header {
-  padding: 16px 24px;
+  padding: 8px 12px;
   flex-shrink: 0;
+  background: #000000;
+  margin: 0;
 }
 .header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: #ffffff;
+  text-align: left;
 }
 
 /* =========================================
    1. 基础布局 & 卡片容器 (Layout & Base)
    ========================================= */
 .view-b-container {
-  background: #1a1f3a;
+  background: #ECECEC;
   color: #e5e7eb;
   border-radius: 12px;
   position: relative;
+  overflow: hidden;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -416,13 +418,6 @@ const syncPersona = async () => {
   transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.add-agent-section-mini {
-  background-color: rgba(206, 220, 251, 0.1);
-}
-.add-agent-section-mini:hover {
-  background-color: rgba(206, 220, 251, 0.2);
-}
-
 .global-actions .save-button {
   background-color: #8095CA;
   border-color: #8095CA;
@@ -430,5 +425,53 @@ const syncPersona = async () => {
 .global-actions .save-button:hover {
   background-color: #6D8DBE;
   border-color: #6D8DBE;
+}
+
+/* =========================================
+   Actions Wrapper Styles
+   ========================================= */
+.actions-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: #F0F0F0;
+  border-top: 1px solid #E0E0E0;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 300;
+}
+
+.add-agent-section-mini {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background-color: transparent;
+  border: 2px dashed #8095CA;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-agent-section-mini:hover {
+  background-color: #E8E8E8;
+}
+
+.plus-icon {
+  font-size: 14px;
+  color: #8095CA;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.add-text {
+  font-size: 11px;
+  color: #666666;
+  font-weight: bold;
 }
 </style>
