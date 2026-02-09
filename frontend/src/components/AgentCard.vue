@@ -284,6 +284,18 @@
                 </div>
               </div>
             </div>
+
+            <div class="social-item">
+              <div class="level-title">Participation</div>
+              <div class="level-options">
+                <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
+                     class="level-btn"
+                     :class="{'is-active': modelValue.social.participation === lv}"
+                     @click="modelValue.social.participation = lv">
+                  {{ levelTranslations[lv] }}
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Right Column: Role Selection -->

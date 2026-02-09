@@ -109,6 +109,7 @@ const createDefaultAgent = (index = 0) => ({
   social: {
     confidence: 'medium',
     register: 'medium',
+    participation: 'medium',
     role: 'leader'
   },
   plasticity: 'medium'
@@ -334,7 +335,8 @@ const syncPersona = async () => {
         social_interaction_style: {
            verbal_confidence: agent.social.confidence,
            language_register: agent.social.register,
-           interaction_role: agent.social.role
+            interaction_role: agent.social.role,
+            participation: agent.social.participation
         },
         learning_adaptivity: agent.plasticity
       };
