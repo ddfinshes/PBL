@@ -12,14 +12,26 @@
         class="px-4 py-2.5 rounded-2xl shadow-md border border-white/30 transition-all duration-300"
         :style="bubbleStyle"
       >
-        <p class="text-black whitespace-pre-wrap text-[15px] font-medium leading-relaxed">{{ message.text }}</p>
+        <p class="text-black whitespace-pre-wrap text-[15px] font-medium leading-relaxed">
+          {{ message.text }}
+        </p>
+
+        <!-- 仅对学生 Agent 显示的文本转语音按钮，阻止冒泡到父级点击 -->
+        <button
+          v-if="!isTeacher"
+          type="button"
+          class="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium text-gray-600 bg-white/70 hover:bg-white shadow-sm border border-gray-200"
+          @click.stop="speakMessage"
+        >
+          {{ isSpeaking ? '||' : '▶' }} Speak
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
   message: {
@@ -67,6 +79,92 @@ const bubbleStyle = computed(() => {
     boxShadow: `0 4px 12px ${bgColor}66` // 添加带有透明度的动态阴影，增强层次感
   };
 });
+
+const isSpeaking = ref(false);
+
+/**
+ * 根据 agent 名字在可用 voice 列表中稳定选取一个音色
+ */
+const pickVoiceForAgent = (voices, agentName) => {
+  if (!voices || voices.length === 0) return null;
+
+  const name = agentName || 'default';
+  // 简单哈希，让同一个 agent 始终映射到同一个下标
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+
+  // 过滤出常见的中英文 voice，更利于教学场景
+  const preferred = voices.filter(v => {
+    const lang = (v.lang || '').toLowerCase();
+    return lang.startsWith('en') || lang.startsWith('zh');
+  });
+
+  const base = preferred.length > 0 ? preferred : voices;
+  return base[hash % base.length] || null;
+};
+
+const speakMessage = () => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    console.warn('当前环境不支持语音合成功能');
+    return;
+  }
+
+  const synth = window.speechSynthesis;
+
+  // 如果当前这条消息正在播放，再次点击则停止播放并恢复按钮为 ▶
+  if (isSpeaking.value) {
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+    }
+    isSpeaking.value = false;
+    return;
+  }
+
+  const text = props.message?.text;
+  if (!text) return;
+
+  const startSpeak = () => {
+    // 为避免多个消息同时播放，这里先清空队列
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+    }
+
+    const utter = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+    const voice = pickVoiceForAgent(voices, props.message.agent);
+    if (voice) {
+      utter.voice = voice;
+    }
+    // 可以适当调节语速和音量，保证教学环境可听
+    utter.rate = 0.8;
+    utter.pitch = 1.2;
+    utter.volume = 1.0;
+
+    utter.onend = () => {
+      isSpeaking.value = false;
+    };
+    utter.onerror = () => {
+      isSpeaking.value = false;
+    };
+
+    isSpeaking.value = true;
+    synth.speak(utter);
+  };
+
+  const existing = synth.getVoices();
+  if (existing && existing.length > 0) {
+    startSpeak();
+  } else {
+    // 某些浏览器需要等待 voices 异步加载
+    const handleVoicesChanged = () => {
+      synth.removeEventListener('voiceschanged', handleVoicesChanged);
+      startSpeak();
+    };
+    synth.addEventListener('voiceschanged', handleVoicesChanged);
+  }
+};
 </script>
 
 <style scoped>
