@@ -1,0 +1,144 @@
+{
+
+  "pbl-session-1768810136507": {
+    "q_0_1": {
+      "messages": [
+        {
+          "id": "init_0_1_d618",
+          "parent_id": null,
+          "branch_id": "main",
+          "agent": "case_introduction",
+          "content": "金大爷今年 60 岁，刚刚退休。平时身体一直不太好，有高血压和糖尿病。金大爷经常和老伙伴们唠嗑说道：都是年轻的时候太拼事业，没有好好照顾自己的身体，又抽烟又喝酒，才会有现在的一身病。如今的金大爷，十分注重自身的保养，打太极、练八段锦，日子很惬意。\n\n上周天气突然转凉，金大爷没能及时增添衣物也着凉了，咳嗽、咳痰，偶尔还有胸闷。老伴让金大爷快点去医院看看，但是金大爷听说最近是新型冠状病毒流行期，担心自己去医院再次被感染，怎么也不愿意去医院。老金从家里翻出去年女儿买的“维生素 C 泡腾片”，原本说明书说每天服用一粒，但他心想，保健品多吃点更能提高免疫力，所以干脆一次用三粒泡水喝。没想到，连吃了三天，咳嗽不见好转，还越来越厉害，连晚上睡觉也睡不好，人没有力气，两条小腿越来越胀，鞋子也变小了。老伴很着急，赶紧联系女儿带金大爷去看病。\n\n引导问题：咳嗽的问诊要点？\n请各位同学开始讨论。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "79461503",
+          "parent_id": "init_0_1_d618",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我注意到金大爷咳嗽、咳痰已经一周，还伴有胸闷、夜间睡不好、乏力和小腿肿胀。这些症状在着凉后出现，且逐渐加重。我想先明确：咳嗽是干咳还是有痰？痰的颜色和量有没有变化？胸闷是否与活动有关？另外，小腿肿胀是新出现的，这可能提示心功能或肾功能的问题，值得进一步问诊。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "6268215d",
+          "parent_id": "79461503",
+          "branch_id": "main",
+          "agent": "Student_1",
+          "content": "我同意要关注痰的性状和胸闷特点，同时还得问咳嗽有没有夜间加重、是否平躺时更明显，因为金大爷有高血压和糖尿病，加上新出现的小腿肿胀和睡不好，得警惕是不是心功能不全的表现。另外，他超量吃了三天维生素C泡腾片，里面钠含量高，会不会加重水钠潴留？这点也值得考虑。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "3ecd9cd1",
+          "parent_id": "6268215d",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我接着前面同学说的，除了痰的性状和夜间咳嗽情况，还要问有没有发热、呼吸急促或者咳粉红色泡沫痰，这些对判断是不是心衰或肺部感染很关键。另外，他有糖尿病和高血压，长期抽烟喝酒，这些基础病和危险因素也得在问诊时重点梳理。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_05da61",
+          "parent_id": "3ecd9cd1",
+          "branch_id": "main",
+          "agent": "teacher",
+          "content": "你们都问到了咳痰的性状，痰的性状不同能提示你们什么？不同的性状和他现在的表现有什么关联？",
+          "summary": "你们都问到了咳痰的性状，痰的性状不同能提示你们什么？不同的性",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "a3f1fcf0",
+          "parent_id": "teacher_05da61",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "如果金大爷咳的是白色泡沫痰，尤其在夜间平躺时加重，还伴胸闷、腿肿，那更倾向心源性咳嗽；要是黄脓痰，可能合并感染，但单纯感染很难解释他快速出现的水肿和乏力。而且他超量服用高钠泡腾片，可能加重水钠潴留，让潜在心衰显性化。所以痰是不是泡沫样、有没有粉红色，直接关系到是心衰还是肺炎为主。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "953488cd",
+          "parent_id": "a3f1fcf0",
+          "branch_id": "main",
+          "agent": "Student_1",
+          "content": "我同意痰的性状很关键，但还想补充一点：金大爷咳嗽三天就出现明显下肢水肿和夜间睡不好，进展太快了，不太像普通肺炎。而且他吃三倍泡腾片，钠摄入猛增，可能把原来控制尚可的心功能一下子压垮了，所以我觉得心衰可能性更大，尤其是左心衰引起的肺淤血。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "teacher_1496c5",
+          "parent_id": "953488cd",
+          "branch_id": "main",
+          "agent": "teacher",
+          "content": "很好，你们都关注到金大爷还有水肿的情况，他的水肿有什么特点？你们是怎么考虑金大爷水肿的特点的？",
+          "summary": "很好，你们都关注到金大爷还有水肿的情况，他的水肿有什么特点？",
+          "topic": "教师干预",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": true
+        },
+        {
+          "id": "dc67b3b3",
+          "parent_id": "teacher_1496c5",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "金大爷的水肿是双侧对称、从小腿开始、快速进展，鞋子都变小了，应该是凹陷性的，而且夜间加重、伴睡眠差和乏力——这些都很符合心源性水肿，尤其是右心或全心衰竭导致体循环淤血。再加上他高血压、糖尿病、吸烟史，本来就有心脏基础病，高钠摄入可能成了压垮心功能的最后一根稻草。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "ee34fc1b",
+          "parent_id": "dc67b3b3",
+          "branch_id": "main",
+          "agent": "Student_1",
+          "content": "我注意到金大爷的水肿是从下肢开始、对称又凹陷，晚上更胀，鞋子都穿不下，这确实很像心源性水肿。而且他本来就有高血压和糖尿病，心脏负担一直不小，再加上三天里猛吃高钠的泡腾片，很可能一下子诱发了全心衰竭，导致体循环淤血加重。不过，我们也不能完全排除肾的问题，毕竟糖尿病久了也可能伤肾，但目前看心衰还是更说得通。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "1ae46241",
+          "parent_id": "ee34fc1b",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我同意前面同学对心源性水肿的分析，特别是高钠摄入诱发心衰这点很关键。不过我想补充一点：金大爷咳嗽加重、夜间不能平卧，这提示可能还有肺淤血，不只是右心衰，更倾向全心衰竭。另外，虽然糖尿病肾病不能完全排除，但他没有提到泡沫尿或晨起眼睑浮肿，肾性水肿证据还不足。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "1183e19f",
+          "parent_id": "1ae46241",
+          "branch_id": "main",
+          "agent": "Student_1",
+          "content": "前面同学提到肺淤血和全心衰竭，我觉得要确认这点，得搞清楚B型利钠肽（BNP）在心衰诊断中的意义，还有维生素C泡腾片具体含多少钠，这关系到高钠负荷到底有多大。另外，咳嗽咳痰三天加重，是否合并肺部感染也需要鉴别，所以肺炎的常见病原体和影像学表现也得查。这些是我们的学习议题。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        },
+        {
+          "id": "e9893801",
+          "parent_id": "1183e19f",
+          "branch_id": "main",
+          "agent": "Student_0",
+          "content": "我来负责查维生素C泡腾片的钠含量和高钠对心衰的影响，还有BNP在心衰诊断中的具体判读标准。",
+          "scene_index": 0,
+          "question_index": 1,
+          "is_convention": false
+        }
+      ],
+      "intervention_summaries": {}
+    }
+  }
+}

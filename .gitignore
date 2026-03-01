@@ -1,0 +1,10 @@
+# 精准忽略 frontend 下的 node_modules
+frontend/node_modules/
+# 通用忽略（防止其他目录的 node_modules 被扫描）
+node_modules/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

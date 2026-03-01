@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Selective border removal - only on root elements */
+html, body, #app, #app-wrapper {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove default fieldset border */
+fieldset {
+  border: none !important;
+}

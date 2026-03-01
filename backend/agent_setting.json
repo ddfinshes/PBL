@@ -1,0 +1,113 @@
+{
+  "徐源松": {
+    "name": "徐源松",
+    "age": "22",
+    "major": "中医药",
+    "avatar": "avatar1.png",
+    "color": "#CEDCFB",
+    "cardColor": "#CEDCFB",
+    "knowledge_background": {
+      "high": [
+        "生理学"
+      ],
+      "medium": [
+        "内科学（肾脏病学）"
+      ],
+      "low": [
+        "医学伦理学"
+      ]
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "symptoms"
+      ],
+      "reasoning_entry": [
+        "symptom_significance"
+      ],
+      "causal_structure": [
+        "multi_concurrent"
+      ]
+    },
+    "social_interaction_style": {
+      "verbal_confidence": "medium",
+      "language_register": "medium",
+      "interaction_role": "leader",
+      "participation": "medium"
+    },
+    "learning_adaptivity": "low"
+  },
+  "窦梓洋": {
+    "name": "窦梓洋",
+    "age": "23",
+    "major": "中医药",
+    "avatar": "avatar1.png",
+    "color": "#FBCEDC",
+    "cardColor": "#FBCEDC",
+    "knowledge_background": {
+      "high": [
+        "药理学"
+      ],
+      "medium": [
+        "诊断学"
+      ],
+      "low": [
+        "内科学（肾脏病学）"
+      ]
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "past_medical_history"
+      ],
+      "reasoning_entry": [
+        "irrelevant_factors"
+      ],
+      "causal_structure": [
+        "undefined"
+      ]
+    },
+    "social_interaction_style": {
+      "verbal_confidence": "high",
+      "language_register": "high",
+      "interaction_role": "leader",
+      "participation": "medium"
+    },
+    "learning_adaptivity": "medium"
+  },
+  "朱yichao": {
+    "name": "朱yichao",
+    "age": "21",
+    "major": "临床",
+    "avatar": "avatar1.png",
+    "color": "#D2FBCE",
+    "cardColor": "#D2FBCE",
+    "knowledge_background": {
+      "high": [
+        "内科学（肾脏病学）"
+      ],
+      "medium": [
+        "医学伦理学"
+      ],
+      "low": [
+        "病理生理学"
+      ]
+    },
+    "cognitive_orientation": {
+      "attentional_anchor": [
+        "physicochemical_parameters"
+      ],
+      "reasoning_entry": [
+        "symptom_significance"
+      ],
+      "causal_structure": [
+        "multi_concurrent"
+      ]
+    },
+    "social_interaction_style": {
+      "verbal_confidence": "low",
+      "language_register": "low",
+      "interaction_role": "critical",
+      "participation": "high"
+    },
+    "learning_adaptivity": "high"
+  }
+}
