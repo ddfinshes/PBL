@@ -37,26 +37,6 @@ HOST_LLM = _build_llm(temperature=0.3)
 SUM_LLM = _build_llm(temperature=0.2)
 
 
-async def STUDENT_ANALYST(state: Dict) -> Dict:
-    """向后兼容的简单学生节点，用于旧版单元测试。
-
-    - 输入: state 字典，至少包含 "messages"（最后一条视作当前人类输入）。
-    - 行为: 调用 STUDENT_LLM.agenerate，并返回包含 AIMessage 的结构。
-    """
-    messages: List[BaseMessage] = state["messages"]
-    last_content = messages[-1].content if messages else ""
-
-    # 按测试文件的约定使用 agenerate 接口，并包装成一轮对话
-    result = await STUDENT_LLM.agenerate([[HumanMessage(content=last_content)]])
-    # backend.test_agents 期望从 generations[0].message 里拿到 AIMessage
-    ai_msg = result.generations[0].message
-
-    return {
-        "messages": [ai_msg],
-        "next_speaker": "router",
-    }
-
-
 async def simplify_message(content: str, language: str = "zh") -> str:
     """Simplify a long message into a single core statement/conclusion for Storyline view.
 
