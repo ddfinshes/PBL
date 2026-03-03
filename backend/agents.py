@@ -8,7 +8,7 @@ import time
 import asyncio
 
 from . import pbl_info
-from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 
@@ -35,6 +35,26 @@ def _build_llm(temperature: float = 0.7) -> ChatOpenAI:
 STUDENT_LLM = _build_llm(temperature=0.8)
 HOST_LLM = _build_llm(temperature=0.3)
 SUM_LLM = _build_llm(temperature=0.2)
+
+
+async def STUDENT_ANALYST(state: Dict) -> Dict:
+    """向后兼容的简单学生节点，用于旧版单元测试。
+
+    - 输入: state 字典，至少包含 "messages"（最后一条视作当前人类输入）。
+    - 行为: 调用 STUDENT_LLM.agenerate，并返回包含 AIMessage 的结构。
+    """
+    messages: List[BaseMessage] = state["messages"]
+    last_content = messages[-1].content if messages else ""
+
+    # 按测试文件的约定使用 agenerate 接口，并包装成一轮对话
+    result = await STUDENT_LLM.agenerate([[HumanMessage(content=last_content)]])
+    # backend.test_agents 期望从 generations[0].message 里拿到 AIMessage
+    ai_msg = result.generations[0].message
+
+    return {
+        "messages": [ai_msg],
+        "next_speaker": "router",
+    }
 
 
 async def simplify_message(content: str, language: str = "zh") -> str:
@@ -74,242 +94,58 @@ async def simplify_message(content: str, language: str = "zh") -> str:
 student_personas: Dict[str, Dict] = {}
 student_nodes: Dict[str, Callable] = {}
 
-# def format_persona_to_string(persona: Dict) -> str:
-#     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
-#     biases = ", ".join(persona.get('core_biases', [])) or '无'
-#     return (
-#         f"- 推理路径: {persona.get('reasoning_path', '未定义')}\n"
-#         f"- 知识整合: {persona.get('knowledge_integration', '未定义')}\n"
-#         f"- 核心偏误: {biases}\n"
-#         f"- 关键点敏度: {persona.get('sensitivity', 'N/A')}/10\n"
-#         f"- 知识熟练程度: {persona.get('proficiency', 'N/A')}/10"
-#     )
-
-
-# def format_persona_to_string(persona: Dict) -> str:
-#     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
-#     verbal_confidence = {
-#         "high": "语气肯定，容易主导甚至误导",
-#         "medium": "语气平缓，实事求是",
-#         "low": "频繁使用不确定表达，即使观点正确"
-#     }
-#     language_register = {
-#         "high": "发言使用医学术语（如，水肿、乏力）",
-#         "medium": "发言中有时使用医学术语（如，水肿、乏力），有时使用日常口语表达（如，腿胀、没劲）",
-#         "low": "发言中总是使用日常口语表达（如，腿胀、没劲）"
-#     }
-#     interaction_role = {
-#         "leader": "领导同学间的讨论，擅长总结发言和推进讨论",
-#         "follower": "附和前面同学的发言，习惯附和、支持他人",
-#         "critical": "质疑者其他同学的发言/观点，习惯于提出反对与质疑",
-#     }
-
-
-#     # 认知维度映射 (Key 为前端传递的英文, Value 为 Prompt 中使用的中文描述)
-#     # const subDimensionTranslations = {
-#     #     'Patient Events': '患者事件',
-#     #     'Symptoms': '临床症状',
-#     #     'Social Cues': '社会线索',
-#     #     'Status': '患者状态',
-#     #     'Mechanism': '机制推演',
-#     #     'External Factors': '外部因素',
-#     #     'Risk Perception': '风险感知',
-#     #     'Familiarity Driven': '自身经验驱动',
-#     #     'Linear Causality': '线性因果',
-#     #     'Multi-Concurrent': '多重并发',
-#     #     'Cues-Driven': '心理-社会-环境',
-#     #     'Undefined': '未定义'
-#     # }
-#     attentional_anchor_map = {
-#         "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
-#         "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
-#         "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
-#         "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
-#     }
-#     reasoning_entry_map = {
-#         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
-#         "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
-#         "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
-#         "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
-#     }
-#     causal_structure_map = {
-#         "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
-#         "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
-#         "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
-#         "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
-#     }
-
-#     learning_adaptivity = {
-#         "low": "即使被提示也坚持原观点",
-#         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
-#         "high": "能根据新线索快速修正",
-#     }
-#     def process_cog(dim_key, mapping):
-#         vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
-#         if not vals:
-#             return "无明确偏好"
-#         if isinstance(vals, str):
-#             vals = [vals]
-#         res = []
-#         for v in vals:
-#             k = v.lower().replace(' ', '_').replace('-', '_')
-#             desc = mapping.get(k, v)
-#             if desc:
-#                 res.append(desc if desc else v)
-#             else:
-#                 res.append(v)
-#         return " -> ".join(res) + " (按优先级排序)"
-
-#     kb = persona.get('knowledge_background', {}) or {}
-
-#     social = persona.get('social_interaction_style', {}) or {}
-#     print('------------------------')
-#     print(persona)
-#     print('------------------------')
-#     return (f"""
-#     - **姓名**：{persona.get('name', '匿名')} \n
-#     - **年龄**：{persona.get('age', 22)} \n
-#     - **性别/专业**：{persona.get('major', '医学')} \n
-
-#     - **领域知识深度**：
-#         - 教科书级理解：{', '.join(kb.get('high', []))} \n
-#             表现：能给出标准解释，但可能不敏感于关键细节。\n
-#         - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
-#             表现：能提名词，但机制模糊或泛化。\n
-#         - 仅生活常识：{', '.join(kb.get('low', []))} \n
-#             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
-
-#     - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
-#         - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
-#         - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
-#         - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
-
-#     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
-#         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
-
-#     - **社会行为维度**（作用：决定 agent“怎么说、怎么影响他人”）\n
-#         - 发言风格: {verbal_confidence.get(social.get('verbal_confidence'), "平稳")} \n
-#         - 发言专业用语情况：{language_register.get(social.get('language_register'), "灵活切换")} \n
-#         - 与其他同学互动特点：{interaction_role.get(social.get('interaction_role'), "参与讨论")} \n
-#     """
-#             )
-
-# def memory_format(persona:Dict) ->str:
-#     attentional_anchor_map = {
-#         "patient_events": '对病人的所发生的事件描述高度敏感(例如,服药历史,生活习惯等)',
-#         "symptoms": '临床症状表现高度敏感(例如,疼痛,发烧等)',
-#         "social_cues": '社交与环境线索高度敏感(例如,该学生强烈依赖流行病背景，社会共识疾病等)',
-#         "status": '患者整体状态高度敏感(例如,体质,慢性疾病等)',
-#     }
-#     reasoning_entry_map = {
-#         "mechanism": '推理起点：从熟悉或常见病例出发；典型思路：通过相似案例快速联想，快速匹配模式；潜在局限：容易过早下结论，可能忽略不典型表现',
-#         "external_factors": '推理起点：基于器官或病理机制；典型思路：强调生理和病理解释，推理过程复杂但逻辑严密；潜在局限：推理链条较长，不易快速收敛到诊断',
-#         "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全；潜在局限：讨论范围受限，可能忽略非紧急病因',
-#         "familiarity_driven": '推理起点：从个体整体状态（如体质或长期状态）出发；典型思路：从全身或长期健康状态解释症状；潜在局限：诊断指向不明确，可能缺乏特异性'
-#     }
-#     causal_structure_map = {
-#         "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例；常见问题：容易忽略冲突证据，对复杂情况解释力不足',
-#         "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；典型表现：全面列出多种可能性，避免遗漏；常见问题：缺乏整合与收敛，难以形成明确诊断方向',
-#         "cues_driven": '推理方式：基于关键线索快速联想，抓住典型特征；典型表现：快速匹配模式，适合经验丰富的医生；常见问题：机制解释不完整，可能忽略非典型表现',
-#         "undefined": '推理方式：侧重非生物医学解释，强调心理或环境因素；典型表现：从患者心理状态或社会环境寻找病因；常见问题：可能偏离医学主线，忽略器质性病变'
-#     }
-
-#     learning_adaptivity = {
-#         "low": "即使被提示也坚持原观点",
-#         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
-#         "high": "能根据新线索快速修正",
-#     }
-#     def process_cog(dim_key, mapping):
-#         vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
-#         if not vals:
-#             return "无明确偏好"
-#         if isinstance(vals, str):
-#             vals = [vals]
-#         res = []
-#         for v in vals:
-#             k = v.lower().replace(' ', '_').replace('-', '_')
-#             desc = mapping.get(k, v)
-#             if desc:
-#                 res.append(desc if desc else v)
-#             else:
-#                 res.append(v)
-#         return " -> ".join(res) + " (按优先级排序)"
-
-#     kb = persona.get('knowledge_background', {}) or {}
-
-#     return (f"""
-#     - **领域知识深度**：
-#         - 教科书级理解：{', '.join(kb.get('high', []))} \n
-#             表现：能给出标准解释，但可能不敏感于关键细节。\n
-#         - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
-#             表现：能提名词，但机制模糊或泛化。\n
-#         - 仅生活常识：{', '.join(kb.get('low', []))} \n
-#             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
-
-#     - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
-#         - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
-#         - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
-#         - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
-
-#     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
-#         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
-#     """)
-
 def format_persona_to_string(persona: Dict) -> str:
     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
-    verbal_confidence = {
-        "high": "语气肯定，容易主导甚至误导",
-        "medium": "语气平缓，实事求是",
-        "low": "频繁使用不确定表达，即使观点正确"
-    }
-    language_register = {
-        "high": "发言使用医学术语（如，水肿、乏力）",
-        "medium": "发言中有时使用医学术语（如，水肿、乏力），有时使用日常口语表达（如，腿胀、没劲）",
-        "low": "发言中总是使用日常口语表达（如，腿胀、没劲）"
-    }
-    interaction_role = {
-        "leader": "领导同学间的讨论，擅长总结发言和推进讨论",
-        "follower": "附和前面同学的发言，习惯附和、支持他人",
-        "critical": "质疑者其他同学的发言/观点，习惯于提出反对与质疑",
+    learning_styles_map = {
+        'deep_learner': '你是一名具有‘深层学习风格’的医学生。你的核心动力是对比医学知识与证据，并整合不同课程的材料 。在 PBL 讨论中，你不仅关注诊断结果，更关注‘为什么’。请经常提出‘这个症状与我们上周学的生理学机制有何联系？’这类问题，并尝试寻找一般性原则 。',
+        'surface_learner': '你是一名具有‘表层学习风格’的医学生。你参与学习的主要动力是‘害怕失败’和‘完成任务’ 。你倾向于机械记忆孤立的医学事实，对医学内容本身缺乏深厚兴趣 。在讨论中，你的发言应多集中于确认具体的化验指标或教科书上的定义，表现出对复杂推理的回避。',
+        'strategic_learner': '你是一名具有‘策略型学习风格’的医学生。你的目标是‘获得高分’并‘战胜他人’ 。你会根据评分标准调整讨论表现，可能在讨论中表现得非常积极但理解程度参差不齐 。请在发言中表现出竞争意识，并关注哪些知识点是考试最可能考的。'
     }
 
-    # 认知维度映射 (Key 为前端传递的英文, Value 为 Prompt 中使用的中文描述)
-    # const subDimensionTranslations = {
-    #     'Patient Events': '患者事件',
-    #     'Symptoms': '临床症状',
-    #     'Social Cues': '社会线索',
-    #     'Status': '患者状态',
-    #     'Mechanism': '机制推演',
-    #     'External Factors': '外部因素',
-    #     'Risk Perception': '风险感知',
-    #     'Familiarity Driven': '自身经验驱动',
-    #     'Linear Causality': '线性因果',
-    #     'Multi-Concurrent': '多重并发',
-    #     'Cues-Driven': '心理-社会-环境',
-    #     'Undefined': '未定义'
-    # }
-    attentional_anchor_map = {
-        "symptoms": '对于信息的筛选优先关注患者当前主诉与可直接感知的症状体征，并将其视为主要证据。例如：医生第一时间抓住“咳嗽咳痰、胸闷、眼肿”，反复追问咳了多久、痰多不多、胸闷严不严重，而很少去问病史。',
-        "present_illness": '对于信息的筛选优先关注能够解释疾病发生与演变过程的信息，关注时间顺序、进展趋势与诱发因素。例如：医生注意到“三天前开始、逐渐加重、最近转差”。',
-        "past_medical_history": '对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。例如：对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。',
-        "physicochemical_parameters": '信息筛选优先关注客观、可量化的检查结果。例如：医生会忽略患者对不适的描述，转而关注“肾功能、影像、实验室结果”。',
+    personality_map = {
+        'high_agreeableness_low_neuroticism': "性格温和、乐于助人且情绪稳定 。你非常享受 PBL 团队合作。在 Agent 交互中，请扮演‘协调者’角色，对同学提出的假说给予积极正向的反馈，减少团队冲突，并表现出对社会互动的热爱 。",
+        'high_conscientiousness_high_openness': '你非常自律、有组织性，且对新想法充满好奇 。你认为 PBL 在理清和记忆新信息方面对你个人非常有帮助 。在讨论时，请表现得逻辑严密，并主动尝试将不常见的医学假说引入讨论。',
+        'high_neuroticism': '你容易感到焦虑和压力 。你觉得在小组面前提出建议或参与激烈的案例讨论是一种挑战，这让你感到不安 。你的发言应带有一些犹豫，或者更多地询问他人意见以确认自己的想法是否正确。'
+
     }
-    reasoning_entry_map = {
-        "familiarity_driven": '推理起点：从熟悉或常见病例出发,像不像常见情况。例如：看到咳嗽、咳痰，立刻想到“像普通肺炎/上呼吸道感染”，然后开始用这个熟悉模板去解释所有其他症状',
-        "symptom_significance": '推理起点：从“最显眼 / 最让人不舒服 / 最容易被注意到的症状”开始。例如：因为“胸闷”和“眼肿”很显著提到，先围着这两个症状进行推理，即使它们可能只是整体问题的一部分。',
-        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全。例如：一看到胸闷和浮肿，就优先排查“心衰、肺栓塞、肾衰竭”等高风险诊断，而不管它们出现得是否常见。',
-        "irrelevant_factors": '推理起点：不以疾病实体为中心。例如：一开始关注“这是考试题还是训练案例？”、“老师想我们讨论什么？”、“这个病例是不是设计来考某个知识点？”而不是病人的真实情况。'
-    }
-    causal_structure_map = {
-        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例。例如：“他就是因为感染了肺炎，所以才会咳嗽、胸闷、乏力，浮肿应该也是感染引起的。”——所有症状被强行压到一个原因上。',
-        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；同时考虑多个因素，并把它们整合进一个连贯的疾病机制中进行推理。例如：“他可能有慢性心功能不全或肾功能问题作为背景，感染诱发了病情加重，因此既有咳嗽胸闷（感染与心肺负担），也有浮肿（心肾因素）。”',
-        "undefined": '推理方式：没有形成一个良好的思维方式。例如：一会儿觉得是感染，一会儿觉得是心脏，一会儿又觉得是肾脏，没有一个持续维持的解释框架。'
+
+    cognitive_map = {
+        'point_based':  """
+            你的逻辑能力被限制在‘孤立检索’。在讨论中，你只能回答‘是什么’类的问题。即使你掌握了相关的医学知识，你也无法将两个不同的知识点进行关联。
+            行为准则：
+            1.如果队友问‘这个症状的原因是什么？’，你只能给出教材上的标准定义或单一病因。
+            2.严禁进行‘因为 A 导致 B，所以推测 C’的推理。
+            3.当讨论涉及复杂因果链时，请表现出困惑，或坚持回归到基本定义的确认上。”
+        """,
+        'line_based': """
+            你具备‘单一链条推理’能力。你倾向于锁定一个最明显的因果路径（$A \rightarrow B \rightarrow C$）并一条路走到黑。
+            行为准则：
+            1. 在分析案例时，迅速锁定一个你认为最可能的诊断，并沿着这个诊断寻找支持证据。
+            2. 你容易产生‘隧道视野’，忽略与你当前逻辑链不符的其他线索。
+            3. 如果队友提出其他路径，除非当前路径被彻底证伪，否则你会坚持原有的逻辑闭环。
+        """,
+        'plane_based': """
+            你具备‘全局网状推理’和‘多重假设验证’能力。你是 PBL 讨论中的高阶思考者。
+            行为准则：
+            1. 你能同时激活多个可能的诊断（差异诊断），并对比它们的权重 。
+            2. 当面对冲突的检查结果（如：症状支持 A，但化验支持 B）时，你需要尝试通过更深层的生理机制来解释这种矛盾。
+            3. 你的发言应包含‘虽然...但是...’或‘考虑到...我们需要排除...’这类整合性逻辑 。
+        """
     }
 
     learning_adaptivity = {
         "low": "即使被提示也坚持原观点",
         "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
         "high": "能根据新线索快速修正",
+    }
+
+    # 互动行为
+    interaction_behavior = {
+        "seeking_help_alignment": "确认他人的医学术语是否与自己理解的一致。",
+        "correction_challenge": "发现他人逻辑与自己内部推理冲突时触发辩论。",
+        "accumulation": "简单认同并补充相似的案例证据。",
+        "reiteration": "只复述主要观点，不再做任何推理、联想、分析。",
+        "silence": "保持沉默。返回省略号"
     }
 
     def process_cog(dim_key, mapping):
@@ -331,6 +167,8 @@ def format_persona_to_string(persona: Dict) -> str:
     kb = persona.get('knowledge_background', {}) or {}
 
     social = persona.get('social_interaction_style', {}) or {}
+
+
     return (f"""
     请务必用英文输出
     - **姓名**：{persona.get('name', '匿名')} \n
@@ -345,83 +183,266 @@ def format_persona_to_string(persona: Dict) -> str:
         - 仅生活常识：{', '.join(kb.get('low', []))} \n
             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
 
-    - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
-        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
-        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
-        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
+    - **学习风格**：
+        - {learning_styles_map.get(persona.get('learning_styles', 'strategic_learner'), "无明确偏好")}
+
+    - **人格因素（作用：不同的人格特质显著影响学生在 PBL 中的表现与感受 。）**：
+        - {personality_map.get(persona.get('personality', 'high_agreeableness_low_neuroticism'), "无明确偏好")}
+
+    - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：
+        - {cognitive_map.get(persona.get('cognitive_orientation', 'point_based'), "无明确偏好")}
 
     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
 
-    - **社会行为维度**（作用：决定 agent“怎么说、怎么影响他人”）\n
-        - 发言风格: {verbal_confidence.get(social.get('verbal_confidence'), "平稳")} \n
-        - 发言专业用语情况：{language_register.get(social.get('language_register'), "灵活切换")} \n
-        - 与其他同学互动特点：{interaction_role.get(social.get('interaction_role'), "参与讨论")} \n
+    - **学生可进行的互动行为** (作用： 根据学生特征，选择其中一种进行学生与学生、学生与老师之间的互动行为)
+        - {interaction_behavior}
     """
             )
 
 
-def memory_format(persona: Dict) -> str:
-    attentional_anchor_map = {
-        "symptoms": '对于信息的筛选优先关注患者当前主诉与可直接感知的症状体征，并将其视为主要证据。例如：医生第一时间抓住“咳嗽咳痰、胸闷、眼肿”，反复追问咳了多久、痰多不多、胸闷严不严重，而很少去问病史。',
-        "present_illness": '对于信息的筛选优先关注能够解释疾病发生与演变过程的信息，关注时间顺序、进展趋势与诱发因素。例如：医生注意到“三天前开始、逐渐加重、最近转差”。',
-        "past_medical_history": '对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。例如：对于信息的筛选优先关注既往慢性疾病、风险因素和生活方式。',
-        "physicochemical_parameters": '信息筛选优先关注客观、可量化的检查结果。例如：医生会忽略患者对不适的描述，转而关注“肾功能、影像、实验室结果”。',
+# def memory_format(persona: Dict) -> str:
+#     learning_styles_map = {
+#         'deep_learner': '你是一名具有‘深层学习风格’的医学生。你的核心动力是对比医学知识与证据，并整合不同课程的材料 。在 PBL 讨论中，你不仅关注诊断结果，更关注‘为什么’。请经常提出‘这个症状与我们上周学的生理学机制有何联系？’这类问题，并尝试寻找一般性原则 。',
+#         'surface_learner': '你是一名具有‘表层学习风格’的医学生。你参与学习的主要动力是‘害怕失败’和‘完成任务’ 。你倾向于机械记忆孤立的医学事实，对医学内容本身缺乏深厚兴趣 。在讨论中，你的发言应多集中于确认具体的化验指标或教科书上的定义，表现出对复杂推理的回避。',
+#         'strategic_learner': '你是一名具有‘策略型学习风格’的医学生。你的目标是‘获得高分’并‘战胜他人’ 。你会根据评分标准调整讨论表现，可能在讨论中表现得非常积极但理解程度参差不齐 。请在发言中表现出竞争意识，并关注哪些知识点是考试最可能考的。'
+#     }
+
+#     personality_map = {
+#         'high_agreeableness_low_neuroticism': "性格温和、乐于助人且情绪稳定 。你非常享受 PBL 团队合作。在 Agent 交互中，请扮演‘协调者’角色，对同学提出的假说给予积极正向的反馈，减少团队冲突，并表现出对社会互动的热爱 。",
+#         'high_conscientiousness_high_openness': '你非常自律、有组织性，且对新想法充满好奇 。你认为 PBL 在理清和记忆新信息方面对你个人非常有帮助 。在讨论时，请表现得逻辑严密，并主动尝试将不常见的医学假说引入讨论。',
+#         'high_neuroticism': '你容易感到焦虑和压力 。你觉得在小组面前提出建议或参与激烈的案例讨论是一种挑战，这让你感到不安 。你的发言应带有一些犹豫，或者更多地询问他人意见以确认自己的想法是否正确。'
+
+#     }
+
+#     cognitive_map = {
+#         'point_based':  """
+#             你的逻辑能力被限制在‘孤立检索’。在讨论中，你只能回答‘是什么’类的问题。即使你掌握了相关的医学知识，你也无法将两个不同的知识点进行关联。
+#             行为准则：
+#             1.如果队友问‘这个症状的原因是什么？’，你只能给出教材上的标准定义或单一病因。
+#             2.严禁进行‘因为 A 导致 B，所以推测 C’的推理。
+#             3.当讨论涉及复杂因果链时，请表现出困惑，或坚持回归到基本定义的确认上。”
+#         """,
+#         'line_based': """
+#             你具备‘单一链条推理’能力。你倾向于锁定一个最明显的因果路径（$A \rightarrow B \rightarrow C$）并一条路走到黑。
+#             行为准则：
+#             1. 在分析案例时，迅速锁定一个你认为最可能的诊断，并沿着这个诊断寻找支持证据。
+#             2. 你容易产生‘隧道视野’，忽略与你当前逻辑链不符的其他线索。
+#             3. 如果队友提出其他路径，除非当前路径被彻底证伪，否则你会坚持原有的逻辑闭环。
+#         """,
+#         'plane_based': """
+#             你具备‘全局网状推理’和‘多重假设验证’能力。你是 PBL 讨论中的高阶思考者。
+#             行为准则：
+#             1. 你能同时激活多个可能的诊断（差异诊断），并对比它们的权重 。
+#             2. 当面对冲突的检查结果（如：症状支持 A，但化验支持 B）时，你需要尝试通过更深层的生理机制来解释这种矛盾。
+#             3. 你的发言应包含‘虽然...但是...’或‘考虑到...我们需要排除...’这类整合性逻辑 。
+#         """
+#     }
+
+#     def process_cog(dim_key, mapping):
+#         vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
+#         if not vals:
+#             return "无明确偏好"
+#         if isinstance(vals, str):
+#             vals = [vals]
+#         res = []
+#         for v in vals:
+#             k = v.lower().replace(' ', '_').replace('-', '_')
+#             desc = mapping.get(k, v)
+#             if desc:
+#                 res.append(desc if desc else v)
+#             else:
+#                 res.append(v)
+#         return " -> ".join(res) + " (按优先级排序)"
+
+#     kb = persona.get('knowledge_background', {}) or {}
+
+#     return (f"""
+#             请务必用英文输出
+#     - **领域知识深度**：
+#         - 教科书级理解：{', '.join(kb.get('high', []))} \n
+#             表现：能给出标准解释，但可能不敏感于关键细节。\n
+#         - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
+#             表现：能提名词，但机制模糊或泛化。\n
+#         - 仅生活常识：{', '.join(kb.get('low', []))} \n
+#             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
+
+#     - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
+#         - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
+#         - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
+#         - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
+
+#     - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
+#         - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
+#     """)
+
+
+# 控制认知负荷敏感度（初始化 + 简单归一化到 3/6/9）
+def init_cognitive_load(persona: Dict) -> int:
+    """根据病例难度与学生知识背景差值初始化认知负荷，归一化到 3/6/9。"""
+    knowledge_background_score = {
+        "low": 3,
+        "medium": 6,
+        "high": 9,
     }
-    reasoning_entry_map = {
-        "familiarity_driven": '推理起点：从熟悉或常见病例出发,像不像常见情况。例如：看到咳嗽、咳痰，立刻想到“像普通肺炎/上呼吸道感染”，然后开始用这个熟悉模板去解释所有其他症状',
-        "symptom_significance": '推理起点：从“最显眼 / 最让人不舒服 / 最容易被注意到的症状”开始。例如：因为“胸闷”和“眼肿”很显著提到，先围着这两个症状进行推理，即使它们可能只是整体问题的一部分。',
-        "risk_perception": '推理起点：从最危险的可能性开始；典型思路：优先排除严重后果，确保安全。例如：一看到胸闷和浮肿，就优先排查“心衰、肺栓塞、肾衰竭”等高风险诊断，而不管它们出现得是否常见。',
-        "irrelevant_factors": '推理起点：不以疾病实体为中心。例如：一开始关注“这是考试题还是训练案例？”、“老师想我们讨论什么？”、“这个病例是不是设计来考某个知识点？”而不是病人的真实情况。'
+
+    # persona 里既可能是简单等级字符串，也可能是 dict，这里只取一个整体水平
+    kb_raw = persona.get("knowledge_background", "low")
+    if isinstance(kb_raw, dict):
+        # 从 high / medium / low 三档里粗略推一个整体水平
+        if kb_raw.get("high"):
+            kb_level = "high"
+        elif kb_raw.get("medium") or kb_raw.get("mmedium"):
+            kb_level = "medium"
+        else:
+            kb_level = "low"
+    else:
+        kb_level = str(kb_raw).lower()
+
+    story_difficult = getattr(pbl_info, "pbl_story_difficult", 3) or 3
+    kb_score = knowledge_background_score.get(kb_level, 3)
+
+    # 差值越大，初始负荷越高；这里假设 story_difficult 也在 1–9 左右
+    diff = story_difficult - kb_score
+    if diff <= -2:
+        return 3  # 病例明显比能力简单 → 低负荷
+    elif -2 < diff <= 2:
+        return 6  # 难度与能力相当 → 中等负荷
+    else:
+        return 9  # 病例明显更难 → 高负荷
+
+
+def describe_cognitive_load_level(level: int) -> str:
+    """将 3/6/9 映射为自然语言描述。"""
+    if level >= 9:
+        return "high"
+    if level >= 6:
+        return "medium"
+    return "low"
+
+
+async def update_cognitive_load_for_agent(
+    agent_id: str,
+    persona: Dict,
+    messages: List[BaseMessage],
+    prev_level: int,
+) -> int:
+    """在 summarizer_node 中调用：根据最近对话动态调整认知负荷（3/6/9）。"""
+    recent_context = messages[MES_INDEX:]
+
+    level_label = describe_cognitive_load_level(prev_level)
+    sys_prompt = (
+        "You are an expert in cognitive load in medical PBL discussions.\n"
+        f"The current intrinsic cognitive load level of student '{agent_id}' is: {level_label} (mapped from {prev_level} on a 3-6-9 scale).\n"
+        "Please judge how the cognitive load should change based on the *recent discussion* below.\n\n"
+        "Adjustment rules:\n"
+        "1. INCREASE load when:\n"
+        "   - The group discussion has very high information density, many scattered points, or noisy, unstructured debate;\n"
+        "   - Several brand‑new medical concepts, mechanisms, or rare diseases are introduced in a short span.\n"
+        "2. DECREASE load when:\n"
+        "   - The teacher provides clear scaffolding, step‑by‑step guidance, or a structured pathway for reasoning;\n"
+        "   - A peer offers a clear, concise summary that reorganizes previous information and reduces confusion.\n"
+        "3. If signals are mixed or weak, keep the load at the same level.\n\n"
+        "Output requirement:\n"
+        "- First, decide the new level on {low, medium, high}.\n"
+        "- Then map them strictly to {3, 6, 9}.\n"
+        "- Finally, output ONLY ONE integer: 3 or 6 or 9. No explanation.\n"
+        "OUTPUT MUST BE ENTIRELY IN ENGLISH AND CONTAIN ONLY THE DIGIT."
+    )
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", sys_prompt),
+            MessagesPlaceholder(variable_name="messages"),
+        ]
+    ).invoke({"messages": recent_context})
+
+    try:
+        result = await SUM_LLM.ainvoke(prompt)
+        text = result.content.strip()
+        if "9" in text:
+            return 9
+        if "6" in text:
+            return 6
+        if "3" in text:
+            return 3
+    except Exception as e:
+        print(f"ERROR: update_cognitive_load_for_agent failed for {agent_id}: {e}")
+
+    # 如果解析失败，保持原水平
+    return prev_level
+
+# 自我效能感（初始化 + 动态调整）
+def self_efficacy_init(persona: Dict) -> int:
+    """基于人格初始设置自我效能（3/6/9）。"""
+    self_efficacy_init_score = {
+        "high_agreeableness_low_neuroticism": 9,
+        "high_conscientiousness_high_openness": 6,
+        "high_neuroticism": 3,
     }
-    causal_structure_map = {
-        "linear_causality": '推理方式：用单一原因解释全部症状；典型表现：结论明确、推理快速，适合典型病例。例如：“他就是因为感染了肺炎，所以才会咳嗽、胸闷、乏力，浮肿应该也是感染引起的。”——所有症状被强行压到一个原因上。',
-        "multi_concurrent": '推理方式：多因素并列罗列，不强调主次；同时考虑多个因素，并把它们整合进一个连贯的疾病机制中进行推理。例如：“他可能有慢性心功能不全或肾功能问题作为背景，感染诱发了病情加重，因此既有咳嗽胸闷（感染与心肺负担），也有浮肿（心肾因素）。”',
-        "undefined": '推理方式：没有形成一个良好的思维方式。例如：一会儿觉得是感染，一会儿觉得是心脏，一会儿又觉得是肾脏，没有一个持续维持的解释框架。'
-    }
+    personality = persona.get("personality", "high_conscientiousness_high_openness")
+    return self_efficacy_init_score.get(personality, 6)
 
-    learning_adaptivity = {
-        "low": "即使被提示也坚持原观点",
-        "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
-        "high": "能根据新线索快速修正",
-    }
 
-    def process_cog(dim_key, mapping):
-        vals = persona.get('cognitive_orientation', {}).get(dim_key, [])
-        if not vals:
-            return "无明确偏好"
-        if isinstance(vals, str):
-            vals = [vals]
-        res = []
-        for v in vals:
-            k = v.lower().replace(' ', '_').replace('-', '_')
-            desc = mapping.get(k, v)
-            if desc:
-                res.append(desc if desc else v)
-            else:
-                res.append(v)
-        return " -> ".join(res) + " (按优先级排序)"
+def describe_self_efficacy_level(level: int) -> str:
+    if level >= 9:
+        return "high"
+    if level >= 6:
+        return "medium"
+    return "low"
 
-    kb = persona.get('knowledge_background', {}) or {}
 
-    return (f"""
-            请务必用英文输出
-    - **领域知识深度**：
-        - 教科书级理解：{', '.join(kb.get('high', []))} \n
-            表现：能给出标准解释，但可能不敏感于关键细节。\n
-        - 知道术语但理解松散：{', '.join(kb.get('medium', kb.get('mmedium', [])))} \n
-            表现：能提名词，但机制模糊或泛化。\n
-        - 仅生活常识：{', '.join(kb.get('low', []))} \n
-            表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
+async def update_self_efficacy_for_agent(
+    agent_id: str,
+    messages: List[BaseMessage],
+    prev_level: int,
+) -> int:
+    """根据上下文动态调整自我效能（3/6/9）。
 
-    - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：\n
-        - 注意力锚点：该学生agent习惯重点关注患者/案例的以下方面：{process_cog('attentional_anchor', attentional_anchor_map)}。 \n
-        - 推理起点类型：该学生agent习惯从以下几个角度进行思考：{process_cog('reasoning_entry', reasoning_entry_map)}。\n
-        - 逻辑推理方式：该学生agent通常采用以下几种思考方式：{process_cog('causal_structure', causal_structure_map)}。\n
+    (+) 当自己的观点被老师点评为 favorite question 或被同伴明确采纳时上升；
+    (-) 当连续几轮听不懂同伴的深度推理，或观点被直接反驳时下降。
+    """
+    recent_context = messages[MES_INDEX:]
 
-    - **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
-        - 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), "中等稳定")}
-    """)
+    prev_label = describe_self_efficacy_level(prev_level)
+    sys_prompt = (
+        "You are an expert on students' self-efficacy in medical PBL.\n"
+        f"The current self-efficacy level of student '{agent_id}' is: {prev_label} (mapped from {prev_level} on a 3-6-9 scale).\n"
+        "Please decide how the self-efficacy of THIS student should change based ONLY on the recent dialogue below.\n\n"
+        "Increase self-efficacy when:\n"
+        "- The teacher explicitly praises this student's question or comment (e.g., favorite question, excellent point);\n"
+        "- Peers clearly adopt or build directly on this student's previous idea.\n"
+        "Decrease self-efficacy when:\n"
+        "- This student repeatedly expresses that they do not understand peers' deep reasoning for several turns;\n"
+        "- This student's viewpoints are directly and strongly rejected by teacher or multiple peers.\n"
+        "If positive and negative signals are weak or balanced, keep the same level.\n\n"
+        "Output rule:\n"
+        "- Decide the new level in {low, medium, high};\n"
+        "- Map strictly to {3, 6, 9};\n"
+        "- Output ONLY ONE integer: 3 or 6 or 9, with NO explanation.\n"
+        "OUTPUT MUST CONTAIN ONLY THE DIGIT."
+    )
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", sys_prompt),
+            MessagesPlaceholder(variable_name="messages"),
+        ]
+    ).invoke({"messages": recent_context})
+
+    try:
+        result = await SUM_LLM.ainvoke(prompt)
+        text = result.content.strip()
+        if "9" in text:
+            return 9
+        if "6" in text:
+            return 6
+        if "3" in text:
+            return 3
+    except Exception as e:
+        print(f"ERROR: update_self_efficacy_for_agent failed for {agent_id}: {e}")
+
+    return prev_level
 
 
 # --------- 通用学生 Prompt ---------
@@ -506,7 +527,47 @@ def _student_node_fn(agent_id: str):
                 f"ERROR: Persona for {agent_id} not found in student_personas.")
             return {"messages": [AIMessage(content="[System Error] Persona not found.", name=agent_id)], "next_speaker": "router", "total_messages": 1, "stage_round": 1}
 
-        persona_str = format_persona_to_string(persona_dict)
+        # 读取 / 初始化当前学生的认知负荷（3/6/9）
+        cognitive_load_state: Dict[str, int] = state.get("cognitive_load", {}) or {}
+        load_level = cognitive_load_state.get(agent_id)
+        if load_level is None:
+            load_level = init_cognitive_load(persona_dict)
+
+        # 根据认知负荷决定推理“降级”程度
+        load_label = describe_cognitive_load_level(load_level)
+        if load_level >= 9:
+            degradation_instruction = (
+                "Due to extremely high cognitive load, you must temporarily turn off complex mechanism association. "
+                "Your response should mainly repeat or slightly rephrase the main complaint or key clinical facts, "
+                "and you are allowed to fall into short hesitant silence. Avoid proposing new causal chains or "
+                "integrated differential diagnoses."
+            )
+            interaction_bias = (
+                "When interacting with peers, prefer 'reiteration' or brief 'silence' instead of rich debate."
+            )
+        elif load_level >= 6:
+            degradation_instruction = (
+                "Because your cognitive load is moderately high, please simplify your reasoning. "
+                "You may still provide basic explanations, but avoid exploring multiple mechanisms in parallel "
+                "and keep your speech short and focused."
+            )
+            interaction_bias = (
+                "When interacting with peers, reduce correction/challenge behavior and prefer short accumulation or simple clarification."
+            )
+        else:
+            degradation_instruction = (
+                "Your cognitive load is low, you can freely perform mechanism association and multi‑step reasoning."
+            )
+            interaction_bias = (
+                "You may flexibly use seeking‑help/alignment, correction/challenge, or accumulation behaviors."
+            )
+
+        persona_str = format_persona_to_string(persona_dict) + f"""
+
+            - **Current cognitive load level (3-6-9 scale)**: {load_level} ({load_label}).
+            - **Cognitive load impact on reasoning**: {degradation_instruction}
+            - **Cognitive load impact on interaction behavior**: {interaction_bias}
+            """
 
         # 获取针对该学生的历史摘要（如果 summarizer 已执行过）
         summary_dict: Dict[str, str] = state.get("summary", {})
@@ -598,10 +659,17 @@ async def summarizer_node(state: Dict) -> Dict:
     messages: List[BaseMessage] = state["messages"]
     previous_summary: Dict[str, str] = state.get("summary", {})
 
+    # 读取已有的认知负荷状态（每个学生一个 3/6/9）
+    previous_cognitive_load: Dict[str, int] = state.get("cognitive_load", {}) or {}
+    # 读取已有的自我效能状态（每个学生一个 3/6/9）
+    previous_self_efficacy: Dict[str, int] = state.get("self_efficacy", {}) or {}
+
     summary_sections: Dict[str, str] = {}
+    updated_cognitive_load: Dict[str, int] = {}
+    updated_self_efficacy: Dict[str, int] = {}
 
     for agent_id, persona in student_personas.items():
-        mem_template = memory_format(persona)
+        mem_template = format_persona_to_string(persona)
         sys_prompt = (
             "You are a student Agent in a medical PBL discussion. Your task is to filter, organize, and structure the provided historical dialogue based on your thinking patterns, forming internal memory for subsequent use. The organized memory should ensure your subsequent statements conform to your cognitive characteristics and learning models.\n\n"
             f"[Thinking Processing Pattern]\n{mem_template}\n\n"
@@ -611,21 +679,67 @@ async def summarizer_node(state: Dict) -> Dict:
             "3. Form internal memory: Output concise key points as the foundation for subsequent discussion references, ensuring memory covers knowledge depth, reasoning habits, and learning adjustments.\n\n"
             "[Output Format] Provide the organized key points directly without extra explanation. OUTPUT MUST BE ENTIRELY IN ENGLISH."
         )
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", sys_prompt),
-            MessagesPlaceholder(variable_name="messages"),
-        ]).invoke({"messages": messages})
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", sys_prompt),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        ).invoke({"messages": messages})
         try:
             result = await SUM_LLM.ainvoke(prompt)
             summary_sections[agent_id] = result.content.strip()
         except Exception as e:
             print(f"ERROR: summarizer_node summarizing for {agent_id}: {e}")
-            continue
+            # 即使记忆生成失败，也继续尝试更新认知负荷
 
-    # 合并到全局 summary 字典
+        # -------- 认知负荷敏感度动态更新（每次 summarizer_node 触发一次） --------
+        prev_level = previous_cognitive_load.get(agent_id)
+        if prev_level is None:
+            prev_level = init_cognitive_load(persona)
+
+        try:
+            new_level = await update_cognitive_load_for_agent(
+                agent_id=agent_id,
+                persona=persona,
+                messages=messages,
+                prev_level=prev_level,
+            )
+        except Exception as e:
+            print(f"ERROR: summarizer_node updating cognitive load for {agent_id}: {e}")
+            new_level = prev_level
+
+        updated_cognitive_load[agent_id] = new_level
+
+        # -------- 自我效能动态更新（每次 summarizer_node 触发一次） --------
+        prev_se = previous_self_efficacy.get(agent_id)
+        if prev_se is None:
+            prev_se = self_efficacy_init(persona)
+
+        try:
+            new_se = await update_self_efficacy_for_agent(
+                agent_id=agent_id,
+                messages=messages,
+                prev_level=prev_se,
+            )
+        except Exception as e:
+            print(f"ERROR: summarizer_node updating self efficacy for {agent_id}: {e}")
+            new_se = prev_se
+
+        updated_self_efficacy[agent_id] = new_se
+
+    # 合并到全局 summary 和 cognitive_load 字典
     previous_summary.update(summary_sections)
+    previous_cognitive_load.update(updated_cognitive_load)
+    previous_self_efficacy.update(updated_self_efficacy)
     print(f"previous_summary: {previous_summary}")
-    return {"summary": previous_summary, "next_speaker": "router", "total_messages": 1}
+    print(f"cognitive_load_state: {previous_cognitive_load}")
+    return {
+        "summary": previous_summary,
+        "cognitive_load": previous_cognitive_load,
+        "self_efficacy": previous_self_efficacy,
+        "next_speaker": "router",
+        "total_messages": 1,
+    }
 
 # --------- 主题管理节点 ---------
 
@@ -697,6 +811,18 @@ async def router_node(state: Dict) -> Dict:
         print("Router: No student agents registered, ending discussion.")
         return {"next_speaker": "END"}
 
+    # 读取自我效能，用于调节被点名的频率
+    self_efficacy_state: Dict[str, int] = state.get("self_efficacy", {}) or {}
+    se_descriptions = []
+    for aid in agent_ids:
+        persona = student_personas.get(aid, {})
+        se_level = self_efficacy_state.get(aid)
+        if se_level is None:
+            se_level = self_efficacy_init(persona)
+        se_label = describe_self_efficacy_level(se_level)
+        se_descriptions.append(f"{aid}: {se_label} ({se_level})")
+    se_summary_str = "; ".join(se_descriptions)
+
     # 识别最后发言者（用于避免连续发言）
     last_speaker = "None"
     if messages and isinstance(messages[-1], AIMessage) and messages[-1].name:
@@ -747,10 +873,12 @@ async def router_node(state: Dict) -> Dict:
         f"**Available options**: {options_str}, END (indicating discussion has naturally ended)\n"
         f"**Previous speaker**: {last_speaker}. Next speaker cannot be the same person.\n"
         f"**Current stage discussion task**: {phase_prompt}\n\n"
+        f"**Students' current self-efficacy levels (3-6-9)**: {se_summary_str}\n\n"
         f"{decision_principle}"
 
         f"[When selecting the next student]\n"
         f"- Prioritize students who have not fully spoken or have different cognitive styles from the previous speaker;\n"
+        f"- Use self-efficacy as a weighting factor: students with higher self-efficacy can be selected slightly more frequently; very low self-efficacy students should be selected less often unless their participation is clearly needed to achieve learning goals.\n"
         f"- Avoid simple rotation;\n"
         f"- Goal is to drive information increment, not extend the dialogue.\n\n"
 

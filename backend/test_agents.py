@@ -52,7 +52,7 @@ class TestAgentNodes(unittest.TestCase):
         mock_llm_result.generations = [mock_generation]
 
         # 3. 使用 patch 来替换真实的 LLM 调用
-        with patch('PBL2.backend.agents.STUDENT_LLM') as mock_llm:
+        with patch('backend.agents.STUDENT_LLM') as mock_llm:
             # 配置 mock LLM 的异步方法 agenerate 的返回值
             future = asyncio.Future()
             future.set_result(mock_llm_result)
