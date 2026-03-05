@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Dict, List, Callable
 import time
 import asyncio
+import json
 
 from . import pbl_info
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
@@ -35,6 +36,172 @@ def _build_llm(temperature: float = 0.7) -> ChatOpenAI:
 STUDENT_LLM = _build_llm(temperature=0.8)
 HOST_LLM = _build_llm(temperature=0.3)
 SUM_LLM = _build_llm(temperature=0.2)
+
+
+PERSONA_PATTERN_LIBRARY = {
+    "learning_mechanisms": {
+        "deep_high": "深度学习倾向是PBL中‘个人学习效能感’（概念澄清与新知记忆）的最强预测因子。",
+        "surface_high": "高表层学习倾向通常意味着对非结构化PBL效率评价较低，更偏好标准答案与任务完成。",
+        "strategic_high": "高策略型倾向会驱动以绩效为导向的参与方式，依据目标/评价标准进行选择性投入。"
+    },
+    "personality_mechanisms": {
+        "neuroticism_high": "高神经质会因社交压力与犯错担忧显著抑制案例讨论中的发言意愿。",
+        "neuroticism_low": "低神经质有助于在不确定讨论中保持社交舒适感、互动愉悦度和持续参与。",
+        "co_openness_high": "高尽责性与高开放性会增强对PBL有效性的认可，并支持更深入、持续的投入。"
+    },
+    "archetypes": {
+        "anxious_high_achiever": "高Deep + 高Neuroticism：‘焦虑的高成就者’，认知上认可PBL价值，但因社交焦虑而发言犹豫。",
+        "social_but_shallow": "高Surface + 低Neuroticism：‘社交活跃但浅层贡献者’，愿意说话但贡献深度不足。",
+        "ideal_beneficiary": "高Deep + 低Neuroticism：PBL理想受益者，兼具学习获益与讨论贡献意愿。",
+        "hybrid": "混合型画像：学习效能与讨论贡献意愿存在拉扯，需要体现情境依赖与内在冲突。"
+    }
+}
+
+def _extract_numeric_trait_scores(persona: Dict) -> Dict[str, Dict[str, int]]:
+    learning_raw = persona.get("learning_styles", {})
+    personality_raw = persona.get("personality", {})
+
+    def _score(raw: Dict, key: str, default: int = 2) -> int:
+        value = raw.get(key, default)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    learning = {
+        "surface": _score(learning_raw, "surface"),
+        "deep": _score(learning_raw, "deep"),
+        "strategic": _score(learning_raw, "strategic"),
+    }
+    personality = {
+        "openness": _score(personality_raw, "openness"),
+        "conscientiousness": _score(personality_raw, "conscientiousness"),
+        "extraversion": _score(personality_raw, "extraversion"),
+        "agreeableness": _score(personality_raw, "agreeableness"),
+        "neuroticism": _score(personality_raw, "neuroticism"),
+    }
+    return {"learning": learning, "personality": personality}
+
+
+def _build_active_pattern_context(scores: Dict[str, Dict[str, int]]) -> Dict[str, List[str]]:
+    ls = scores["learning"]
+    p = scores["personality"]
+
+    learning_patterns: List[str] = []
+    personality_patterns: List[str] = []
+    archetypes: List[str] = []
+
+    if ls["deep"] >= 3:
+        learning_patterns.append(PERSONA_PATTERN_LIBRARY["learning_mechanisms"]["deep_high"])
+    if ls["surface"] >= 3:
+        learning_patterns.append(PERSONA_PATTERN_LIBRARY["learning_mechanisms"]["surface_high"])
+    if ls["strategic"] >= 3:
+        learning_patterns.append(PERSONA_PATTERN_LIBRARY["learning_mechanisms"]["strategic_high"])
+
+    if p["neuroticism"] >= 3:
+        personality_patterns.append(PERSONA_PATTERN_LIBRARY["personality_mechanisms"]["neuroticism_high"])
+    if p["neuroticism"] <= 1:
+        personality_patterns.append(PERSONA_PATTERN_LIBRARY["personality_mechanisms"]["neuroticism_low"])
+    if p["conscientiousness"] >= 3 or p["openness"] >= 3:
+        personality_patterns.append(PERSONA_PATTERN_LIBRARY["personality_mechanisms"]["co_openness_high"])
+
+    if ls["deep"] >= 3 and p["neuroticism"] >= 3:
+        archetypes.append(PERSONA_PATTERN_LIBRARY["archetypes"]["anxious_high_achiever"])
+    if ls["surface"] >= 3 and p["neuroticism"] <= 1:
+        archetypes.append(PERSONA_PATTERN_LIBRARY["archetypes"]["social_but_shallow"])
+    if ls["deep"] >= 3 and p["neuroticism"] <= 1:
+        archetypes.append(PERSONA_PATTERN_LIBRARY["archetypes"]["ideal_beneficiary"])
+    if not archetypes:
+        archetypes.append(PERSONA_PATTERN_LIBRARY["archetypes"]["hybrid"])
+
+    if not learning_patterns:
+        learning_patterns = [
+            "当前没有单一极端学习机制主导；应按Deep/Surface/Strategic的加权组合进行描述。"
+        ]
+    if not personality_patterns:
+        personality_patterns = [
+            "当前没有单一极端人格机制主导；应描述中等强度的社交-情绪画像。"
+        ]
+
+    return {
+        "learning_patterns": learning_patterns,
+        "personality_patterns": personality_patterns,
+        "archetypes": archetypes,
+    }
+
+
+async def generate_learning_personality_sections(persona: Dict) -> Dict[str, str]:
+    """Generate separated learning-style and personality prompt sections from numeric traits."""
+    scores = _extract_numeric_trait_scores(persona)
+    ls = scores["learning"]
+    p = scores["personality"]
+    active_patterns = _build_active_pattern_context(scores)
+
+    system_prompt = (
+        "你是医学PBL学生智能体的人格画像合成引擎。"
+        "你必须结合以下理论框架生成："
+        "（1）PBL特质：病例驱动、问题非结构化、协作讨论、假设-证据迭代、反思修正；"
+        "（2）Biggs学习风格：Deep/Surface/Strategic对应不同学习动机与策略；"
+        "（3）大五人格：尤其Neuroticism影响发言压力与讨论贡献意愿，Conscientiousness与Openness影响投入质量与PBL价值认可。"
+        "请将‘模式字典’与‘当前激活模式’作为硬约束进行生成，"
+        "输出内容必须映射到激活模式，并体现‘学习效能（learning efficacy）’与‘讨论贡献意愿（contribution willingness）’两个维度，"
+        "不得写成泛泛的人格描述或空泛鸡汤。"
+        "请严格只返回JSON，键名必须是 learning_style_prompt、personality_prompt、integrated_prompt。"
+        "所有值都用中文字符串，不要使用Markdown。"
+    )
+
+    user_prompt = (
+        "特质量表：1=低，2=中，3=高。\n"
+        f"学习风格：surface={ls['surface']}, deep={ls['deep']}, strategic={ls['strategic']}。\n"
+        f"人格特质：openness={p['openness']}, conscientiousness={p['conscientiousness']}, extraversion={p['extraversion']}, "
+        f"agreeableness={p['agreeableness']}, neuroticism={p['neuroticism']}。\n"
+        f"模式字典（参考）：{json.dumps(PERSONA_PATTERN_LIBRARY, ensure_ascii=False)}\n"
+        f"该学生激活的学习模式：{json.dumps(active_patterns['learning_patterns'], ensure_ascii=False)}\n"
+        f"该学生激活的人格模式：{json.dumps(active_patterns['personality_patterns'], ensure_ascii=False)}\n"
+        f"该学生激活的原型映射：{json.dumps(active_patterns['archetypes'], ensure_ascii=False)}\n"
+        "生成要求（必须遵循上述激活模式）：\n"
+        "1) learning_style_prompt（60-140字）：基于Biggs理论描述该学生的学习动机与策略（Deep/Surface/Strategic），"
+        "并明确在PBL中会如何表现（是否主动追问机制、是否偏向标准答案、是否按绩效选择性参与）。\n"
+        "2) personality_prompt（80-170字）：基于大五描述社交与情绪机制，重点解释Neuroticism如何改变发言阈值与贡献意愿，"
+        "并补充Conscientiousness与Openness如何增强或削弱对PBL价值的主观判断。\n"
+        "3) integrated_prompt（130-230字）：在PBL‘不确定+协作+持续修正’情境下，整合学习风格与人格机制，"
+        "写出内在冲突、可观察行为、发言策略与转变条件；需映射到一个或多个原型（焦虑高成就者/社交活跃但浅层贡献者/理想受益者/混合型）。\n"
+        "写作风格要求：角色指令风格，强调可执行行为，不要写成文献综述。\n"
+        "只输出JSON。"
+    )
+# 沉默
+# 高神经质 (High Neuroticism)： 社交压力大，怕丢脸。
+# 高策略型 (High Strategic)： 认为协作效率低，只在乎个人得分。
+# 低深层学习 (Low Deep)： 对知识背后的逻辑不感兴趣，无法产出深刻见解。
+# 低宜人性 (Low Agreeableness)： 缺乏合作精神，对支持他人没兴趣。
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            ("human", "{user_prompt_text}"),
+        ]
+    ).invoke({"user_prompt_text": user_prompt})
+    result = await SUM_LLM.ainvoke(prompt)
+    content = (result.content or "").strip()
+    parsed = json.loads(content)
+
+    learning_style_prompt = str(parsed.get("learning_style_prompt", "")).strip()
+    personality_prompt = str(parsed.get("personality_prompt", "")).strip()
+    integrated_prompt = str(parsed.get("integrated_prompt", "")).strip()
+
+    if not learning_style_prompt or not personality_prompt:
+        raise ValueError("LLM did not return valid learning_style_prompt/personality_prompt")
+
+    return {
+        "learning_style_prompt": learning_style_prompt,
+        "personality_prompt": personality_prompt,
+        "learning_personality_prompt": integrated_prompt,
+    }
+
+
+async def generate_learning_personality_prompt(persona: Dict) -> str:
+    """Generate a natural-language role prompt from numeric learning-style + personality traits."""
+    sections = await generate_learning_personality_sections(persona)
+    return sections.get("learning_personality_prompt", "")
 
 
 async def simplify_message(content: str, language: str = "zh") -> str:
@@ -73,6 +240,7 @@ async def simplify_message(content: str, language: str = "zh") -> str:
 # 全局存储，由 API 动态更新
 student_personas: Dict[str, Dict] = {}
 student_nodes: Dict[str, Callable] = {}
+
 
 def format_persona_to_string(persona: Dict) -> str:
     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
@@ -145,9 +313,24 @@ def format_persona_to_string(persona: Dict) -> str:
         return " -> ".join(res) + " (按优先级排序)"
 
     kb = persona.get('knowledge_background', {}) or {}
+    structural_level = str(kb.get('structural_level', 'medium')).lower()
+    structural_knowledge_map = {
+        'low': '结构性知识较弱：你倾向于陈述孤立事实，较难建立知识点之间的因果或机制联系。发言应更偏向单点事实，不要主动构建复杂关联。',
+        'medium': '结构性知识中等：你可以建立部分知识点关联，但链条可能不完整。发言可进行有限关联推理，但需保持谨慎并承认不确定性。',
+        'high': '结构性知识较强：你能够较稳定地建立多知识点之间的正确关联。发言应体现机制联系、证据整合与差异诊断权衡。',
+    }
+    structural_knowledge_desc = structural_knowledge_map.get(
+        structural_level,
+        structural_knowledge_map['medium']
+    )
 
-    social = persona.get('social_interaction_style', {}) or {}
+    learning_style_desc = str(persona.get('learning_style_prompt', '') or '').strip()
+    personality_desc = str(persona.get('personality_prompt', '') or '').strip()
 
+    if not learning_style_desc:
+        raise ValueError("Missing learning_style_prompt. Please click Save to generate prompts via LLM.")
+    if not personality_desc:
+        raise ValueError("Missing personality_prompt. Please click Save to generate prompts via LLM.")
 
     return (f"""
     请务必用英文输出
@@ -162,12 +345,14 @@ def format_persona_to_string(persona: Dict) -> str:
             表现：能提名词，但机制模糊或泛化。\n
         - 仅生活常识：{', '.join(kb.get('low', []))} \n
             表现：只用日常经验或现象解释（如“吃多了对身体不好”）。\n
+        - 结构性知识水平：{structural_level} \n
+            表现与发言约束：{structural_knowledge_desc}\n
 
     - **学习风格**：
-        - {learning_styles_map.get(persona.get('learning_styles', 'strategic_learner'), "无明确偏好")}
+        - {learning_style_desc}
 
     - **人格因素（作用：不同的人格特质显著影响学生在 PBL 中的表现与感受 。）**：
-        - {personality_map.get(persona.get('personality', 'high_agreeableness_low_neuroticism'), "无明确偏好")}
+        - {personality_desc}
 
     - **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：
         - {cognitive_map.get(persona.get('cognitive_orientation', 'point_based'), "无明确偏好")}
@@ -178,7 +363,7 @@ def format_persona_to_string(persona: Dict) -> str:
     - **学生可进行的互动行为** (作用： 根据学生特征，选择其中一种进行学生与学生、学生与老师之间的互动行为)
         - {interaction_behavior}
     """
-            )
+    )
 
 
 # def memory_format(persona: Dict) -> str:
@@ -280,10 +465,23 @@ def init_cognitive_load(persona: Dict) -> int:
         kb_level = str(kb_raw).lower()
 
     story_difficult = getattr(pbl_info, "pbl_story_difficult", 3) or 3
+
+    structural_penalty_map = {
+        "low": 2,
+        "medium": 1,
+        "high": 0,
+    }
+    structural_level = "medium"
+    if isinstance(kb_raw, dict):
+        structural_level = str(kb_raw.get(
+            "structural_level", "medium")).lower()
+    structural_penalty = structural_penalty_map.get(structural_level, 1)
+
+    effective_difficulty = story_difficult + structural_penalty
     kb_score = knowledge_background_score.get(kb_level, 3)
 
     # 差值越大，初始负荷越高；这里假设 story_difficult 也在 1–9 左右
-    diff = story_difficult - kb_score
+    diff = effective_difficulty - kb_score
     if diff <= -2:
         return 3  # 病例明显比能力简单 → 低负荷
     elif -2 < diff <= 2:
@@ -347,12 +545,15 @@ async def update_cognitive_load_for_agent(
         if "3" in text:
             return 3
     except Exception as e:
-        print(f"ERROR: update_cognitive_load_for_agent failed for {agent_id}: {e}")
+        print(
+            f"ERROR: update_cognitive_load_for_agent failed for {agent_id}: {e}")
 
     # 如果解析失败，保持原水平
     return prev_level
 
 # 自我效能感（初始化 + 动态调整）
+
+
 def self_efficacy_init(persona: Dict) -> int:
     """基于人格初始设置自我效能（3/6/9）。"""
     self_efficacy_init_score = {
@@ -360,7 +561,24 @@ def self_efficacy_init(persona: Dict) -> int:
         "high_conscientiousness_high_openness": 6,
         "high_neuroticism": 3,
     }
-    personality = persona.get("personality", "high_conscientiousness_high_openness")
+    personality = persona.get(
+        "personality", 6)  # 默认中等水平
+
+    if isinstance(personality, dict):
+        try:
+            conscientiousness = int(personality.get("conscientiousness", 2))
+        except (TypeError, ValueError):
+            conscientiousness = 2
+        try:
+            neuroticism = int(personality.get("neuroticism", 2))
+        except (TypeError, ValueError):
+            neuroticism = 2
+        if conscientiousness >= 3 and neuroticism <= 1:
+            return 9
+        if neuroticism >= 3:
+            return 3
+        return 6
+
     return self_efficacy_init_score.get(personality, 6)
 
 
@@ -420,7 +638,8 @@ async def update_self_efficacy_for_agent(
         if "3" in text:
             return 3
     except Exception as e:
-        print(f"ERROR: update_self_efficacy_for_agent failed for {agent_id}: {e}")
+        print(
+            f"ERROR: update_self_efficacy_for_agent failed for {agent_id}: {e}")
 
     return prev_level
 
@@ -493,7 +712,7 @@ STUDENT_PROMPT = ChatPromptTemplate.from_messages(
     ]
 )
 
-# --------- 创建和注册学生的工厂 ---------
+# --------- 创建和注册学生 ---------
 
 
 def _student_node_fn(agent_id: str):
@@ -508,7 +727,8 @@ def _student_node_fn(agent_id: str):
             return {"messages": [AIMessage(content="[System Error] Persona not found.", name=agent_id)], "next_speaker": "router", "total_messages": 1, "stage_round": 1}
 
         # 读取 / 初始化当前学生的认知负荷（3/6/9）
-        cognitive_load_state: Dict[str, int] = state.get("cognitive_load", {}) or {}
+        cognitive_load_state: Dict[str, int] = state.get(
+            "cognitive_load", {}) or {}
         load_level = cognitive_load_state.get(agent_id)
         if load_level is None:
             load_level = init_cognitive_load(persona_dict)
@@ -640,9 +860,11 @@ async def summarizer_node(state: Dict) -> Dict:
     previous_summary: Dict[str, str] = state.get("summary", {})
 
     # 读取已有的认知负荷状态（每个学生一个 3/6/9）
-    previous_cognitive_load: Dict[str, int] = state.get("cognitive_load", {}) or {}
+    previous_cognitive_load: Dict[str, int] = state.get(
+        "cognitive_load", {}) or {}
     # 读取已有的自我效能状态（每个学生一个 3/6/9）
-    previous_self_efficacy: Dict[str, int] = state.get("self_efficacy", {}) or {}
+    previous_self_efficacy: Dict[str, int] = state.get(
+        "self_efficacy", {}) or {}
 
     summary_sections: Dict[str, str] = {}
     updated_cognitive_load: Dict[str, int] = {}
@@ -685,7 +907,8 @@ async def summarizer_node(state: Dict) -> Dict:
                 prev_level=prev_level,
             )
         except Exception as e:
-            print(f"ERROR: summarizer_node updating cognitive load for {agent_id}: {e}")
+            print(
+                f"ERROR: summarizer_node updating cognitive load for {agent_id}: {e}")
             new_level = prev_level
 
         updated_cognitive_load[agent_id] = new_level
@@ -702,7 +925,8 @@ async def summarizer_node(state: Dict) -> Dict:
                 prev_level=prev_se,
             )
         except Exception as e:
-            print(f"ERROR: summarizer_node updating self efficacy for {agent_id}: {e}")
+            print(
+                f"ERROR: summarizer_node updating self efficacy for {agent_id}: {e}")
             new_se = prev_se
 
         updated_self_efficacy[agent_id] = new_se

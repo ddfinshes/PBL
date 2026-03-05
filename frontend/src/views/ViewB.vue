@@ -19,7 +19,6 @@
             <AgentCard 
               ref="cardRefs"
               v-model="agents[index]"
-              :cognitive-options="cognitiveOptions"
               :interaction-roles="interactionRoles"
               :card-color="agents[index].cardColor"
               @delete="deleteAgent(index)"
@@ -39,8 +38,15 @@
 
       <!-- Global Save Action -->
       <div class="global-actions">
-        <el-button type="primary" size="small" @click="syncPersona" class="save-button">
-          Save
+        <el-button
+          type="primary"
+          size="small"
+          :loading="isGeneratingPersonaPrompt"
+          :disabled="isGeneratingPersonaPrompt"
+          @click="syncPersona"
+          class="save-button"
+        >
+          {{ isGeneratingPersonaPrompt ? 'Cloning Agents...' : 'Save' }}
         </el-button>
       </div>
     </div>
@@ -69,12 +75,7 @@ const props = defineProps({
 // Refs for individual cards to handle global events like "cancelling edit"
 const cardRefs = ref([]);
 const activeIndex = ref(0);
-
-const cognitiveOptions = {
-  0: ['symptoms', 'present_illness', 'past_medical_history', 'physicochemical_parameters'],
-  1: ['familiarity_driven', 'symptom_significance', 'risk_perception', 'irrelevant_factors'],
-  2: ['linear_causality', 'multi_concurrent', 'undefined']
-};
+const isGeneratingPersonaPrompt = ref(false);
 
 const interactionRoles = [
   { name: 'Leader', value: 'leader', icon: 'leader.png' },
@@ -101,18 +102,34 @@ const createDefaultAgent = (index = 0) => ({
     novice: [],    // Medium
     layman: []     // Bad
   },
-  cognitive: {
-    0: [],
-    1: [],
-    2: []
+  structuralKnowledge: 'medium',
+  learning_styles: {
+    surface: 2,
+    deep: 2,
+    strategic: 2
   },
+  personality: {
+    openness: 2,
+    conscientiousness: 2,
+    extraversion: 2,
+    agreeableness: 2,
+    neuroticism: 2
+  },
+  cognitiveOrientation: 'line_based',
   social: {
     confidence: 'medium',
     register: 'medium',
     participation: 'medium',
     role: 'leader'
   },
-  plasticity: 'medium'
+  plasticity: 'medium',
+  biasErrors: [],
+  biasErrorOptions: [
+    'Anchoring Bias',
+    'Availability Bias',
+    'Confirmation Bias',
+    'Premature Closure'
+  ]
 });
 
 const agents = ref([createDefaultAgent(0)]);
@@ -294,6 +311,7 @@ const handleGlobalMouseDown = (e) => {
 };
 
 const syncPersona = async () => {
+  isGeneratingPersonaPrompt.value = true;
   try {
     const formatPersonaForBackend = (agent) => {
       // 映射级别为数值或原始字符串，取决于后端需求
@@ -301,7 +319,7 @@ const syncPersona = async () => {
       const levelMap = { low: 3, medium: 6, high: 9 };
       
       return {
-        reasoning_path: Array.isArray(agent.cognitive[2]) ? agent.cognitive[2].join(', ') : (agent.cognitive[2] || 'Linear Causality'),
+        reasoning_path: agent.cognitiveOrientation || 'line_based',
         knowledge_integration: agent.plasticity === 'high' ? '系统化' : '碎片化',
         core_biases: [],
         sensitivity: levelMap[agent.social.confidence] || 5,
@@ -320,27 +338,33 @@ const syncPersona = async () => {
         age: agent.age,
         major: agent.major,
         avatar: agent.avatar || 'avatar1.png',
-        color: agent.cardColor,     // 兼容字段 1
-        cardColor: agent.cardColor, // 兼容字段 2
+        color: agent.cardColor,     
+        cardColor: agent.cardColor, 
+        learning_styles: {
+          surface: Number(agent.learning_styles?.surface) || 2,
+          deep: Number(agent.learning_styles?.deep) || 2,
+          strategic: Number(agent.learning_styles?.strategic) || 2
+        },
+        personality: {
+          openness: Number(agent.personality?.openness) || 2,
+          conscientiousness: Number(agent.personality?.conscientiousness) || 2,
+          extraversion: Number(agent.personality?.extraversion) || 2,
+          agreeableness: Number(agent.personality?.agreeableness) || 2,
+          neuroticism: Number(agent.personality?.neuroticism) || 2
+        },
         knowledge_background: {
            high: agent.classifiedKnowledge.competent,
            medium: agent.classifiedKnowledge.novice,
-           low: agent.classifiedKnowledge.layman
+            low: agent.classifiedKnowledge.layman,
+            structural_level: agent.structuralKnowledge || 'medium'
         },
-        cognitive_orientation: {
-           attentional_anchor: agent.cognitive[0],
-           reasoning_entry: agent.cognitive[1],
-           causal_structure: agent.cognitive[2]
-        },
-        social_interaction_style: {
-           verbal_confidence: agent.social.confidence,
-           language_register: agent.social.register,
-            interaction_role: agent.social.role,
-            participation: agent.social.participation
-        },
-        learning_adaptivity: agent.plasticity
+        cognitive_orientation: agent.cognitiveOrientation || 'line_based',
+        learning_adaptivity: agent.plasticity,
+        bias_errors: Array.isArray(agent.biasErrors) ? agent.biasErrors : []
       };
     });
+
+    ElMessage.info('Calling LLM to generate learning-style/personality prompt...');
 
     const response = await axios.post('http://127.0.0.1:8000/update_personas', payload);
     if (response.status === 200) {
@@ -350,6 +374,8 @@ const syncPersona = async () => {
   } catch (error) {
     console.error('Error saving personas:', error);
     ElMessage.error('Failed to save configuration');
+  } finally {
+    isGeneratingPersonaPrompt.value = false;
   }
 };
 </script>

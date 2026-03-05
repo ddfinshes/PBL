@@ -92,31 +92,6 @@
 
     <!-- Main Content Container -->
     <div class="card-content-wrapper">
-      <!-- Quick Profile Selector -->
-      <div class="quick-profile-bar">
-        <button
-          class="quick-pill"
-          :class="{ 'is-active': activeQuickProfile === 'good' }"
-          @click="applyQuickProfile('good')"
-        >
-          Top Student
-        </button>
-        <button
-          class="quick-pill"
-          :class="{ 'is-active': activeQuickProfile === 'medium' }"
-          @click="applyQuickProfile('medium')"
-        >
-          Average Student
-        </button>
-        <button
-          class="quick-pill"
-          :class="{ 'is-active': activeQuickProfile === 'bad' }"
-          @click="applyQuickProfile('bad')"
-        >
-          Struggling Student
-        </button>
-      </div>
-      
       <!-- Knowledge Background Section -->
       <section class="panel-section knowledge-panel">
         <h3 class="panel-title">Knowledge Base</h3>
@@ -235,116 +210,183 @@
             </div>
           </div>
         </div>
+
+        <div class="structural-knowledge-row">
+          <div class="structural-title">Structural Knowledge</div>
+          <div class="structural-options">
+            <div
+              v-for="lv in ['low', 'medium', 'high']"
+              :key="lv"
+              class="structural-option"
+              :class="{ 'is-active': modelValue.structuralKnowledge === lv }"
+              @click="modelValue.structuralKnowledge = lv"
+            >
+              {{ levelTranslations[lv] }}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section traits-panel">
+        <div class="radar-grid">
+          <div class="radar-card">
+            <div class="radar-card-title">Learning Style</div>
+            <svg
+              ref="learningRadarRef"
+              class="radar-svg"
+              viewBox="-20 -20 180 180"
+            >
+              <polygon
+                v-for="ring in [1, 2, 3]"
+                :key="`ls-ring-${ring}`"
+                :points="getRadarRingPoints(learningStyleAxes, ring)"
+                class="radar-ring"
+              />
+              <line
+                v-for="(axis, idx) in learningStyleAxes"
+                :key="`ls-axis-${axis.key}`"
+                :x1="radarCenter"
+                :y1="radarCenter"
+                :x2="getAxisEndpoint(learningStyleAxes.length, idx).x"
+                :y2="getAxisEndpoint(learningStyleAxes.length, idx).y"
+                class="radar-axis"
+              />
+              <polygon :points="getRadarDataPoints(modelValue.learning_styles, learningStyleAxes)" class="radar-data" />
+              <circle
+                v-for="(axis, idx) in learningStyleAxes"
+                :key="`ls-handle-${axis.key}`"
+                :cx="getRadarHandlePoints(modelValue.learning_styles, learningStyleAxes)[idx].x"
+                :cy="getRadarHandlePoints(modelValue.learning_styles, learningStyleAxes)[idx].y"
+                r="4.5"
+                class="radar-handle"
+                @mousedown.prevent="startRadarDrag('learning_styles', idx, $event)"
+              />
+              <text
+                v-for="(axis, idx) in learningStyleAxes"
+                :key="`ls-label-${axis.key}`"
+                :x="getLabelPosition(learningStyleAxes.length, idx).x"
+                :y="getLabelPosition(learningStyleAxes.length, idx).y"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                class="radar-label-text"
+              >
+                {{ axis.label }}
+              </text>
+            </svg>
+          </div>
+
+          <div class="radar-card">
+            <div class="radar-card-title">Personality</div>
+            <svg
+              ref="personalityRadarRef"
+              class="radar-svg"
+              viewBox="-20 -20 180 180"
+            >
+              <polygon
+                v-for="ring in [1, 2, 3]"
+                :key="`bf-ring-${ring}`"
+                :points="getRadarRingPoints(personalityAxes, ring)"
+                class="radar-ring"
+              />
+              <line
+                v-for="(axis, idx) in personalityAxes"
+                :key="`bf-axis-${axis.key}`"
+                :x1="radarCenter"
+                :y1="radarCenter"
+                :x2="getAxisEndpoint(personalityAxes.length, idx).x"
+                :y2="getAxisEndpoint(personalityAxes.length, idx).y"
+                class="radar-axis"
+              />
+              <polygon :points="getRadarDataPoints(modelValue.personality, personalityAxes)" class="radar-data" />
+              <circle
+                v-for="(axis, idx) in personalityAxes"
+                :key="`bf-handle-${axis.key}`"
+                :cx="getRadarHandlePoints(modelValue.personality, personalityAxes)[idx].x"
+                :cy="getRadarHandlePoints(modelValue.personality, personalityAxes)[idx].y"
+                r="4.5"
+                class="radar-handle"
+                @mousedown.prevent="startRadarDrag('personality', idx, $event)"
+              />
+              <text
+                v-for="(axis, idx) in personalityAxes"
+                :key="`bf-label-${axis.key}`"
+                :x="getLabelPosition(personalityAxes.length, idx).x"
+                :y="getLabelPosition(personalityAxes.length, idx).y"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                class="radar-label-text"
+              >
+                {{ axis.label }}
+              </text>
+            </svg>
+          </div>
+        </div>
       </section>
 
       <!-- Cognitive Tendency Section -->
-      <section class="panel-section cognitive-panel" :class="{'is-delete-mode': isDeleteMode}">
+      <section class="panel-section cognitive-panel">
         <h3 class="panel-title">Cognitive Orientation</h3>
-        <div class="orientation-labels">
-           <div v-for="(label, key) in cognitiveLabels" :key="key" class="label-text">
-             {{ label }}
-           </div>
-        </div>
-
-        <div class="options-grid">
-          <div v-for="(allOpts, category) in cognitiveOptions" :key="category" class="option-column">
-            <!-- 已选中部分（支持排序） -->
-            <div v-for="(opt, idx) in modelValue.cognitive[category]" :key="'sel-' + opt" 
-                 class="selectable-box is-active"
-                 @click="toggleCognitive(category, opt)">
-              <div class="box-content-row">
-                 <span class="box-text">{{ subDimensionTranslations[opt] || opt }}</span>
-                 <div class="order-controls" v-if="!isDeleteMode" @click.stop>
-                    <button class="order-btn" @click="moveItem(category, idx, -1)" v-if="idx > 0">▲</button>
-                    <button class="order-btn" @click="moveItem(category, idx, 1)" v-if="idx < modelValue.cognitive[category].length - 1">▼</button>
-                 </div>
-              </div>
-            </div>
-
-            <!-- 未选中推荐部分（已精简） -->
-            <div v-for="opt in getSortedOptionsForCategory(category).recommended" :key="'rec-' + opt" 
-                 class="selectable-box is-related"
-                 @click="toggleCognitive(category, opt)">
-              {{ subDimensionTranslations[opt] || opt }}
-            </div>
-
-            <!-- 未选中其他部分 -->
-            <div v-for="opt in getSortedOptionsForCategory(category).others" :key="'other-' + opt" 
-                 class="selectable-box is-inactive"
-                 @click="toggleCognitive(category, opt)">
-              {{ subDimensionTranslations[opt] || opt }}
-            </div>
+        <div class="cognitive-choice-grid">
+          <div
+            v-for="item in cognitiveChoices"
+            :key="item.value"
+            class="cognitive-choice-item"
+            :class="{ 'is-active': modelValue.cognitiveOrientation === item.value }"
+            @click="modelValue.cognitiveOrientation = item.value"
+          >
+            <img :src="item.icon" :alt="item.label" class="cognitive-choice-icon" />
+            <div class="cognitive-choice-label">{{ item.label }}</div>
           </div>
         </div>
       </section>
 
       <!-- Social and Learning Integration Section -->
       <section class="panel-section combined-panel">
-        <!-- Top Row: Social Attributes -->
-        <h3 class="panel-title mb-1">Social-Interaction Style</h3>
-        <div class="social-attributes-row">
-          <!-- Left Column: Two Selection Groups -->
-          <div class="social-left-column">
-            <div class="social-item">
-              <div class="level-title">Verbal Confidence</div>
-              <div class="level-options">
-                <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
-                     class="level-btn"
-                     :class="{'is-active': modelValue.social.confidence === lv}"
-                     @click="modelValue.social.confidence = lv">
-                  {{ levelTranslations[lv] }}
-                </div>
-              </div>
-            </div>
-
-            <div class="social-item">
-              <div class="level-title">Language Register</div>
-              <div class="level-options">
-                <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
-                     class="level-btn"
-                     :class="{'is-active': modelValue.social.register === lv}"
-                     @click="modelValue.social.register = lv">
-                  {{ levelTranslations[lv] }}
-                </div>
-              </div>
-            </div>
-
-            <div class="social-item">
-              <div class="level-title">Participation</div>
-              <div class="level-options">
-                <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
-                     class="level-btn"
-                     :class="{'is-active': modelValue.social.participation === lv}"
-                     @click="modelValue.social.participation = lv">
-                  {{ levelTranslations[lv] }}
-                </div>
+        <div class="plasticity-grid">
+          <div class="plasticity-card">
+            <h3 class="panel-title">Learning Plasticity</h3>
+            <div class="plasticity-options">
+              <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
+                   class="level-btn"
+                   :class="{'is-active': modelValue.plasticity === lv}"
+                   @click="modelValue.plasticity = lv">
+                {{ plasticityTranslations[lv] }}
               </div>
             </div>
           </div>
-
-          <!-- Right Column: Role Selection -->
-          <div class="social-right-column">
-            <div class="role-selection-grid">
-              <div v-for="role in interactionRoles" :key="role.value" class="role-choice-item" @click="modelValue.social.role = role.value">
-                <div class="role-illus" :style="{backgroundImage: `url('/${role.icon}')`}"></div>
-                <div class="role-name-text">{{ role.name }}</div>
-                <div class="mini-checkbox" :class="{'is-checked': modelValue.social.role === role.value}">
-                  <span v-if="modelValue.social.role === role.value" class="check-mark">✓</span>
-                </div>
-              </div>
+          <div class="plasticity-card plasticity-empty-panel">
+            <h3 class="panel-title">Bias & Error</h3>
+            <div class="bias-list">
+              <button
+                v-for="item in modelValue.biasErrorOptions"
+                :key="item"
+                type="button"
+                class="bias-item"
+                :class="{ 'is-active': modelValue.biasErrors.includes(item) }"
+                @click="toggleBiasError(item)"
+              >
+                {{ item }}
+              </button>
             </div>
-          </div>
-        </div>
 
-        <!-- Bottom Row: Learning Plasticity -->
-        <h3 class="panel-title mb-1 mt-2">Learning Plasticity</h3>
-        <div class="plasticity-horizontal-options">
-          <div v-for="lv in ['low', 'medium', 'high']" 
-               :key="lv"
-               class="p-level-card"
-               :class="{'is-active': modelValue.plasticity === lv}"
-               @click="modelValue.plasticity = lv">
-            <div class="p-level-name">{{ plasticityTranslations[lv] }}</div>
+            <div v-if="isAddingBiasError" class="bias-add-row">
+              <input
+                v-model="newBiasErrorName"
+                class="bias-add-input"
+                placeholder="Add bias or error..."
+                v-focus
+                @blur="submitAddBiasError"
+                @keyup.enter="submitAddBiasError"
+              />
+            </div>
+            <button
+              v-else
+              type="button"
+              class="bias-add-btn"
+              @click="isAddingBiasError = true"
+            >
+              +
+            </button>
           </div>
         </div>
       </section>
@@ -357,7 +399,6 @@ import { ref, inject } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
-  cognitiveOptions: { type: Object, required: true },
   interactionRoles: { type: Array, required: true },
   cardColor: { type: String, default: '#CEDCFB' }
 });
@@ -368,6 +409,279 @@ const knowledgeActions = inject('knowledgeActions', {});
 
 const editingField = ref(null);
 const dragOverField = ref(null);
+
+const radarCenter = 70;
+const radarRadius = 48;
+
+const learningStyleAxes = [
+  { key: 'surface', label: 'Surface' },
+  { key: 'deep', label: 'Deep' },
+  { key: 'strategic', label: 'Strategic' }
+];
+
+const personalityAxes = [
+  { key: 'openness', label: 'Openness' },
+  { key: 'conscientiousness', label: 'Conscientiousness' },
+  { key: 'extraversion', label: 'Extraversion' },
+  { key: 'agreeableness', label: 'Agreeableness' },
+  { key: 'neuroticism', label: 'Neuroticism' }
+];
+
+const learningRadarRef = ref(null);
+const personalityRadarRef = ref(null);
+const draggingRadar = ref({ type: null, axisIndex: -1 });
+
+if (!props.modelValue.structuralKnowledge) {
+  props.modelValue.structuralKnowledge = 'medium';
+}
+
+if (!props.modelValue.cognitiveOrientation) {
+  props.modelValue.cognitiveOrientation = 'line_based';
+}
+
+if (!props.modelValue.learning_styles || typeof props.modelValue.learning_styles !== 'object') {
+  props.modelValue.learning_styles = { surface: 2, deep: 2, strategic: 2 };
+}
+
+if (!props.modelValue.personality || typeof props.modelValue.personality !== 'object') {
+  props.modelValue.personality = {
+    openness: 2,
+    conscientiousness: 2,
+    extraversion: 2,
+    agreeableness: 2,
+    neuroticism: 2
+  };
+}
+
+const defaultBiasErrorOptions = [
+  'Anchoring Bias',
+  'Availability Bias',
+  'Confirmation Bias',
+  'Premature Closure'
+];
+
+if (!Array.isArray(props.modelValue.biasErrors)) {
+  props.modelValue.biasErrors = Array.isArray(props.modelValue.bias_errors)
+    ? [...props.modelValue.bias_errors]
+    : [];
+}
+
+const sourceBiasErrorOptions = Array.isArray(props.modelValue.biasErrorOptions)
+  ? props.modelValue.biasErrorOptions
+  : (Array.isArray(props.modelValue.bias_error_options) ? props.modelValue.bias_error_options : []);
+
+props.modelValue.biasErrorOptions = Array.from(
+  new Set([
+    ...defaultBiasErrorOptions,
+    ...sourceBiasErrorOptions,
+    ...props.modelValue.biasErrors
+  ])
+);
+
+const normalizeRadarValues = () => {
+  learningStyleAxes.forEach(axis => {
+    const current = Number(props.modelValue.learning_styles[axis.key]);
+    props.modelValue.learning_styles[axis.key] = Number.isFinite(current)
+      ? Math.max(1, Math.min(3, Math.round(current)))
+      : 2;
+  });
+
+  personalityAxes.forEach(axis => {
+    const current = Number(props.modelValue.personality[axis.key]);
+    props.modelValue.personality[axis.key] = Number.isFinite(current)
+      ? Math.max(1, Math.min(3, Math.round(current)))
+      : 2;
+  });
+};
+
+normalizeRadarValues();
+
+const getAxisAngle = (total, index) => -Math.PI / 2 + (index * 2 * Math.PI) / total;
+
+const getAxisEndpoint = (total, index) => {
+  const angle = getAxisAngle(total, index);
+  return {
+    x: radarCenter + radarRadius * Math.cos(angle),
+    y: radarCenter + radarRadius * Math.sin(angle)
+  };
+};
+
+const getRadarRingPoints = (axes, ringLevel) => {
+  const ringRadius = (ringLevel / 3) * radarRadius;
+  return axes
+    .map((_, index) => {
+      const angle = getAxisAngle(axes.length, index);
+      const x = radarCenter + ringRadius * Math.cos(angle);
+      const y = radarCenter + ringRadius * Math.sin(angle);
+      return `${x},${y}`;
+    })
+    .join(' ');
+};
+
+const getRadarHandlePoints = (valuesObj, axes) => {
+  return axes.map((axis, index) => {
+    const value = Math.max(1, Math.min(3, Number(valuesObj?.[axis.key]) || 1));
+    const radius = (value / 3) * radarRadius;
+    const angle = getAxisAngle(axes.length, index);
+    return {
+      x: radarCenter + radius * Math.cos(angle),
+      y: radarCenter + radius * Math.sin(angle)
+    };
+  });
+};
+
+const getRadarDataPoints = (valuesObj, axes) => {
+  return getRadarHandlePoints(valuesObj, axes)
+    .map(point => `${point.x},${point.y}`)
+    .join(' ');
+};
+
+const clampRadarScore = (value) => Math.max(1, Math.min(3, Math.round(value)));
+//调整learning style后大五人格的影响
+const learningStylePersonalityEffects = {
+  deep: {
+    openness: 1,
+    conscientiousness: 1,
+    agreeableness: 1
+  },
+  strategic: {
+    conscientiousness: 1,
+    extraversion: 1
+  },
+  surface: {
+    neuroticism: 1,
+    openness: -1,
+    conscientiousness: -1
+  }
+};
+
+const applyLinkedPersonalityFromLearningStyles = (changedAxisKey, delta) => {
+  const effects = learningStylePersonalityEffects[changedAxisKey];
+  if (!effects || !delta) return;
+
+  Object.entries(effects).forEach(([traitKey, direction]) => {
+    const current = Number(props.modelValue.personality?.[traitKey]) || 2;
+    const next = clampRadarScore(current + direction * delta);
+    props.modelValue.personality[traitKey] = next;
+  });
+};
+
+const getLabelPosition = (total, index) => {
+  const angle = getAxisAngle(total, index);
+  const labelDistance = total === 5 ? radarRadius + 30 : radarRadius + 18;
+  const personalityOffsets = [
+    { x: 0, y: -6 },
+    { x: 14, y: -3 },
+    { x: 16, y: 9 },
+    { x: -16, y: 9 },
+    { x: -14, y: -3 }
+  ];
+
+  const offset = total === 5 ? personalityOffsets[index] || { x: 0, y: 0 } : { x: 0, y: 0 };
+
+  return {
+    x: radarCenter + labelDistance * Math.cos(angle) + offset.x,
+    y: radarCenter + labelDistance * Math.sin(angle) + offset.y
+  };
+};
+
+const getLabelAnchor = (total, index) => {
+  if (total !== 5) return 'middle';
+  if (index === 1 || index === 2) return 'start';
+  if (index === 3 || index === 4) return 'end';
+  return 'middle';
+};
+
+const getLabelBaseline = (total, index) => {
+  if (total !== 5) return 'middle';
+  if (index === 0) return 'hanging';
+  return 'middle';
+};
+
+const updateRadarScoreByPointer = (clientX, clientY) => {
+  const { type, axisIndex } = draggingRadar.value;
+  if (!type || axisIndex < 0) return;
+
+  const svgEl = type === 'learning_styles' ? learningRadarRef.value : personalityRadarRef.value;
+  if (!svgEl) return;
+
+  const rect = svgEl.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * 140;
+  const y = ((clientY - rect.top) / rect.height) * 140;
+
+  const axes = type === 'learning_styles' ? learningStyleAxes : personalityAxes;
+  const angle = getAxisAngle(axes.length, axisIndex);
+  const unitX = Math.cos(angle);
+  const unitY = Math.sin(angle);
+
+  const dx = x - radarCenter;
+  const dy = y - radarCenter;
+  const projection = Math.max(0, Math.min(radarRadius, dx * unitX + dy * unitY));
+  const score = Math.max(1, Math.min(3, Math.round((projection / radarRadius) * 3)));
+
+  const targetAxis = axes[axisIndex];
+  if (targetAxis) {
+    const currentScore = Number(props.modelValue[type]?.[targetAxis.key]);
+    if (currentScore === score) return;
+    props.modelValue[type][targetAxis.key] = score;
+    if (type === 'learning_styles') {
+      const delta = score - currentScore;
+      applyLinkedPersonalityFromLearningStyles(targetAxis.key, delta);
+    }
+  }
+};
+
+const onRadarMouseMove = (event) => {
+  updateRadarScoreByPointer(event.clientX, event.clientY);
+};
+
+const stopRadarDrag = () => {
+  draggingRadar.value = { type: null, axisIndex: -1 };
+  window.removeEventListener('mousemove', onRadarMouseMove);
+  window.removeEventListener('mouseup', stopRadarDrag);
+};
+
+const startRadarDrag = (type, axisIndex, event) => {
+  draggingRadar.value = { type, axisIndex };
+  updateRadarScoreByPointer(event.clientX, event.clientY);
+  window.addEventListener('mousemove', onRadarMouseMove);
+  window.addEventListener('mouseup', stopRadarDrag);
+};
+
+const isAddingBiasError = ref(false);
+const newBiasErrorName = ref('');
+
+const toggleBiasError = (item) => {
+  if (!Array.isArray(props.modelValue.biasErrors)) {
+    props.modelValue.biasErrors = [];
+  }
+  const index = props.modelValue.biasErrors.indexOf(item);
+  if (index >= 0) {
+    props.modelValue.biasErrors.splice(index, 1);
+  } else {
+    props.modelValue.biasErrors.push(item);
+  }
+};
+
+const submitAddBiasError = () => {
+  const value = (newBiasErrorName.value || '').trim();
+  if (value) {
+    if (!Array.isArray(props.modelValue.biasErrorOptions)) {
+      props.modelValue.biasErrorOptions = [];
+    }
+    if (!props.modelValue.biasErrorOptions.includes(value)) {
+      props.modelValue.biasErrorOptions.push(value);
+    }
+    if (!Array.isArray(props.modelValue.biasErrors)) {
+      props.modelValue.biasErrors = [];
+    }
+    if (!props.modelValue.biasErrors.includes(value)) {
+      props.modelValue.biasErrors.push(value);
+    }
+  }
+  isAddingBiasError.value = false;
+  newBiasErrorName.value = '';
+};
 
 // 知识点编辑状态
 const editingKnowledge = ref({ category: null, index: null, value: '' });
@@ -473,26 +787,23 @@ const onDrop = (event, targetCategory) => {
   dragOverField.value = null;
 };
 
-// --- Cognitive Tendency: Chinese Translation & archetypes Dictionary ---
-const cognitiveLabels = {
-  0: 'Attentional Anchor',
-  1: 'Reasoning Entry',
-  2: 'Reasoning Style'
-};
-
-const subDimensionTranslations = {
-  'symptoms': 'Symptoms',
-  'present_illness': 'Present Illness',
-  'past_medical_history': 'Past Medical History',
-  'physicochemical_parameters': 'Physicochemical Parameters',
-  'familiarity_driven': 'Familiarity Driven',
-  'symptom_significance': 'Symptom Significance',
-  'risk_perception': 'Risk Perception',
-  'irrelevant_factors': 'Irrelevant Factors',
-  'linear_causality': 'Linear Causality',
-  'multi_concurrent': 'Multi Concurrent',
-  'undefined': 'Undefined'
-};
+const cognitiveChoices = [
+  {
+    value: 'point_based',
+    label: 'Point-based Reasoning',
+    icon: '/点.png'
+  },
+  {
+    value: 'line_based',
+    label: 'Linear Chaining',
+    icon: '/线.png'
+  },
+  {
+    value: 'plane_based',
+    label: 'Multi Concurrent',
+    icon: '/面.png'
+  }
+];
 
 const levelTranslations = {
   'low': 'Low',
@@ -501,63 +812,9 @@ const levelTranslations = {
 };
 
 const plasticityTranslations = {
-  'low': 'Rigid',
-  'medium': 'Steady',
-  'high': 'Adaptive'
-};
-
-const isDeleteMode = ref(false);
-
-const toggleDeleteMode = () => {
-  isDeleteMode.value = !isDeleteMode.value;
-};
-
-const resetCognitive = () => {
-  props.modelValue.cognitive[0] = [];
-  props.modelValue.cognitive[1] = [];
-  props.modelValue.cognitive[2] = [];
-};
-
-const toggleCognitive = (category, opt) => {
-  if (!Array.isArray(props.modelValue.cognitive[category])) {
-    props.modelValue.cognitive[category] = [props.modelValue.cognitive[category]];
-  }
-  
-  const index = props.modelValue.cognitive[category].indexOf(opt);
-  
-  if (isDeleteMode.value) {
-    if (index !== -1) {
-      props.modelValue.cognitive[category].splice(index, 1);
-    }
-  } else {
-    if (index === -1) {
-      props.modelValue.cognitive[category].push(opt);
-    } else {
-      props.modelValue.cognitive[category].splice(index, 1);
-    }
-  }
-};
-
-const moveItem = (category, index, direction) => {
-  const list = props.modelValue.cognitive[category];
-  if (direction === -1 && index > 0) {
-    [list[index], list[index - 1]] = [list[index - 1], list[index]];
-  } else if (direction === 1 && index < list.length - 1) {
-    [list[index], list[index + 1]] = [list[index + 1], list[index]];
-  }
-};
-
-const getSortedOptionsForCategory = (category) => {
-  const options = props.cognitiveOptions[category] || [];
-  const selected = props.modelValue.cognitive[category] || [];
-  
-  const remaining = options.filter(o => !selected.includes(o));
-  
-  return {
-    selected: selected,
-    recommended: [],
-    others: remaining
-  };
+  'low': 'low',
+  'medium': 'medium',
+  'high': 'high'
 };
 
 const vFocus = {
@@ -571,70 +828,8 @@ const resetEditing = () => {
   editingField.value = null;
   editingKnowledge.value = { category: null, index: null, value: '' };
   isAddingKnowledge.value = false;
-};
-
-const getAllKnowledgePoints = () => {
-  const unclassified = props.modelValue.unclassifiedKnowledge || [];
-  const classified = props.modelValue.classifiedKnowledge || {
-    competent: [],
-    novice: [],
-    layman: []
-  };
-  return [
-    ...unclassified,
-    ...(classified.competent || []),
-    ...(classified.novice || []),
-    ...(classified.layman || [])
-  ];
-};
-
-const activeQuickProfile = ref(null);
-
-const applyQuickProfile = (level) => {
-  activeQuickProfile.value = level;
-  const allKnowledge = getAllKnowledgePoints();
-  props.modelValue.unclassifiedKnowledge = [];
-  props.modelValue.classifiedKnowledge = {
-    competent: [],
-    novice: [],
-    layman: []
-  };
-
-  if (level === 'good') {
-    props.modelValue.classifiedKnowledge.competent = [...allKnowledge];
-    props.modelValue.cognitive[0] = [
-      'symptoms',
-      'present_illness',
-      'physicochemical_parameters',
-      'past_medical_history'
-    ];
-    props.modelValue.cognitive[1] = [
-      'risk_perception',
-      'familiarity_driven',
-      'symptom_significance'
-    ];
-    props.modelValue.cognitive[2] = ['multi_concurrent'];
-  } else if (level === 'medium') {
-    props.modelValue.classifiedKnowledge.novice = [...allKnowledge];
-    props.modelValue.cognitive[0] = [
-      'symptoms',
-      'present_illness',
-      'past_medical_history'
-    ];
-    props.modelValue.cognitive[1] = [
-      'familiarity_driven',
-      'symptom_significance'
-    ];
-    props.modelValue.cognitive[2] = ['linear_causality'];
-  } else {
-    props.modelValue.classifiedKnowledge.layman = [...allKnowledge];
-    props.modelValue.cognitive[0] = [
-      'symptoms',
-      'present_illness'
-    ];
-    props.modelValue.cognitive[1] = ['irrelevant_factors'];
-    props.modelValue.cognitive[2] = ['undefined'];
-  }
+  isAddingBiasError.value = false;
+  newBiasErrorName.value = '';
 };
 
 defineExpose({ resetEditing });
@@ -673,36 +868,6 @@ defineExpose({ resetEditing });
   display: flex;
   flex-direction: column;
   gap: 0.7rem; /* 压缩内部模块间的间距 */
-}
-
-.quick-profile-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px;
-  border-radius: 20px;
-  border: 2px dashed color-mix(in srgb, var(--base-card-color) 70%, #ffffff 30%);
-  background: color-mix(in srgb, var(--base-card-color) 18%, #ffffff 82%);
-}
-
-.quick-pill {
-  flex: 1;
-  border: none;
-  background: rgba(255, 255, 255, 0.8);
-  color: #7A7A7A;
-  font-weight: 600;
-  font-size: 12px;
-  padding: 6px 8px;
-  border-radius: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
-}
-
-.quick-pill.is-active,
-.quick-pill:hover {
-  background: var(--base-card-color);
-  color: #ffffff;
 }
 
 /* =========================================
@@ -914,7 +1079,7 @@ defineExpose({ resetEditing });
    4. 知识背景部分 (Knowledge Background)
    ========================================= */
 .knowledge-panel {
-  height: 300px;
+  height: 350px;
 }
 
 .competence-legend {
@@ -1139,14 +1304,183 @@ defineExpose({ resetEditing });
 .medium-bg { background-color: #f2f2a6; color: #000000;}
 .bad-bg    { background-color: #ffbfa1; color: #000; }
 
+.structural-knowledge-row {
+  margin: 0.2rem 0.6rem 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+}
+
+.structural-title {
+  font-size: 11px;
+  font-weight: bold;
+  color: #6C6565;
+  margin-bottom: 0.3rem;
+}
+
+.structural-options {
+  display: flex;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  padding: 2px;
+}
+
+.structural-option {
+  flex: 1;
+  text-align: center;
+  padding: 2px 10px;
+  font-size: 10px;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #7F8C8D;
+}
+
+.structural-option.is-active {
+  background-color: #8095CA;
+  color: white;
+  font-weight: bold;
+}
+.traits-panel {
+  padding: 0.2rem 0.3rem 0rem;
+}
+
+.radar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.radar-card {
+  background-color: rgba(255, 255, 255, 0.42);
+  border-radius: 12px;
+  padding: 0.2rem 0.3rem 0rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.radar-card-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+  line-height: 1.1;
+}
+
+.radar-svg {
+  width: 300px;
+  height: 160px;
+}
+
+.radar-ring {
+  fill: none;
+  stroke: rgba(108, 101, 101, 0.35);
+  stroke-width: 0.8;
+}
+
+.radar-axis {
+  stroke: rgba(108, 101, 101, 0.38);
+  stroke-width: 0.8;
+}
+
+.radar-data {
+  fill: rgba(128, 149, 202, 0.28);
+  stroke: #8095CA;
+  stroke-width: 1.4;
+}
+
+.radar-handle {
+  fill: #8095CA;
+  stroke: #ffffff;
+  stroke-width: 1.1;
+  cursor: grab;
+}
+
+.radar-handle:active {
+  cursor: grabbing;
+}
+
+.radar-labels {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+}
+
+.radar-labels.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.radar-labels.five-col {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.radar-label-text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #4A4A4A;
+  pointer-events: none;
+}
 /* =========================================
    5. 认知倾向部分 (Cognitive Orientation)
    ========================================= */
 .cognitive-panel {
-  height: 320px;
+  height: 120px;
   position: relative;
   margin-bottom: 0.2rem;
   margin-top: 0;
+}
+
+
+.cognitive-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  padding: 0.5rem 0.8rem 0.35rem;
+}
+
+.cognitive-choice-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 82px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0.45rem;
+}
+
+.cognitive-choice-item:hover {
+  background-color: #C5C9D4;
+}
+
+.cognitive-choice-item.is-active {
+  background-color: #8095CA;
+  color: #fff;
+  border-color: #8095CA;
+}
+
+.cognitive-choice-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.cognitive-choice-label {
+  font-size: 11px;
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #000000;
+}
+
+.cognitive-choice-item.is-active .cognitive-choice-label {
+  color: #ffffff;
 }
 
 .animate-pulse {
@@ -1265,6 +1599,115 @@ defineExpose({ resetEditing });
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.plasticity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.plasticity-card {
+  background-color: rgba(255, 255, 255, 0.42);
+  border-radius: 12px;
+  padding: 0.45rem 0.45rem;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.plasticity-options {
+  margin: 0.45rem auto 0.1rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.plasticity-options .level-btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  min-height: 34px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plasticity-options .level-btn:hover {
+  background: rgba(197, 201, 212, 0.8);
+}
+
+.plasticity-empty-panel {
+  min-height: 58px;
+}
+
+.bias-list {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bias-item {
+  border: none;
+  background: rgba(255, 255, 255, 0.55);
+  color: #7A7A7A;
+  border-radius: 12px;
+  min-height: 28px;
+  padding: 0.2rem 0.6rem;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bias-item:hover {
+  background: rgba(197, 201, 212, 0.8);
+}
+
+.bias-item.is-active {
+  background: #8095CA;
+  color: #ffffff;
+}
+
+.bias-add-row {
+  margin-top: 0.35rem;
+}
+
+.bias-add-input {
+  width: 100%;
+  border: 1px dashed rgba(122, 122, 122, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  color: #6C6565;
+  font-size: 12px;
+  padding: 0.2rem 0.55rem;
+  outline: none;
+  text-align: center;
+}
+
+.bias-add-btn {
+  margin: 0.35rem auto 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px dashed #A5A8AC;
+  background: #D9D9D9;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .social-attributes-row {

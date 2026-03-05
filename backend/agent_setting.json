@@ -1,113 +1,89 @@
 {
-  "徐源松": {
-    "name": "徐源松",
-    "age": "22",
-    "major": "中医药",
+  "1": {
+    "name": "1",
+    "age": "1",
+    "major": "1",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
+    "learning_styles": {
+      "surface": 1,
+      "deep": 3,
+      "strategic": 2
+    },
+    "personality": {
+      "openness": 3,
+      "conscientiousness": 3,
+      "extraversion": 2,
+      "agreeableness": 3,
+      "neuroticism": 1
+    },
     "knowledge_background": {
       "high": [
-        "生理学"
-      ],
-      "medium": [
-        "内科学（肾脏病学）"
-      ],
-      "low": [
+        "病理生理学",
+        "药理学",
+        "内科学（肾脏病学）",
+        "生理学",
+        "诊断学",
         "医学伦理学"
-      ]
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "symptoms"
       ],
-      "reasoning_entry": [
-        "symptom_significance"
-      ],
-      "causal_structure": [
-        "multi_concurrent"
-      ]
+      "medium": [],
+      "low": [],
+      "structural_level": "high"
     },
-    "social_interaction_style": {
-      "verbal_confidence": "medium",
-      "language_register": "medium",
-      "interaction_role": "leader",
-      "participation": "medium"
-    },
-    "learning_adaptivity": "low"
+    "cognitive_orientation": "plane_based",
+    "learning_adaptivity": "high",
+    "bias_errors": [
+      "Availability Bias",
+      "Anchoring Bias",
+      "Confirmation Bias",
+      "Premature Closure"
+    ],
+    "learning_style_prompt": "该学生具有高深度学习倾向，动机源于对概念本质的理解与知识整合，而非仅追求成绩或完成任务。在PBL中会主动追问病理机制、联系基础理论，并乐于在模糊信息中构建解释框架，不依赖标准答案，也不因评价压力而选择性参与。",
+    "personality_prompt": "低神经质使其在小组讨论中情绪稳定，面对不确定情境不易焦虑，发言阈值低、互动意愿强；高尽责性驱动其认真准备、持续跟进问题，高开放性则促使其乐于接纳多元观点并探索非常规解释，二者共同强化其对PBL教育价值的积极判断与投入意愿。",
+    "learning_personality_prompt": "作为‘PBL理想受益者’，该学生在非结构化病例讨论中既能主动提出假设、追问机制，又能轻松参与协作修正，表现出高学习效能与高贡献意愿的协同。其低神经质保障了发言的自然流畅，高开放性与尽责性则支撑其持续深挖证据、整合新知。无显著内在冲突，但在时间压力或组员消极时可能转为策略性聚焦核心问题，以维持讨论效率。"
   },
-  "窦梓洋": {
-    "name": "窦梓洋",
-    "age": "23",
-    "major": "中医药",
+  "Student_1": {
+    "name": "",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
+    "learning_styles": {
+      "surface": 3,
+      "deep": 2,
+      "strategic": 3
+    },
+    "personality": {
+      "openness": 1,
+      "conscientiousness": 1,
+      "extraversion": 3,
+      "agreeableness": 2,
+      "neuroticism": 3
+    },
     "knowledge_background": {
       "high": [
+        "病理生理学",
         "药理学"
       ],
       "medium": [
+        "内科学（肾脏病学）",
+        "生理学"
+      ],
+      "low": [
+        "医学伦理学",
         "诊断学"
       ],
-      "low": [
-        "内科学（肾脏病学）"
-      ]
+      "structural_level": "low"
     },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "past_medical_history"
-      ],
-      "reasoning_entry": [
-        "irrelevant_factors"
-      ],
-      "causal_structure": [
-        "undefined"
-      ]
-    },
-    "social_interaction_style": {
-      "verbal_confidence": "high",
-      "language_register": "high",
-      "interaction_role": "leader",
-      "participation": "medium"
-    },
-    "learning_adaptivity": "medium"
-  },
-  "朱yichao": {
-    "name": "朱yichao",
-    "age": "21",
-    "major": "临床",
-    "avatar": "avatar1.png",
-    "color": "#D2FBCE",
-    "cardColor": "#D2FBCE",
-    "knowledge_background": {
-      "high": [
-        "内科学（肾脏病学）"
-      ],
-      "medium": [
-        "医学伦理学"
-      ],
-      "low": [
-        "病理生理学"
-      ]
-    },
-    "cognitive_orientation": {
-      "attentional_anchor": [
-        "physicochemical_parameters"
-      ],
-      "reasoning_entry": [
-        "symptom_significance"
-      ],
-      "causal_structure": [
-        "multi_concurrent"
-      ]
-    },
-    "social_interaction_style": {
-      "verbal_confidence": "low",
-      "language_register": "low",
-      "interaction_role": "critical",
-      "participation": "high"
-    },
-    "learning_adaptivity": "high"
+    "cognitive_orientation": "line_based",
+    "learning_adaptivity": "medium",
+    "bias_errors": [
+      "haha"
+    ],
+    "learning_style_prompt": "该学生以表层学习为主，偏好明确任务与标准答案，对PBL中模糊、非结构化的问题感到不适；同时具有高策略性，会根据评分标准或考核重点选择性投入，仅在预期能提升绩效的环节主动追问机制或参与讨论。",
+    "personality_prompt": "高神经质使其在小组讨论中因害怕说错或被评判而显著提高发言阈值，常沉默或仅做安全回应；低尽责性削弱其对PBL长期价值的认同，低开放性进一步降低对多元观点和探索过程的兴趣，导致主观上认为PBL效率低下、收获有限。",
+    "learning_personality_prompt": "作为混合型画像，该学生在PBL中呈现明显内在冲突：策略性驱动其在关键评估节点（如汇报、测验相关）选择性参与，但高神经质抑制其在开放式讨论中的表达，低尽责与低开放又削弱其对协作探究价值的认可。可观察行为包括：前期沉默、后期突击准备、回避假设性提问、倾向复述教材结论。若提供清晰发言脚本、匿名反馈机制或阶段性目标锚定，可能降低焦虑并提升贡献意愿。"
   }
 }

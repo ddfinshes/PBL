@@ -29,7 +29,13 @@ from .config import BASE_URL, DASHSCOPE_API_KEY, LLM_MODEL_NAME
 
 # 动态 Agent 注册与图构建相关
 from . import graph  # 导入 graph 模块以访问和修改 app
-from .agents import register_student_agent, student_nodes, student_personas, simplify_message
+from .agents import (
+    register_student_agent,
+    student_nodes,
+    student_personas,
+    simplify_message,
+    generate_learning_personality_sections,
+)
 from .graph_builder import build_graph, GraphState
 from .graph import app, GraphState
 # 导入解析函数
@@ -193,6 +199,20 @@ async def startup_event():
     try:
         with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
             personas = json.load(f)
+
+        async def enrich_persona(agent_id: str, persona_data: Dict):
+            enriched = dict(persona_data or {})
+            generated_sections = await generate_learning_personality_sections(enriched)
+            enriched.update(generated_sections)
+            return agent_id, enriched
+
+        enriched_pairs = await asyncio.gather(
+            *(enrich_persona(agent_id, persona_data) for agent_id, persona_data in personas.items())
+        )
+        personas = {agent_id: persona for agent_id, persona in enriched_pairs}
+
+        with open(AGENT_SETTING_PATH, 'w', encoding='utf-8') as f:
+            json.dump(personas, f, ensure_ascii=False, indent=2)
 
         for agent_id, persona in personas.items():
             register_student_agent(agent_id, persona)
@@ -643,9 +663,20 @@ async def api_add_question(request: AddQuestionRequest):
 async def update_personas_v1(request: Dict[str, Dict]):
     """接收前端配置，保存到 JSON 文件，清空并重新注册所有 agent，并重新构建图。"""
     try:
+        async def enrich_persona(agent_id: str, persona_data: Dict):
+            enriched = dict(persona_data or {})
+            generated_sections = await generate_learning_personality_sections(enriched)
+            enriched.update(generated_sections)
+            return agent_id, enriched
+
+        enriched_pairs = await asyncio.gather(
+            *(enrich_persona(agent_id, persona_data) for agent_id, persona_data in request.items())
+        )
+        enriched_request = {agent_id: persona for agent_id, persona in enriched_pairs}
+
         # 1. 保存到 agent_setting.json
         with open(AGENT_SETTING_PATH, 'w', encoding='utf-8') as f:
-            json.dump(request, f, ensure_ascii=False, indent=2)
+            json.dump(enriched_request, f, ensure_ascii=False, indent=2)
         logger.info(f"Saved personas to {AGENT_SETTING_PATH}")
 
         # 2. 清空现有的 agent 配置
@@ -654,7 +685,7 @@ async def update_personas_v1(request: Dict[str, Dict]):
         logger.info("Cleared existing agent configurations.")
 
         # 3. 注册新的 agent
-        for agent_id, persona_data in request.items():
+        for agent_id, persona_data in enriched_request.items():
             register_student_agent(agent_id, persona_data)
 
         # 4. 重新编译 LangGraph
@@ -662,7 +693,11 @@ async def update_personas_v1(request: Dict[str, Dict]):
         graph.app = build_graph(agent_ids)
         logger.info(f"Successfully rebuilt graph with agents: {agent_ids}")
 
-        return {"status": "success", "message": f"Personas updated, saved to file, and graph rebuilt for {len(agent_ids)} agents."}
+        return {
+            "status": "success",
+            "message": f"Personas updated, generated prompts, saved to file, and graph rebuilt for {len(agent_ids)} agents.",
+            "generated_prompt_count": len(enriched_request),
+        }
     except Exception as e:
         logger.error(f"Failed to update personas: {e}")
         return {"status": "error", "detail": str(e)}, 500
