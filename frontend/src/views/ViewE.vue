@@ -1,261 +1,442 @@
 <template>
   <div class="view-e-container h-full flex flex-col bg-[#ECECEC] rounded-xl border border-gray-300 overflow-hidden">
-    <!-- Header -->
     <div class="view-e-header">
-      <h2 class="view-title">Reflection</h2>
+      <h2 class="view-title">Learning Objectives</h2>
     </div>
 
-    <!-- Timeline Content -->
-    <div ref="container" class="flex-1 overflow-y-auto timeline-scroll pr-4 relative px-6 pt-4" @click="selectedTopic = null">
-      <div class="relative min-h-full">
-        <!-- 竖线：强化颜色、宽度，并确保贯穿整个滚动区域 -->
-        <div 
-          class="absolute left-[24px] top-4 w-[4px] bg-[#333333] z-0 rounded-full shadow-[0_0_10px_rgba(51,51,51,0.2)]"
-          :style="{ bottom: filteredMessages.length > 0 ? '40px' : '0' }"
-        ></div>
-        
-        <!-- 末端箭头：在最后一条消息下方显示 -->
-        <div 
-          v-if="filteredMessages.length > 0"
-          class="absolute left-[18px] w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-[#333333] z-0"
-          :style="{ top: 'calc(100% - 30px)' }"
-        ></div>
+    <div class="flex-1 overflow-y-auto px-4 py-4 objective-scroll">
+      <div v-if="!hasActiveQuestion" class="empty-state">
+        <p>Select a trigger question to view objective completion.</p>
+      </div>
 
-        <div class="space-y-8 relative z-10 py-6">
-          <div 
-            v-for="(msg, index) in filteredMessages" 
-            :key="msg.id"
-            class="flex items-start group transition-all duration-300 relative rounded-2xl"
-            :class="{ 
-              'scale-[1.03] z-20': msg.isCurrentTopic,
-              'pulse-highlight': msg.isCurrentTopic
-            }"
-          >
-          <!-- 选中消息的高亮边框特效 -->
-          <div 
-            v-if="msg.isCurrentTopic" 
-            class="absolute -inset-1 border-2 border-[#60A5FA] rounded-2xl pointer-events-none z-10 animate-border-pulse"
-          ></div>
+      <div v-else>
+        <div class="context-card">
+          <div class="context-title">Current Trigger Question</div>
+          <div class="context-text">{{ currentTriggerQuestion || 'Not available' }}</div>
+        </div>
 
-          <!-- Left: Agent Info -->
-          <div class="flex-shrink-0 flex flex-col items-center w-[50px] mr-6">
-            <div 
-              class="w-10 h-10 rounded-full border-2 border-white/80 shadow-lg bg-white overflow-hidden mb-1 transition-transform group-hover:scale-110"
-              :style="{ borderColor: getAgentColor(msg.agent) }"
-            >
-              <img :src="getAgentAvatar(msg.agent)" class="w-full h-full object-cover">
-            </div>
-            <span class="text-[10px] text-gray-600 font-bold truncate w-full text-center">
-              {{ getAgentName(msg.agent) }}
-            </span>
+        <div class="progress-card">
+          <div class="progress-row">
+            <span class="progress-label">Completion</span>
+            <span class="progress-value">{{ achievedCount }}/{{ objectiveRows.length }}</span>
           </div>
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: `${progressPercent}%` }"></div>
+          </div>
+        </div>
 
-          <!-- Right: Summary Bubble -->
-          <div class="flex-1 pt-1">
-            <div 
-              class="relative px-4 py-3 rounded-2xl rounded-tl-none border border-white/20 shadow-xl backdrop-blur-md transition-all group-hover:brightness-110"
-              :style="{ 
-                backgroundColor: getAgentColor(msg.agent),
-                opacity: 0.85
-              }"
-            >
-              <p class="text-[#000000] text-sm leading-relaxed font-bold italic">
-                “{{ msg.summary || msg.text }}”
-              </p>
-              
-              <!-- 装饰性箭头 (指向时间轴线) -->
-              <div 
-                class="absolute left-[-8px] top-0 w-2 h-2"
-                style="clip-path: polygon(100% 0, 0 0, 100% 100%);"
-                :style="{ backgroundColor: getAgentColor(msg.agent) }"
-              ></div>
+        <div v-if="objectiveRows.length === 0" class="empty-state">
+          <p>No learning objectives evaluated yet for this trigger question.</p>
+        </div>
+
+        <div v-else class="objective-list">
+          <div
+            v-for="(row, idx) in objectiveRows"
+            :key="`${idx}-${row.objective}`"
+            class="objective-item"
+            :class="row.statusClass"
+          >
+            <div class="objective-top">
+              <div class="objective-index">LO{{ idx + 1 }}</div>
+              <div class="objective-status">{{ row.statusLabel }}</div>
             </div>
+            <div class="objective-text">{{ row.objective }}</div>
+            <div v-if="row.evidence" class="objective-evidence">{{ row.evidence }}</div>
           </div>
         </div>
       </div>
     </div>
   </div>
-
-</div>
 </template>
 
 <script setup>
-import { ref, onMounted, inject, computed, watch, nextTick } from 'vue';
-import axios from 'axios';
+import { inject, computed } from 'vue';
 
-const { 
-  messages, 
-  selectedTopic, 
-  selectedNodeLeafId,
-  activeMessageId, 
-  activeQuestionInfo,
-  personas,
-  getAgentColor,
-  getAgentName,
-  getAgentAvatar
-} = inject('pblSocket', {});
-const container = ref(null);
-
-// 计算当前活跃路径上的消息 ID 集合
-const activePathIds = computed(() => {
-  const path = new Set();
-  if (!messages?.value?.length) return path;
-
-  // Filter messages by active question
-  const questionMessages = messages.value.filter(m => 
-    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
-    m.questionIndex === activeQuestionInfo.value.questionIndex
-  );
-
-  let curr = selectedNodeLeafId.value || activeMessageId?.value;
-  // 如果当前活跃消息不在范围内，取范围内最后一个
-  if (!questionMessages.find(m => m.id === curr) && questionMessages.length > 0) {
-    curr = questionMessages[questionMessages.length - 1].id;
-  }
-
-  let safety = 0;
-  while (curr && safety < 1000) {
-    path.add(curr);
-    const m = questionMessages.find(msg => msg.id === curr);
-    const next = m ? m.parent_id : null;
-    if (!next || next === curr) break;
-    curr = next;
-    safety++;
-  }
-  return path;
+const props = defineProps({
+  caseData: { type: Object, default: null },
+  objectiveEvaluationMap: { type: Object, default: () => ({}) },
+  discussionEndMap: { type: Object, default: () => ({}) }
 });
 
-// 过滤和处理消息
-const filteredMessages = computed(() => {
-  // 显式引用 personas.value 确保当配置加载后，视图能正确刷新头像和颜色
-  const _configs = personas.value;
-  
-  if (!messages.value?.length) return [];
+const { activeQuestionInfo } = inject('pblSocket', {});
 
-  // Filter messages by active question
-  // 允许 teacher_handler 显示，确保讨论链路完整
-  let baseMessages = messages.value.filter(m => 
-    m && m.agent !== 'case_introduction' && 
-    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
-    m.questionIndex === activeQuestionInfo.value.questionIndex
-  );
-  
-  if (baseMessages.length === 0) return [];
+const normalizeText = (text) => {
+  return String(text || '')
+    .trim()
+    .replace(/[\u3000\s]+/g, ' ')
+    .replace(/[；;。！？!?,，]/g, '')
+    .toLowerCase();
+};
 
-  // 获取该问题下的所有消息，用于查找
-  const questionMessages = messages.value.filter(m => 
-    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
-    m.questionIndex === activeQuestionInfo.value.questionIndex
-  );
-
-  // 1. 确定我们要展示哪条路径
-  let leafId = selectedNodeLeafId.value || activeMessageId?.value;
-  if (!questionMessages.find(m => m.id === leafId)) {
-    leafId = questionMessages[questionMessages.length - 1].id;
-  }
-
-  if (selectedTopic?.value) {
-     // 找到选中主题涉及的最佳叶子节点（该主题下的最后一条发言）
-     const topicMsgs = questionMessages.filter(m => {
-        let tName = m.topic || ((m.agent === 'teacher' || m.agent === 'teacher_handler') ? '教师干预' : '待识别');
-        return `${m.branch_id || 'main'}_${tName}` === selectedTopic.value;
-     });
-     if (topicMsgs.length > 0) leafId = topicMsgs[topicMsgs.length - 1].id;
-  }
-
-  // 计算该路径上的所有消息 ID (包含祖先链，确保上下文完整)
-  const pathIds = new Set();
-  let curr = leafId;
-  let safety = 0;
-  while (curr && safety < 1000) {
-    pathIds.add(curr);
-    const m = questionMessages.find(msg => msg.id === curr);
-    const next = m ? m.parent_id : null;
-    if (!next || next === curr) break;
-    curr = next;
-    safety++;
-  }
-
-  // 确保所有在路径上的消息被按时间顺序排列
-  return baseMessages
-    .filter(m => pathIds.has(m.id))
-    .map(m => {
-       const agentName = m.agent;
-       let tName = m.topic || ((agentName === 'teacher' || agentName === 'teacher_handler') ? '教师干预' : '待识别');
-       const nodeKey = `${m.branch_id || 'main'}_${tName}`;
-       return {
-         ...m,
-         isCurrentTopic: !!(selectedTopic.value && nodeKey === selectedTopic.value)
-       };
-    })
-    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+const hasActiveQuestion = computed(() => {
+  const info = activeQuestionInfo?.value;
+  return !!info && info.sceneIndex >= 0 && info.questionIndex >= 0;
 });
 
+const currentScene = computed(() => {
+  if (!props.caseData || !hasActiveQuestion.value) return null;
+  return props.caseData?.scenes?.[activeQuestionInfo.value.sceneIndex] || null;
+});
 
-// 自动滚动到底部
-watch(() => filteredMessages.value.length, () => {
-  nextTick(() => {
-    if (container.value) {
-      container.value.scrollTo({
-        top: container.value.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
+const currentTriggerQuestion = computed(() => {
+  const scene = currentScene.value;
+  if (!scene) return '';
+  return scene?.trigger_questions?.[activeQuestionInfo.value.questionIndex]?.question || '';
+});
+
+const configuredObjectives = computed(() => {
+  const scene = currentScene.value;
+  if (!scene) return [];
+  const rows = scene.trigger_question_learning_objectives || [];
+  const qIdx = activeQuestionInfo.value.questionIndex;
+
+  const currentQNorm = normalizeText(currentTriggerQuestion.value);
+  const byQuestion = rows.find((r) => normalizeText(r?.trigger_question) === currentQNorm);
+  if (byQuestion && Array.isArray(byQuestion.learning_objectives)) {
+    return byQuestion.learning_objectives.filter(Boolean);
+  }
+
+  const rowByIndex = rows[qIdx];
+  if (rowByIndex && Array.isArray(rowByIndex.learning_objectives)) {
+    return rowByIndex.learning_objectives.filter(Boolean);
+  }
+
+  return [];
+});
+
+const getEvaluationRowsForActiveQuestion = () => {
+  if (!hasActiveQuestion.value) return [];
+  const key = `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`;
+
+  const live = props.objectiveEvaluationMap?.[key] || {};
+  const fromLive = Array.isArray(live.objectiveEvaluations)
+    ? live.objectiveEvaluations
+    : (Array.isArray(live.objective_evaluations) ? live.objective_evaluations : []);
+  if (fromLive.length) return fromLive;
+
+  const ended = props.discussionEndMap?.[key] || {};
+  const fromEnd = Array.isArray(ended.objectiveEvaluations)
+    ? ended.objectiveEvaluations
+    : (Array.isArray(ended.objective_evaluations) ? ended.objective_evaluations : []);
+  if (fromEnd.length) return fromEnd;
+
+  // Fallback: if active key has no data, use latest available update across all keys.
+  const pickRows = (entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    if (Array.isArray(entry.objectiveEvaluations)) return entry.objectiveEvaluations;
+    if (Array.isArray(entry.objective_evaluations)) return entry.objective_evaluations;
+    return [];
+  };
+
+  const candidates = [
+    ...Object.entries(props.objectiveEvaluationMap || {}).map(([k, v]) => ({
+      key: k,
+      updatedAt: Number(v?.updatedAt || 0),
+      rows: pickRows(v)
+    })),
+    ...Object.entries(props.discussionEndMap || {}).map(([k, v]) => ({
+      key: k,
+      updatedAt: Number(v?.updatedAt || 0),
+      rows: pickRows(v)
+    }))
+  ].filter((item) => item.rows.length > 0);
+
+  if (!candidates.length) return [];
+  candidates.sort((a, b) => b.updatedAt - a.updatedAt);
+  return candidates[0].rows;
+};
+
+const hasSummarizationStarted = computed(() => {
+  if (!hasActiveQuestion.value) return false;
+  const key = `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`;
+  const rounds = props.objectiveEvaluationMap?.[key]?.rounds || [];
+  if (Array.isArray(rounds) && rounds.length > 0) return true;
+  return getEvaluationRowsForActiveQuestion().length > 0;
+});
+
+const objectiveRows = computed(() => {
+  if (!hasActiveQuestion.value) return [];
+  const wsRows = getEvaluationRowsForActiveQuestion();
+  const resultMap = new Map(
+    wsRows.map((item) => [normalizeText(item.objective), item])
+  );
+
+  const base = configuredObjectives.value;
+  if (!base.length) {
+    return wsRows.map((item) => {
+      const achieved = Boolean(item?.achieved);
+      const evidence = String(item?.evidence || '').trim();
+      const rawStatus = String(item?.status || '').trim().toLowerCase();
+      const status = ['achieved', 'in_progress', 'not_discussed'].includes(rawStatus)
+        ? rawStatus
+        : (achieved ? 'achieved' : (evidence ? 'in_progress' : 'not_discussed'));
+      const pendingLabel = hasSummarizationStarted.value ? '总结中' : 'Not Discussed Yet';
+      return {
+        objective: String(item?.objective || 'Unnamed objective').trim(),
+        achieved,
+        statusLabel: status === 'achieved' ? 'Achieved' : (status === 'in_progress' ? 'In Discussion' : pendingLabel),
+        statusClass: status === 'achieved' ? 'achieved' : (status === 'in_progress' ? 'in-progress' : 'pending'),
+        evidence
+      };
+    });
+  }
+
+  return base.map((obj, idx) => {
+    const objectiveKey = String(obj || '').trim();
+    // LLM occasionally paraphrases objective text; fallback to index keeps UI aligned.
+    const byText = resultMap.get(normalizeText(objectiveKey));
+    const byIndex = wsRows[idx];
+    const hit = byText || byIndex || null;
+    const evidence = String(hit?.evidence || '').trim();
+    const achieved = Boolean(hit?.achieved);
+    const rawStatus = String(hit?.status || '').trim().toLowerCase();
+    const normalizedStatus = ['achieved', 'in_progress', 'not_discussed'].includes(rawStatus)
+      ? rawStatus
+      : (achieved ? 'achieved' : (evidence ? 'in_progress' : 'not_discussed'));
+
+    const statusLabelMap = {
+      achieved: 'Achieved',
+      in_progress: 'In Discussion',
+      not_discussed: hasSummarizationStarted.value ? '总结中' : 'Not Discussed Yet'
+    };
+
+    const statusClassMap = {
+      achieved: 'achieved',
+      in_progress: 'in-progress',
+      not_discussed: 'pending'
+    };
+
+    return {
+      objective: objectiveKey,
+      achieved,
+      statusLabel: statusLabelMap[normalizedStatus],
+      statusClass: statusClassMap[normalizedStatus],
+      evidence
+    };
   });
 });
 
-onMounted(() => {
-  // fetchPersonas(); // 已经由 pblSocket 全局处理
+const achievedCount = computed(() => objectiveRows.value.filter((row) => row.achieved).length);
+
+const progressPercent = computed(() => {
+  if (!objectiveRows.value.length) return 0;
+  return Math.round((achievedCount.value / objectiveRows.value.length) * 100);
 });
 </script>
 
 <style scoped>
-.view-e-container {
-  background-color: #ECECEC;
-}
 .view-e-header {
   background: #000000;
   padding: 8px 12px;
-  flex-shrink: 0;
-  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+
 .view-title {
   font-size: 14px;
   font-weight: 600;
   color: #ffffff;
   margin: 0;
-  text-align: left;
 }
-.timeline-scroll::-webkit-scrollbar {
+
+.objective-scroll::-webkit-scrollbar {
   width: 4px;
 }
-.timeline-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.timeline-scroll::-webkit-scrollbar-thumb {
-  background: rgba(128, 149, 202, 0.2);
+
+.objective-scroll::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.35);
   border-radius: 10px;
 }
-.timeline-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 149, 202, 0.4);
+
+.context-card,
+.progress-card {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
 }
 
-.animate-border-pulse {
-  animation: border-pulse 2s infinite;
+.summary-card {
+  background: #f8fafc;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
 }
 
-@keyframes border-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.7);
-    border-color: rgba(96, 165, 250, 1);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(96, 165, 250, 0);
-    border-color: rgba(96, 165, 250, 0.5);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
-    border-color: rgba(96, 165, 250, 1);
-  }
+.summary-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.summary-subtitle {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #334155;
+}
+
+.summary-round-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.summary-round {
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.summary-round-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.summary-round-track {
+  margin-top: 6px;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.summary-round-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.context-title,
+.progress-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.context-text {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.progress-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.progress-track {
+  margin-top: 8px;
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+}
+
+.objective-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.objective-item {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+}
+
+.objective-item.achieved {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.objective-item.pending {
+  border-color: #fca5a5;
+  background: #fff1f2;
+}
+
+.objective-item.in-progress {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.objective-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.objective-index {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.objective-status {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.objective-item.achieved .objective-status {
+  color: #15803d;
+}
+
+.objective-item.pending .objective-status {
+  color: #b91c1c;
+}
+
+.objective-item.in-progress .objective-status {
+  color: #1d4ed8;
+}
+
+.objective-text {
+  font-size: 13px;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.objective-evidence {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.35;
+}
+
+.empty-state {
+  margin-top: 12px;
+  border: 1px dashed #9ca3af;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  color: #6b7280;
+  background: #f9fafb;
+  font-size: 13px;
 }
 </style>

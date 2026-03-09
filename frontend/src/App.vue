@@ -78,9 +78,24 @@
         <ViewF :active-context="activeContext" />
       </div>
 
-      <!-- Right Column: ViewE -->
+      <!-- Right Column: ViewE + ViewG (two rows) -->
       <div class="right-column">
-        <ViewE style="height: 100%;" />
+        <div class="right-top-row">
+          <ViewE
+            style="height: 100%;"
+            :case-data="caseResult"
+            :objective-evaluation-map="objectiveEvaluationMap"
+            :discussion-end-map="discussionEndByQuestion"
+          />
+        </div>
+
+        <div class="right-bottom-row">
+          <ViewG
+            style="height: 100%;"
+            :objective-evaluation-map="objectiveEvaluationMap"
+            :discussion-end-map="discussionEndByQuestion"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -95,6 +110,7 @@ import ViewC from './views/ViewC.vue';
 import ViewD from './views/ViewD.vue';
 import ViewE from './views/ViewE.vue';
 import ViewF from './views/ViewF.vue';
+import ViewG from './views/ViewG.vue';
 import { usePBLSocket } from './composables/usePBLSocket.js';
 
 const sessionId = `pbl-session-${Date.now()}`;
@@ -121,6 +137,9 @@ const {
   getAgentColor,
   getAgentName,
   getAgentAvatar,
+  objectiveEvaluationMap,
+  discussionEndByQuestion,
+  agentStateByQuestion,
 } = usePBLSocket(sessionId, () => {});
 
 const selectedTopic = ref(null);
@@ -193,6 +212,9 @@ provide('pblSocket', {
   selectedNodeLeafId,
   discussionStage,
   interventionSummaries,
+  objectiveEvaluationMap,
+  discussionEndByQuestion,
+  agentStateByQuestion,
   personas,
   fetchPersonas,
   getAgentConfig,
@@ -467,5 +489,15 @@ body {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+}
+
+.right-top-row {
+  flex: 0.9;
+  min-height: 0;
+}
+
+.right-bottom-row {
+  flex: 1.6;
+  min-height: 0;
 }
 </style>

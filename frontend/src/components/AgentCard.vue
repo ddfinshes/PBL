@@ -210,23 +210,8 @@
             </div>
           </div>
         </div>
-
-        <div class="structural-knowledge-row">
-          <div class="structural-title">Structural Knowledge</div>
-          <div class="structural-options">
-            <div
-              v-for="lv in ['low', 'medium', 'high']"
-              :key="lv"
-              class="structural-option"
-              :class="{ 'is-active': modelValue.structuralKnowledge === lv }"
-              @click="modelValue.structuralKnowledge = lv"
-            >
-              {{ levelTranslations[lv] }}
-            </div>
-          </div>
-        </div>
       </section>
-
+      <!-- Traits Panel -->
       <section class="panel-section traits-panel">
         <div class="radar-grid">
           <div class="radar-card">
@@ -430,10 +415,6 @@ const personalityAxes = [
 const learningRadarRef = ref(null);
 const personalityRadarRef = ref(null);
 const draggingRadar = ref({ type: null, axisIndex: -1 });
-
-if (!props.modelValue.structuralKnowledge) {
-  props.modelValue.structuralKnowledge = 'medium';
-}
 
 if (!props.modelValue.cognitiveOrientation) {
   props.modelValue.cognitiveOrientation = 'line_based';
@@ -1304,44 +1285,6 @@ defineExpose({ resetEditing });
 .medium-bg { background-color: #f2f2a6; color: #000000;}
 .bad-bg    { background-color: #ffbfa1; color: #000; }
 
-.structural-knowledge-row {
-  margin: 0.2rem 0.6rem 0.5rem;
-  padding: 0.4rem 0.5rem;
-  background-color: rgba(255, 255, 255, 0.4);
-  border-radius: 12px;
-}
-
-.structural-title {
-  font-size: 11px;
-  font-weight: bold;
-  color: #6C6565;
-  margin-bottom: 0.3rem;
-}
-
-.structural-options {
-  display: flex;
-  background-color: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 20px;
-  padding: 2px;
-}
-
-.structural-option {
-  flex: 1;
-  text-align: center;
-  padding: 2px 10px;
-  font-size: 10px;
-  border-radius: 18px;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: #7F8C8D;
-}
-
-.structural-option.is-active {
-  background-color: #8095CA;
-  color: white;
-  font-weight: bold;
-}
 .traits-panel {
   padding: 0.2rem 0.3rem 0rem;
 }

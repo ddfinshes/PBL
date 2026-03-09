@@ -94,6 +94,15 @@ class PBLFastParser:
             - story_content：该场景的病历描述、临床表现、检查结果等
             - key_discussion_points：核心讨论要点
             - trigger_questions：引导问题
+                - trigger_question_learning_objectives：按 trigger question 拆分的学习目标
+
+                【学习目标拆分规则 - 必须遵守】
+                1. 每个 Scene 的每一个 trigger question 都必须有对应的学习目标。
+                2. 使用结构：
+                    - trigger_question: 问题原文
+                    - learning_objectives: 该问题下 1-4 条可评估目标
+                3. learning_objectives 必须是可观察、可检验的医学学习任务，不要写空泛口号。
+                4. 若原文未显式给出，结合该场景病情与问题语义进行合理补全。
             
             【图片处理 - 关键规则】
             1. 只在 Markdown 中寻找 `![](img/xxx.jpg)` 格式的图片
@@ -182,6 +191,42 @@ class PBLFastParser:
 
                 scene_dict['images_base64'] = images_b64
                 scene_dict['local_image_paths'] = local_paths
+
+                # 兜底对齐：确保每个 trigger question 都有对应的 learning objectives。
+                trigger_questions = scene_dict.get(
+                    'trigger_questions', []) or []
+                objective_rows = scene_dict.get(
+                    'trigger_question_learning_objectives', []) or []
+
+                normalized_rows = []
+                for q_idx, q_item in enumerate(trigger_questions):
+                    q_text = str((q_item or {}).get('question', '')).strip()
+                    matched = None
+
+                    # 优先按问题文本匹配。
+                    for row in objective_rows:
+                        row_q = str((row or {}).get(
+                            'trigger_question', '')).strip()
+                        if row_q and row_q == q_text:
+                            matched = row
+                            break
+
+                    # 若文本匹配失败，按索引兜底。
+                    if matched is None and q_idx < len(objective_rows):
+                        matched = objective_rows[q_idx]
+
+                    objectives = []
+                    if matched is not None:
+                        objectives = matched.get(
+                            'learning_objectives', []) or []
+
+                    normalized_rows.append({
+                        'trigger_question': q_text,
+                        'learning_objectives': [str(obj).strip() for obj in objectives if str(obj).strip()],
+                    })
+
+                scene_dict['trigger_question_learning_objectives'] = normalized_rows
+
                 if 'relevant_image_filenames' in scene_dict:
                     del scene_dict['relevant_image_filenames']
 

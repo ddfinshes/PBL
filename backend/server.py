@@ -9,7 +9,9 @@ from os import name
 import uvicorn
 import json
 import uuid
-from typing import Dict
+import copy
+from contextlib import suppress
+from typing import Dict, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import logging
@@ -68,6 +70,8 @@ class ActiveSceneRequest(BaseModel):
     trigger_questions: List[str]
     scene_index: int = 0
     question_index: int = 0
+    case_name: str = ""
+    current_learning_objectives: List[str] = []
 
 
 class InterventionSummaryRequest(BaseModel):
@@ -111,6 +115,13 @@ class AddQuestionRequest(BaseModel):
     caseName: str
     sceneIndex: int
     questionText: str
+
+
+class AddObjectiveRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+    objectiveText: str
 
 
 app_fastapi = FastAPI()
@@ -184,6 +195,57 @@ def process_response_urls(result_dict: dict) -> dict:
             del scene["local_image_paths"]
     return result_dict
 
+
+def resolve_case_json_path(case_name: str) -> Optional[Path]:
+    """Resolve case JSON path by filename first, then by case_title fallback."""
+    if not case_name:
+        return None
+
+    # 1) Direct filename match: /case/{case_name}.json
+    direct = CASE_STORAGE_DIR / f"{case_name}.json"
+    if direct.exists():
+        return direct
+
+    # 2) Title match in JSON content (handles filename/title mismatch)
+    target = case_name.strip()
+    for f in CASE_STORAGE_DIR.glob("*.json"):
+        try:
+            with open(f, "r", encoding="utf-8") as jf:
+                data = json.load(jf)
+            if str(data.get("case_title", "")).strip() == target:
+                return f
+        except Exception:
+            continue
+
+    return None
+
+
+def resolve_objectives_from_case(case_name: str, scene_idx: int, question_idx: int) -> List[str]:
+    """Read canonical per-question learning objectives directly from case JSON."""
+    path = resolve_case_json_path(case_name)
+    if not path:
+        return []
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        scenes = case_data.get("scenes") or []
+        if scene_idx < 0 or scene_idx >= len(scenes):
+            return []
+
+        rows = scenes[scene_idx].get(
+            "trigger_question_learning_objectives") or []
+        if question_idx < 0 or question_idx >= len(rows):
+            return []
+
+        objectives = rows[question_idx].get("learning_objectives") or []
+        return [str(o).strip() for o in objectives if str(o).strip()]
+    except Exception as e:
+        logger.error(
+            f"读取案例目标失败: case={case_name}, scene={scene_idx}, question={question_idx}, error={e}")
+        return []
+
 # --- API 路由 ---
 
 
@@ -191,9 +253,11 @@ def process_response_urls(result_dict: dict) -> dict:
 async def startup_event():
     """服务器启动时，从配置文件加载 Agents 并构建图。"""
     print("Initializing agents from agent_setting.json...")
+    logger.info("Starting agent initialization...")
 
     if not AGENT_SETTING_PATH.exists():
         print("✗ Startup: agent_setting.json not found. No agents loaded.")
+        logger.error(f"agent_setting.json not found at {AGENT_SETTING_PATH}")
         return
 
     try:
@@ -218,10 +282,19 @@ async def startup_event():
             register_student_agent(agent_id, persona)
 
         agent_ids = list(student_nodes.keys())
+        if not agent_ids:
+            logger.warning(
+                "No agents found in agent_setting.json after loading")
+            print("⚠ Warning: No agents found to build graph")
+            return
+
         graph.app = build_graph(agent_ids)
+        logger.info(f"✓ Graph successfully built with agents: {agent_ids}")
         print(f"✓ Startup: Graph built with agents: {agent_ids}")
     except Exception as e:
-        print(f"✗ Startup: Error loading agents: {e}")
+        logger.error(
+            f"✗ Startup: Error loading agents: {type(e).__name__}: {e}", exc_info=True)
+        print(f"✗ Startup: Error loading agents: {type(e).__name__}: {e}")
 
 
 @app_fastapi.get("/")
@@ -381,9 +454,29 @@ def api_get_case_images(case_name: str):
 @app_fastapi.post("/api/set-active-scene")
 async def set_active_scene(request: ActiveSceneRequest):
     from .pbl_info import update_pbl_info
-    update_pbl_info(request.story, request.trigger_questions,
-                    request.scene_index, request.question_index)
-    return {"status": "success", "message": "Global PBL info updated."}
+
+    # Prefer backend canonical objectives from case JSON to avoid stale frontend cache.
+    resolved_objectives = resolve_objectives_from_case(
+        case_name=request.case_name,
+        scene_idx=request.scene_index,
+        question_idx=request.question_index,
+    )
+    effective_objectives = resolved_objectives or request.current_learning_objectives
+
+    update_pbl_info(
+        story=request.story,
+        questions=request.trigger_questions,
+        scene_idx=request.scene_index,
+        q_idx=request.question_index,
+        learning_objectives=effective_objectives,
+        case_name=request.case_name,
+    )
+    return {
+        "status": "success",
+        "message": "Global PBL info updated.",
+        "objectives_source": "case_json" if resolved_objectives else "request_payload",
+        "objectives_count": len(effective_objectives),
+    }
 
 
 # 5. 【新增】保存编辑后的case数据
@@ -453,6 +546,13 @@ async def api_save_case(request_data: dict):
         # 更新问题内容
         scene["trigger_questions"][question_idx]["question"] = new_question
 
+        # 同步更新对应的问题学习目标映射（若存在）
+        per_q_objectives = scene.get(
+            "trigger_question_learning_objectives", [])
+        if isinstance(per_q_objectives, list) and question_idx < len(per_q_objectives):
+            if isinstance(per_q_objectives[question_idx], dict):
+                per_q_objectives[question_idx]["trigger_question"] = new_question
+
         # 保存回JSON文件
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(case_data, f, ensure_ascii=False, indent=2)
@@ -511,6 +611,12 @@ async def api_delete_question(request: DeleteQuestionRequest):
         # 删除问题
         scene["trigger_questions"].pop(question_idx)
 
+        # 同步删除对应的问题学习目标映射（若存在）
+        per_q_objectives = scene.get(
+            "trigger_question_learning_objectives", [])
+        if isinstance(per_q_objectives, list) and question_idx < len(per_q_objectives):
+            per_q_objectives.pop(question_idx)
+
         # 保存回JSON文件
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(case_data, f, ensure_ascii=False, indent=2)
@@ -558,9 +664,14 @@ async def api_add_question(request: AddQuestionRequest):
         scene = case_data["scenes"][scene_idx]
         if "trigger_questions" not in scene:
             scene["trigger_questions"] = []
+        if "trigger_question_learning_objectives" not in scene:
+            scene["trigger_question_learning_objectives"] = []
 
         # 添加新问题
         scene["trigger_questions"].append({"question": question_text})
+        scene["trigger_question_learning_objectives"].append(
+            {"trigger_question": question_text, "learning_objectives": []}
+        )
 
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(case_data, f, ensure_ascii=False, indent=2)
@@ -569,6 +680,77 @@ async def api_add_question(request: AddQuestionRequest):
 
     except Exception as e:
         logger.error(f"添加问题失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/add-objective")
+async def api_add_objective(request: AddObjectiveRequest):
+    """向当前场景的当前 trigger question 添加一条学习目标。"""
+    try:
+        case_name = request.caseName
+        scene_idx = request.sceneIndex
+        question_idx = request.questionIndex
+        objective_text = request.objectiveText.strip()
+
+        if not objective_text:
+            return {"status": "error", "detail": "objectiveText 不能为空"}, 400
+
+        json_path = CASE_STORAGE_DIR / f"{case_name}.json"
+        if not json_path.exists():
+            matching_files = list(CASE_STORAGE_DIR.glob("*.json"))
+            json_path = None
+            for f in matching_files:
+                try:
+                    with open(f, 'r', encoding='utf-8') as file:
+                        data = json.load(file)
+                        if data.get("case_title", "").strip() == case_name.strip():
+                            json_path = f
+                            break
+                except Exception:
+                    continue
+
+            if not json_path:
+                return {"status": "error", "detail": f"案例文件不存在: {case_name}"}, 404
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            case_data = json.load(f)
+
+        scenes = case_data.get("scenes", [])
+        if scene_idx >= len(scenes):
+            return {"status": "error", "detail": "场景索引越界"}, 400
+
+        scene = scenes[scene_idx]
+        questions = scene.get("trigger_questions", [])
+        if question_idx >= len(questions):
+            return {"status": "error", "detail": "问题索引越界"}, 400
+
+        q_text = str(questions[question_idx].get("question", "") or "").strip()
+
+        if "trigger_question_learning_objectives" not in scene or not isinstance(scene.get("trigger_question_learning_objectives"), list):
+            scene["trigger_question_learning_objectives"] = []
+
+        rows = scene["trigger_question_learning_objectives"]
+        while len(rows) <= question_idx:
+            rows.append({"trigger_question": "", "learning_objectives": []})
+
+        row = rows[question_idx]
+        if not isinstance(row, dict):
+            row = {"trigger_question": "", "learning_objectives": []}
+            rows[question_idx] = row
+
+        row["trigger_question"] = q_text
+        if "learning_objectives" not in row or not isinstance(row.get("learning_objectives"), list):
+            row["learning_objectives"] = []
+
+        if objective_text not in row["learning_objectives"]:
+            row["learning_objectives"].append(objective_text)
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        return {"status": "success", "message": "objective 已添加"}
+    except Exception as e:
+        logger.error(f"添加 objective 失败: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}, 500
 
 
@@ -672,7 +854,8 @@ async def update_personas_v1(request: Dict[str, Dict]):
         enriched_pairs = await asyncio.gather(
             *(enrich_persona(agent_id, persona_data) for agent_id, persona_data in request.items())
         )
-        enriched_request = {agent_id: persona for agent_id, persona in enriched_pairs}
+        enriched_request = {agent_id: persona for agent_id,
+                            persona in enriched_pairs}
 
         # 1. 保存到 agent_setting.json
         with open(AGENT_SETTING_PATH, 'w', encoding='utf-8') as f:
@@ -1022,6 +1205,17 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
     logger.info(f"WebSocket connection established for session: {session_id}")
 
+    # Check if graph is initialized
+    if graph.app is None:
+        logger.error(
+            f"WebSocket connection rejected for {session_id}: graph.app is None - agents not initialized")
+        await websocket.send_json({
+            "error": "System Error: Agent graph not initialized. Please check server logs and ensure agents were loaded during startup.",
+            "type": "system_error"
+        })
+        await websocket.close()
+        return
+
     config = {"configurable": {"thread_id": session_id}, "recursion_limit": 60}
 
     # 初始化该 session 的历史记录
@@ -1036,6 +1230,144 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
         }
 
     sh = session_histories[session_id]
+
+    def _build_state_snapshot(state_like: Optional[Dict]) -> Dict:
+        """Build a compact, rollback-safe runtime snapshot from graph state."""
+        base = state_like or {}
+        return {
+            "private_memory": copy.deepcopy(base.get("private_memory", {}) or {}),
+            "knowledge_state": copy.deepcopy(base.get("knowledge_state", {}) or {}),
+            "cognitive_load": copy.deepcopy(base.get("cognitive_load", {}) or {}),
+            "self_efficacy": copy.deepcopy(base.get("self_efficacy", {}) or {}),
+            "total_messages": int(base.get("total_messages", 0) or 0),
+            "current_topic": str(base.get("current_topic", "Undefined") or "Undefined"),
+            "discussion_active": bool(base.get("discussion_active", True)),
+            "is_teacher_interrupted": bool(base.get("is_teacher_interrupted", False)),
+            "force_no_silence_once": bool(base.get("force_no_silence_once", False)),
+            "next_speaker": str(base.get("next_speaker", "router") or "router"),
+            "trigger_question": str(base.get("trigger_question", "") or ""),
+            "objective_evaluations": copy.deepcopy(base.get("objective_evaluations", []) or []),
+            "achieved_all": bool(base.get("achieved_all", False)),
+            "end_reason": str(base.get("end_reason", "") or ""),
+        }
+
+    def _snapshot_for_message(message_id: Optional[str]) -> Dict:
+        if not message_id:
+            return _build_state_snapshot(None)
+        # Fallback to nearest ancestor snapshot for compatibility with old history rows.
+        curr = message_id
+        safety = 0
+        while curr and safety < 2000:
+            msg_data = sh["messages_map"].get(curr, {}) or {}
+            stored = msg_data.get("state_snapshot", {}) if isinstance(
+                msg_data, dict) else {}
+            if isinstance(stored, dict) and stored:
+                return _build_state_snapshot(stored)
+            curr = msg_data.get("parent_id") if isinstance(
+                msg_data, dict) else None
+            safety += 1
+        return _build_state_snapshot(None)
+
+    def _apply_out_to_runtime_state(runtime_state: Dict, out: Dict) -> Dict:
+        """Apply node incremental outputs onto session runtime state."""
+        if not isinstance(out, dict):
+            return runtime_state
+
+        # total_messages is an additive channel in LangGraph.
+        if "total_messages" in out:
+            runtime_state["total_messages"] = int(runtime_state.get(
+                "total_messages", 0) or 0) + int(out.get("total_messages", 0) or 0)
+
+        for key in [
+            "private_memory",
+            "knowledge_state",
+            "cognitive_load",
+            "self_efficacy",
+            "current_topic",
+            "discussion_active",
+            "is_teacher_interrupted",
+            "force_no_silence_once",
+            "next_speaker",
+            "trigger_question",
+            "objective_evaluations",
+            "achieved_all",
+            "end_reason",
+        ]:
+            if key in out:
+                runtime_state[key] = copy.deepcopy(out.get(key))
+
+        return runtime_state
+
+    def _clear_output_queue() -> None:
+        """Drop stale queued events so resumed branches don't consume old outputs."""
+        while not output_queue.empty():
+            try:
+                output_queue.get_nowait()
+                output_queue.task_done()
+            except asyncio.QueueEmpty:
+                break
+
+    async def _stop_graph_tasks(drain_pending: bool, clear_queue: bool = True) -> None:
+        """Stop current graph tasks safely.
+
+        - drain_pending=True: let output_processor finish queued events (internalization/topic/objective updates).
+        - clear_queue=True: remove any stale leftovers after stop.
+        """
+        nonlocal graph_task, output_task, pause_requested, discussion_paused
+
+        if drain_pending and graph_task:
+            # Ask output_processor to pause at next safe event boundary.
+            pause_requested = True
+            try:
+                await asyncio.wait_for(_wait_until_paused(), timeout=8.0)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Graceful pause timed out; forcing task cancellation.")
+
+        if graph_task:
+            graph_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await graph_task
+            graph_task = None
+
+        if output_task:
+            if drain_pending:
+                try:
+                    await asyncio.wait_for(output_queue.join(), timeout=3.0)
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Timed out draining pending output queue before task switch.")
+            output_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await output_task
+            output_task = None
+
+        if clear_queue:
+            _clear_output_queue()
+
+        pause_requested = False
+        discussion_paused = False
+
+    async def _wait_until_paused() -> None:
+        while not discussion_paused:
+            await asyncio.sleep(0.05)
+
+    async def _emit_state_restore(scene_idx: int, question_idx: int, snapshot: Optional[Dict]) -> None:
+        """Push restored objective/end-state so frontend can sync ViewE when switching branch/context."""
+        snap = _build_state_snapshot(snapshot or {})
+        rows = snap.get("objective_evaluations", []) or []
+        if not isinstance(rows, list):
+            rows = []
+        await websocket.send_json({
+            "type": "state_restored",
+            "scene_index": int(scene_idx),
+            "question_index": int(question_idx),
+            "trigger_question": snap.get("trigger_question", ""),
+            "objective_evaluations": rows,
+            "achieved_all": bool(snap.get("achieved_all", False)),
+            "end_reason": snap.get("end_reason", ""),
+            "state_snapshot": snap,
+        })
 
     # 【新增】连接时自动从文件恢复历史，防止重启后内存丢失
     if not sh["messages_map"] and DISCUSSION_FILE.exists():
@@ -1132,9 +1464,18 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     current_state = None
     graph_task = None
     output_queue = asyncio.Queue()
+    runtime_state: Dict = _build_state_snapshot(None)
+    pause_requested = False
+    discussion_paused = False
 
     async def stream_langgraph(state, s_idx, q_idx):
         """后台流式输出任务，携带当前任务的场景和问题索引"""
+        if graph.app is None:
+            logger.error(
+                "Error in stream_langgraph: graph.app is None - the agent graph was not initialized during startup")
+            await websocket.send_json({"error": "Agent graph not initialized. Please ensure agents are loaded and retry."})
+            return
+
         current_config = {
             "configurable": {"thread_id": f"{session_id}_{s_idx}_{q_idx}_{sh.get('current_branch', 'main')}"},
             "recursion_limit": 60
@@ -1153,6 +1494,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
     async def output_processor():
         """处理输出队列的任务"""
+        nonlocal runtime_state, graph_task, pause_requested, discussion_paused
         while True:
             try:
                 item = await output_queue.get()
@@ -1165,6 +1507,9 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     event, s_idx, q_idx = item
 
                 for node, out in event.items():
+                    runtime_state = _apply_out_to_runtime_state(
+                        runtime_state, out)
+
                     # 处理消息输出
                     if "messages" in out:
                         for m in out["messages"]:
@@ -1186,6 +1531,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                 "agent": sender,
                                 "content": m.content,
                                 "langchain_msg": m,
+                                "state_snapshot": _build_state_snapshot(runtime_state),
                                 "scene_index": s_idx,
                                 "question_index": q_idx,
                                 "is_convention": False
@@ -1213,7 +1559,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                 "summary": simplified,
                                 "type": "agent_output",
                                 "scene_index": s_idx,
-                                "question_index": q_idx
+                                "question_index": q_idx,
+                                "state_snapshot": msg_data.get("state_snapshot", {}),
                             })
 
                     # 处理主题更新
@@ -1225,16 +1572,70 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             "topic": out["current_topic"],
                             "type": "topic_update"
                         })
-                    # 新增阶段变更通知
-                    if "stage_index" in out:
-                        from . import pbl_info
-                        stage_idx = out["stage_index"]
+
+                    # Keep the active message snapshot aligned with latest state updates
+                    # from non-message nodes (topic_manager/summarizer/router).
+                    active_id = sh.get("active_id")
+                    if active_id and active_id in sh["messages_map"]:
+                        sh["messages_map"][active_id]["state_snapshot"] = _build_state_snapshot(
+                            runtime_state)
                         await websocket.send_json({
-                            "type": "stage_update",
-                            "stage_index": stage_idx,
-                            "stage_name": pbl_info.stage_tasks[stage_idx] if stage_idx < len(pbl_info.stage_tasks) else "讨论结束"
+                            "type": "state_snapshot_update",
+                            "scene_index": s_idx,
+                            "question_index": q_idx,
+                            "active_id": active_id,
+                            "state_snapshot": sh["messages_map"][active_id].get("state_snapshot", {}),
+                        })
+
+                    # 目标达成状态更新（由 router blackbox 给出）
+                    if "objective_evaluations" in out:
+                        logger.info(
+                            "WS objective_update send scene=%s question=%s rows=%s",
+                            s_idx,
+                            q_idx,
+                            len(out.get("objective_evaluations", []) or []),
+                        )
+                        await websocket.send_json({
+                            "type": "objective_update",
+                            "scene_index": s_idx,
+                            "question_index": q_idx,
+                            "trigger_question": out.get("trigger_question", ""),
+                            "objective_evaluations": out.get("objective_evaluations", []),
+                        })
+
+                    # 讨论结束事件（用于前端提示 END 原因）
+                    if out.get("next_speaker") == "END":
+                        logger.info(
+                            "WS discussion_end send scene=%s question=%s reason=%s rows=%s",
+                            s_idx,
+                            q_idx,
+                            out.get("end_reason", "unknown"),
+                            len(out.get("objective_evaluations", []) or []),
+                        )
+                        await websocket.send_json({
+                            "type": "discussion_end",
+                            "scene_index": s_idx,
+                            "question_index": q_idx,
+                            "reason": out.get("end_reason", "unknown"),
+                            "achieved_all": bool(out.get("achieved_all", False)),
+                            "trigger_question": out.get("trigger_question", ""),
+                            "objective_evaluations": out.get("objective_evaluations", []),
                         })
                 output_queue.task_done()
+
+                if pause_requested and not discussion_paused:
+                    logger.info(
+                        "Pause barrier reached: stopping stream after current event is fully persisted."
+                    )
+                    if graph_task:
+                        graph_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await graph_task
+                        graph_task = None
+                    _clear_output_queue()
+                    pause_requested = False
+                    discussion_paused = True
+                    await websocket.send_json({"type": "discussion_paused"})
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1285,8 +1686,26 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             f"Failed to clear specific block in discussion file: {e}")
 
                 # 同步更新全局 pbl_info
+                from . import pbl_info as pbl_state
                 from .pbl_info import update_pbl_info
-                update_pbl_info(initial_case, [], scene_idx, question_idx)
+                # 保留已由 /api/set-active-scene 注入的当前问题与目标，避免在 start_discussion 时被清空。
+                preserved_questions = pbl_state.pbl_triger_questions or []
+                preserved_case_name = getattr(
+                    pbl_state, "current_case_name", "") or ""
+                refreshed_objectives = resolve_objectives_from_case(
+                    case_name=preserved_case_name,
+                    scene_idx=scene_idx,
+                    question_idx=question_idx,
+                )
+                preserved_objectives = refreshed_objectives or pbl_state.current_learning_objectives or []
+                update_pbl_info(
+                    story=initial_case,
+                    questions=preserved_questions,
+                    scene_idx=scene_idx,
+                    q_idx=question_idx,
+                    learning_objectives=preserved_objectives,
+                    case_name=preserved_case_name,
+                )
 
                 # 为初始消息生成 ID 并记录
                 msg_id = f"init_{scene_idx}_{question_idx}_{str(uuid.uuid4())[:4]}"
@@ -1313,18 +1732,24 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
                 current_state = {
                     "messages": [init_msg],
-                    "summary": {},
+                    "total_messages": 0,
+                    "private_memory": {},
+                    "knowledge_state": {},
+                    "cognitive_load": {},
+                    "self_efficacy": {},
                     "next_speaker": "router",
                     "is_teacher_interrupted": False,
                     "discussion_active": True,
+                    "force_no_silence_once": False,
                     "current_topic": "开始讨论"
                 }
+                runtime_state = _build_state_snapshot(current_state)
+
+                sh["messages_map"][msg_id]["state_snapshot"] = _build_state_snapshot(
+                    runtime_state)
 
                 # 取消旧任务
-                if graph_task:
-                    graph_task.cancel()
-                if output_task:
-                    output_task.cancel()
+                await _stop_graph_tasks(drain_pending=False, clear_queue=True)
 
                 # 启动新任务
                 graph_task = asyncio.create_task(
@@ -1339,6 +1764,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     state = sh["q_states"][q_key]
                     sh["active_id"] = state["active_id"]
                     sh["current_branch"] = state["current_branch"]
+                    runtime_state = _snapshot_for_message(sh["active_id"])
+                    await _emit_state_restore(s_idx, q_idx, runtime_state)
                     logger.info(
                         f"Context switched to {q_key}: active_id={sh['active_id']}, branch={sh['current_branch']}")
                 else:
@@ -1350,20 +1777,23 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 if target_id in sh["messages_map"]:
                     logger.info(f"Rolling back to message: {target_id}")
 
+                    # Finish in-flight queue events first so memory/objective states are not lost.
+                    await _stop_graph_tasks(drain_pending=True, clear_queue=True)
+
                     target_branch = sh["messages_map"][target_id].get(
                         "branch_id", "main")
+                    target_scene_idx = int(
+                        sh["messages_map"][target_id].get("scene_index", 0) or 0)
+                    target_question_idx = int(
+                        sh["messages_map"][target_id].get("question_index", 0) or 0)
                     from . import pbl_info
-                    update_q_state(pbl_info.active_scene_index,
-                                   pbl_info.active_question_index, target_id, target_branch)
+                    update_q_state(target_scene_idx,
+                                   target_question_idx, target_id, target_branch)
+                    runtime_state = _snapshot_for_message(target_id)
+                    await _emit_state_restore(target_scene_idx, target_question_idx, runtime_state)
 
                     logger.info(
                         f"Context switched to branch: {sh['current_branch']}")
-
-                    # 停止当前讨论
-                    if graph_task:
-                        graph_task.cancel()
-                    if output_task:
-                        output_task.cancel()
 
                     await websocket.send_json({"type": "rollback_ack", "target_id": target_id})
 
@@ -1375,10 +1805,16 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 if target_id and target_id in sh["messages_map"]:
                     sh["active_id"] = target_id
                     sh["current_branch"] = branch_id
+                    runtime_state = _snapshot_for_message(target_id)
+                    target_scene_idx = int(
+                        sh["messages_map"][target_id].get("scene_index", 0) or 0)
+                    target_question_idx = int(
+                        sh["messages_map"][target_id].get("question_index", 0) or 0)
 
                     from . import pbl_info
-                    update_q_state(pbl_info.active_scene_index,
-                                   pbl_info.active_question_index, target_id, branch_id)
+                    update_q_state(target_scene_idx,
+                                   target_question_idx, target_id, branch_id)
+                    await _emit_state_restore(target_scene_idx, target_question_idx, runtime_state)
 
                     logger.info(
                         f"✓ Switched node focus to: {target_id} on branch: {branch_id}")
@@ -1393,6 +1829,10 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
             elif action == "teacher_intervention":
                 teacher_content = msg.get("content", "")
+
+                # Ensure previous branch in-flight operations are fully applied before branching intervention.
+                await _stop_graph_tasks(drain_pending=True, clear_queue=True)
+
                 # 优先使用前端传入的 parent_id，实现点击节点后分支
                 target_parent_id = msg.get("parent_id")
                 from . import pbl_info
@@ -1401,6 +1841,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         "branch_id", "main")
                     update_q_state(pbl_info.active_scene_index,
                                    pbl_info.active_question_index, target_parent_id, target_branch)
+                    runtime_state = _snapshot_for_message(target_parent_id)
                     logger.info(
                         f"Teacher intervention branching from focus: {target_parent_id} on branch: {sh['current_branch']}")
 
@@ -1436,6 +1877,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     "content": teacher_content,
                     "summary": teacher_content[:30],
                     "langchain_msg": teacher_msg,
+                    "state_snapshot": _build_state_snapshot(runtime_state),
                     "topic": "Teacher Intervention",
                     "scene_index": pbl_info.active_scene_index,
                     "question_index": pbl_info.active_question_index,
@@ -1461,24 +1903,29 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     "summary": teacher_content[:30],
                     "topic": "Teacher Intervention",
                     "scene_index": pbl_info.active_scene_index,
-                    "question_index": pbl_info.active_question_index
+                    "question_index": pbl_info.active_question_index,
+                    "state_snapshot": teacher_msg_data.get("state_snapshot", {}),
                 })
 
                 # 准备更新 Payload
                 update_payload = {
                     "messages": chain + [teacher_msg],  # 传入完整链条以重置状态
+                    "total_messages": int(runtime_state.get("total_messages", 0) or 0),
+                    "private_memory": copy.deepcopy(runtime_state.get("private_memory", {}) or {}),
+                    "knowledge_state": copy.deepcopy(runtime_state.get("knowledge_state", {}) or {}),
+                    "cognitive_load": copy.deepcopy(runtime_state.get("cognitive_load", {}) or {}),
+                    "self_efficacy": copy.deepcopy(runtime_state.get("self_efficacy", {}) or {}),
                     "is_teacher_interrupted": False,    # 设为 False 以跳过主持人干预回复，直接让学生讨论
                     "next_speaker": "router",           # 直接去路由
                     "discussion_active": True,
+                    "force_no_silence_once": True,
                     "current_topic": None               # 强制重置主题识别，由 topic_manager 重新生成
                 }
+                runtime_state = _build_state_snapshot(update_payload)
 
                 # 取消旧任务并重新启动讨论流
                 # 这里的 stream_langgraph 现在由于我们之前的修改，会使用包含 branch_id 的新 thread_id
-                if graph_task:
-                    graph_task.cancel()
-                if output_task:
-                    output_task.cancel()
+                await _stop_graph_tasks(drain_pending=False, clear_queue=True)
 
                 logger.info(
                     f"Restarting graph with new branch: {sh['current_branch']}")
@@ -1494,27 +1941,25 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
             elif action == "pause_discussion":
                 logger.info("教师指令：暂停讨论。")
-                if graph_task:
-                    graph_task.cancel()
-                if output_task:
-                    output_task.cancel()
-
-                # 尽量清空输出队列，实现“憋回去”
-                while not output_queue.empty():
-                    try:
-                        output_queue.get_nowait()
-                        output_queue.task_done()
-                    except asyncio.QueueEmpty:
-                        break
-
-                await websocket.send_json({"type": "discussion_paused"})
+                if not graph_task and not output_task:
+                    discussion_paused = True
+                    await websocket.send_json({"type": "discussion_paused"})
+                else:
+                    # Defer stopping until current event is fully processed and persisted.
+                    pause_requested = True
+                    logger.info(
+                        "Pause requested; waiting for current in-flight event to finish.")
 
             elif action == "resume_discussion":
                 logger.info("教师指令：恢复讨论。")
-                if graph_task:
-                    graph_task.cancel()
-                if output_task:
-                    output_task.cancel()
+                if pause_requested and not discussion_paused:
+                    try:
+                        await asyncio.wait_for(_wait_until_paused(), timeout=8.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Resume requested before pause barrier completed; forcing stop.")
+
+                await _stop_graph_tasks(drain_pending=False, clear_queue=True)
 
                 # 【修复】恢复时，需要重新构建到当前 active_id 的完整链条
                 # 这样能保证即使切换了分支，LangGraph 也能从正确的消息链恢复
@@ -1536,19 +1981,34 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 # 如果链条为空，说明只有初始消息，使用 None 让 checkpoint 恢复
                 resume_state = None
                 if chain:
+                    snapshot = _snapshot_for_message(sh.get("active_id"))
+                    historical_turns = int(
+                        snapshot.get("total_messages", 0) or 0)
                     resume_state = {
                         "messages": chain,
+                        "total_messages": historical_turns,
+                        "private_memory": copy.deepcopy(snapshot.get("private_memory", {}) or {}),
+                        "knowledge_state": copy.deepcopy(snapshot.get("knowledge_state", {}) or {}),
+                        "cognitive_load": copy.deepcopy(snapshot.get("cognitive_load", {}) or {}),
+                        "self_efficacy": copy.deepcopy(snapshot.get("self_efficacy", {}) or {}),
+                        "discussion_active": bool(snapshot.get("discussion_active", True)),
+                        "is_teacher_interrupted": bool(snapshot.get("is_teacher_interrupted", False)),
+                        "force_no_silence_once": bool(snapshot.get("force_no_silence_once", False)),
+                        "current_topic": snapshot.get("current_topic", "Undefined"),
                         "next_speaker": "router"
                     }
+                    runtime_state = _build_state_snapshot(resume_state)
                     logger.info(
                         f"Resuming with {len(chain)} historical messages from {sh['active_id']} on branch {sh['current_branch']}")
                 else:
+                    runtime_state = _build_state_snapshot(runtime_state)
                     logger.info(
                         f"No messages to resume, using checkpoint recovery on branch {sh['current_branch']}")
 
                 graph_task = asyncio.create_task(stream_langgraph(
                     resume_state, pbl_info.active_scene_index, pbl_info.active_question_index))
                 output_task = asyncio.create_task(output_processor())
+                discussion_paused = False
                 await websocket.send_json({"type": "discussion_resumed"})
 
     except WebSocketDisconnect:

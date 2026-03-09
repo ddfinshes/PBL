@@ -5,8 +5,6 @@
       <div class="flex justify-between items-center">
         <h1 class="view-title">Discussion Simulation</h1>
         <div class="flex items-center space-x-2">
-          <span class="text-sm font-medium text-gray-600">Stage: {{ discussionStage }}</span>
-          
           <div class="flex items-center space-x-1">
             <span class="relative flex h-3 w-3">
               <span
@@ -24,6 +22,11 @@
 
     <!-- Chat Area -->
     <main ref="chatContainer" class="flex-1 overflow-y-auto p-4" style="background: #ECECEC;">
+      <div v-if="endHint" class="mb-3 rounded-lg border border-[#7fbf4c] bg-[#f4fbe8] px-3 py-2 text-sm text-[#2f4f1f]">
+        <strong>{{ endHint.title }}</strong>
+        <span class="ml-2">{{ endHint.text }}</span>
+      </div>
+
       <!-- Initial State / Start Button -->
       <div v-if="filteredMessages.length === 0" class="text-center py-12">
         <h2 class="text-xl font-semibold text-gray-800">Discussion Not Started Yet</h2>
@@ -42,20 +45,29 @@
         <div 
           v-for="message in filteredMessages" 
           :key="message.id" 
-          class="relative mb-4 transition-all duration-300 cursor-pointer"
+          class="relative mb-4 transition-all duration-300"
           :class="{ 'scale-[1.01] z-10': message.isCurrentTopic }"
-          @click.stop="handleMessageClick(message)"
         >
           <!-- 呼吸边框特效 -->
           <div 
             v-if="message.isCurrentTopic" 
             class="absolute -inset-1 border-2 border-[#60A5FA] rounded-xl pointer-events-none animate-chat-pulse z-[5]"
           ></div>
+
+          <button
+            type="button"
+            class="rollback-btn"
+            title="回滚到此消息"
+            aria-label="回滚到此消息"
+            @click.stop="handleRollback(message)"
+          >
+            ↩
+          </button>
           
           <ChatCard
             :message="message"
             :agent-config="getAgentConfig(message.agent)"
-            class="relative z-10"
+            class="relative z-10 pr-10"
           />
         </div>
       </div>
@@ -101,13 +113,24 @@ const {
   selectedNodeLeafId,
   activeMessageId,
   activeQuestionInfo,
+  discussionEndByQuestion,
   personas,
   fetchPersonas,
   getAgentConfig,
-  discussionStage
 } = pblSocket
-console.log('-------',discussionStage
-)
+
+const endHint = computed(() => {
+  const key = `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`
+  const endState = discussionEndByQuestion?.value?.[key]
+  if (!endState) return null
+  if (endState.reason === 'learning_objectives_achieved' || endState.achievedAll) {
+    return {
+      title: 'Discussion Completed',
+      text: 'Learning objectives achieved. Router has ended this discussion for the current question.'
+    }
+  }
+  return null
+})
 // 获取特定消息 ID 向上溯源的所有父节点 ID（即该分支的完整路径）
 const getChainForId = (leafId) => {
   const chain = new Set();
@@ -228,7 +251,7 @@ const handleTeacherIntervention = (messageText) => {
   sendTeacherIntervention(messageText)
 }
 
-const handleMessageClick = (message) => {
+const handleRollback = (message) => {
   rollbackTo(message.id)
 }
 
@@ -277,5 +300,30 @@ onMounted(() => {
 
 .animate-chat-pulse {
   animation: chat-pulse 2s infinite;
+}
+
+.rollback-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  border: 1px solid #9ca3af;
+  background: rgba(255, 255, 255, 0.95);
+  color: #374151;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.rollback-btn:hover {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
 }
 </style>

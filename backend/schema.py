@@ -22,6 +22,15 @@ class BackgroundKnowledge(BaseModel):
     category: str = Field(description="分类，如：基础医学、临床医学")
     items: List[str] = Field(description="知识点列表")
 
+
+class TriggerQuestionLearningObjective(BaseModel):
+    """每个 trigger question 对应的学习目标。"""
+    trigger_question: str = Field(description="对应的触发问题原文")
+    learning_objectives: List[str] = Field(
+        default=[],
+        description="该问题下应达成的学习目标列表",
+    )
+
 # --- 新增：知识点溯源 ---
 
 
@@ -66,6 +75,11 @@ class Scene(BaseModel):
     trigger_questions: List[TriggerQuestion] = Field(
         default=[],
         description="对应 PDF 中的 '教师提示用问题'。"
+    )
+
+    trigger_question_learning_objectives: List[TriggerQuestionLearningObjective] = Field(
+        default=[],
+        description="按 trigger question 拆分的学习目标。每个问题至少应有一条对应目标。",
     )
 
     scene_reference_knowledge: Optional[str] = Field(

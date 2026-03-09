@@ -398,6 +398,7 @@ async function deleteQuestion(qIdx) {
 const onInspectQuestion = async (questionObj, qIdx) => {
   const activeStory = currentScene.value.story_content;
   const activeQuestion = questionObj.question;
+  const perQuestionObjectives = (currentScene.value.trigger_question_learning_objectives || [])[qIdx]?.learning_objectives || [];
 
   // 更新当前激活的问题索引，用于 UI 高亮 (同步到全局 socket 状态)
   activeQuestionInfo.value = { sceneIndex: currentIndex.value, questionIndex: qIdx };
@@ -416,6 +417,8 @@ const onInspectQuestion = async (questionObj, qIdx) => {
       body: JSON.stringify({
         story: activeStory,
         trigger_questions: [activeQuestion], // 重点：传入当前点击的这一个问题
+        case_name: props.caseData?.case_title || '',
+        current_learning_objectives: perQuestionObjectives,
         scene_index: currentIndex.value,
         question_index: qIdx
       })

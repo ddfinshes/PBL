@@ -54,12 +54,18 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, inject, provide } from 'vue';
+import { ref, watch, computed, inject, provide, onMounted } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import AgentCard from '../components/AgentCard.vue';
 
-const { fetchPersonas, updateKnowledge, addKnowledge, deleteKnowledge } = inject('pblSocket', {});
+const {
+  personas,
+  fetchPersonas,
+  updateKnowledge,
+  addKnowledge,
+  deleteKnowledge
+} = inject('pblSocket', {});
 
 const props = defineProps({
   theoreticalKnowledge: {
@@ -102,7 +108,6 @@ const createDefaultAgent = (index = 0) => ({
     novice: [],    // Medium
     layman: []     // Bad
   },
-  structuralKnowledge: 'medium',
   learning_styles: {
     surface: 2,
     deep: 2,
@@ -133,6 +138,94 @@ const createDefaultAgent = (index = 0) => ({
 });
 
 const agents = ref([createDefaultAgent(0)]);
+
+const mapBackendPersonaToAgent = (persona, index = 0, backendKey = '') => {
+  const highKnowledge = Array.isArray(persona?.knowledge_background?.high)
+    ? [...persona.knowledge_background.high]
+    : [];
+  const mediumKnowledge = Array.isArray(persona?.knowledge_background?.medium)
+    ? [...persona.knowledge_background.medium]
+    : [];
+  const lowKnowledge = Array.isArray(persona?.knowledge_background?.low)
+    ? [...persona.knowledge_background.low]
+    : [];
+
+  const classifiedSet = new Set([...highKnowledge, ...mediumKnowledge, ...lowKnowledge]);
+  const unclassifiedKnowledge = Array.isArray(props.theoreticalKnowledge)
+    ? props.theoreticalKnowledge.filter(point => !classifiedSet.has(point))
+    : [];
+
+  return {
+    ...createDefaultAgent(index),
+    id: `agent-${backendKey || index}`,
+    name: persona?.name ?? '',
+    age: persona?.age ?? '',
+    major: persona?.major ?? '',
+    avatar: persona?.avatar || 'avatar1.png',
+    cardColor: persona?.cardColor || persona?.color || cardColors[index % cardColors.length],
+    unclassifiedKnowledge,
+    classifiedKnowledge: {
+      competent: highKnowledge,
+      novice: mediumKnowledge,
+      layman: lowKnowledge
+    },
+    structuralKnowledge: persona?.knowledge_background?.structural_level || 'medium',
+    learning_styles: {
+      surface: Number(persona?.learning_styles?.surface) || 2,
+      deep: Number(persona?.learning_styles?.deep) || 2,
+      strategic: Number(persona?.learning_styles?.strategic) || 2
+    },
+    personality: {
+      openness: Number(persona?.personality?.openness) || 2,
+      conscientiousness: Number(persona?.personality?.conscientiousness) || 2,
+      extraversion: Number(persona?.personality?.extraversion) || 2,
+      agreeableness: Number(persona?.personality?.agreeableness) || 2,
+      neuroticism: Number(persona?.personality?.neuroticism) || 2
+    },
+    cognitiveOrientation: persona?.cognitive_orientation || 'line_based',
+    social: {
+      confidence: persona?.social?.confidence || 'medium',
+      register: persona?.social?.register || 'medium',
+      participation: persona?.social?.participation || 'medium',
+      role: persona?.interaction_role || persona?.social?.role || 'leader'
+    },
+    plasticity: persona?.learning_adaptivity || 'medium',
+    biasErrors: Array.isArray(persona?.bias_errors) ? [...persona.bias_errors] : []
+  };
+};
+
+const restoreAgentsFromBackend = async () => {
+  try {
+    let personaMap = {};
+
+    if (fetchPersonas) {
+      await fetchPersonas();
+      personaMap = personas?.value && typeof personas.value === 'object'
+        ? personas.value
+        : {};
+    }
+
+    if (!Object.keys(personaMap).length) {
+      const response = await axios.get('http://127.0.0.1:8000/get_personas');
+      personaMap = response?.data && typeof response.data === 'object' ? response.data : {};
+    }
+
+    const entries = Object.entries(personaMap);
+
+    if (!entries.length) return;
+
+    agents.value = entries.map(([backendKey, persona], index) =>
+      mapBackendPersonaToAgent(persona, index, backendKey)
+    );
+    activeIndex.value = 0;
+  } catch (error) {
+    console.error('Failed to restore personas in ViewB:', error);
+  }
+};
+
+onMounted(() => {
+  restoreAgentsFromBackend();
+});
 
 const STACK_HEADER_HEIGHT = 85; 
 const EXPANDED_CARD_HEIGHT = 870; 
@@ -355,8 +448,7 @@ const syncPersona = async () => {
         knowledge_background: {
            high: agent.classifiedKnowledge.competent,
            medium: agent.classifiedKnowledge.novice,
-            low: agent.classifiedKnowledge.layman,
-            structural_level: agent.structuralKnowledge || 'medium'
+            low: agent.classifiedKnowledge.layman
         },
         cognitive_orientation: agent.cognitiveOrientation || 'line_based',
         learning_adaptivity: agent.plasticity,

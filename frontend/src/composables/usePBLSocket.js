@@ -19,6 +19,22 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   const activeQuestionInfo = ref({ sceneIndex: -1, questionIndex: -1 });
   const interventionSummaries = ref({}); // 新增：离线/归档的总结分析数据 (intervention_id -> {parts, timestamp})
   const personas = ref({}); // 新增：Agent 配置数据
+  const objectiveEvaluationMap = ref({}); // key: "scene_question" -> latest + rounds
+  const discussionEndByQuestion = ref({}); // key: "scene_question" -> end payload
+  const agentStateByQuestion = ref({}); // key: "scene_question" -> latest runtime snapshot
+
+  const applyAgentStateSnapshot = (sceneIndex, questionIndex, snapshot) => {
+    if (!Number.isFinite(sceneIndex) || !Number.isFinite(questionIndex)) return;
+    if (!snapshot || typeof snapshot !== 'object') return;
+    const key = `${sceneIndex}_${questionIndex}`;
+    agentStateByQuestion.value = {
+      ...agentStateByQuestion.value,
+      [key]: {
+        ...snapshot,
+        updatedAt: Date.now()
+      }
+    };
+  };
 
   // 加载 Agent 配置
   const fetchPersonas = async () => {
@@ -110,11 +126,15 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
           topic: m.topic || '历史记录',
           timestamp: m.timestamp || Date.now(),
           sceneIndex: m.scene_index,
-          questionIndex: m.question_index
+          questionIndex: m.question_index,
+          stateSnapshot: m.state_snapshot || null
         }));
 
         if (newMsgs.length > 0) {
           messages.value = [...messages.value, ...newMsgs].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          newMsgs.forEach((m) => {
+            applyAgentStateSnapshot(Number(m.sceneIndex), Number(m.questionIndex), m.stateSnapshot);
+          });
           // 如果没有活跃 ID，则设为最后一条
           if (!activeMessageId.value && messages.value.length > 0) {
             activeMessageId.value = messages.value[messages.value.length - 1].id;
@@ -133,10 +153,12 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
           topic: data.topic || currentTopic.value,
           timestamp: Date.now(),
           sceneIndex: data.scene_index,
-          questionIndex: data.question_index
+          questionIndex: data.question_index,
+          stateSnapshot: data.state_snapshot || null
         };
         messages.value.push(newMsg);
         activeMessageId.value = newMsg.id;
+        applyAgentStateSnapshot(Number(newMsg.sceneIndex), Number(newMsg.questionIndex), newMsg.stateSnapshot);
 
         // DOM 更新后自动滚动到底部
         nextTick(() => {
@@ -182,6 +204,120 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         isPaused.value = true;
       } else if (data.type === 'discussion_resumed') {
         isPaused.value = false;
+      }
+
+      if (data.type === 'objective_update') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        const key = `${sceneIndex}_${questionIndex}`;
+        const incomingRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+        console.log('[objective_update] recv', {
+          key,
+          rowCount: incomingRows.length,
+          triggerQuestion: data.trigger_question || '',
+          activeKey: `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`
+        });
+        const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
+        const round = {
+          id: `round-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+          triggerQuestion: data.trigger_question || prev.triggerQuestion || '',
+          objectiveEvaluations: incomingRows,
+          achievedAll: incomingRows.length > 0 && incomingRows.every((item) => Boolean(item?.achieved)),
+          updatedAt: Date.now()
+        };
+
+        objectiveEvaluationMap.value = {
+          ...objectiveEvaluationMap.value,
+          [key]: {
+            triggerQuestion: round.triggerQuestion,
+            objectiveEvaluations: round.objectiveEvaluations,
+            achievedAll: round.achievedAll,
+            updatedAt: round.updatedAt,
+            rounds: [...(Array.isArray(prev.rounds) ? prev.rounds : []), round]
+          }
+        };
+        console.log('[objective_update] map keys', Object.keys(objectiveEvaluationMap.value));
+      }
+
+      if (data.type === 'discussion_end') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        const key = `${sceneIndex}_${questionIndex}`;
+        console.log('[discussion_end] recv', {
+          key,
+          achievedAll: Boolean(data.achieved_all),
+          objectiveCount: Array.isArray(data.objective_evaluations) ? data.objective_evaluations.length : 0
+        });
+        discussionEndByQuestion.value = {
+          ...discussionEndByQuestion.value,
+          [key]: {
+            reason: data.reason || 'unknown',
+            achievedAll: Boolean(data.achieved_all),
+            triggerQuestion: data.trigger_question || '',
+            objectiveEvaluations: Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [],
+            updatedAt: Date.now()
+          }
+        };
+      }
+
+      if (data.type === 'state_restored') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        const key = `${sceneIndex}_${questionIndex}`;
+        const restoredRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+        const restoredAt = Date.now();
+
+        objectiveEvaluationMap.value = {
+          ...objectiveEvaluationMap.value,
+          [key]: {
+            triggerQuestion: data.trigger_question || '',
+            objectiveEvaluations: restoredRows,
+            achievedAll: Boolean(data.achieved_all),
+            updatedAt: restoredAt,
+            rounds: restoredRows.length > 0
+              ? [{
+                id: `restore-${restoredAt}`,
+                triggerQuestion: data.trigger_question || '',
+                objectiveEvaluations: restoredRows,
+                achievedAll: Boolean(data.achieved_all),
+                updatedAt: restoredAt
+              }]
+              : []
+          }
+        };
+
+        if (String(data.end_reason || '').trim()) {
+          discussionEndByQuestion.value = {
+            ...discussionEndByQuestion.value,
+            [key]: {
+              reason: data.end_reason,
+              achievedAll: Boolean(data.achieved_all),
+              triggerQuestion: data.trigger_question || '',
+              objectiveEvaluations: restoredRows,
+              updatedAt: restoredAt
+            }
+          };
+        } else {
+          // Restored state is not ended: clear stale end-state for this question.
+          const nextEndMap = { ...discussionEndByQuestion.value };
+          delete nextEndMap[key];
+          discussionEndByQuestion.value = nextEndMap;
+        }
+
+        applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
+
+        console.log('[state_restored] applied', {
+          key,
+          rowCount: restoredRows.length,
+          achievedAll: Boolean(data.achieved_all),
+          endReason: data.end_reason || ''
+        });
+      }
+
+      if (data.type === 'state_snapshot_update') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
       }
 
       if (data.type === 'stage_update' && data.stage_name) {
@@ -352,6 +488,9 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     activeQuestionInfo,
     interventionSummaries,
     personas,
+    objectiveEvaluationMap,
+    discussionEndByQuestion,
+    agentStateByQuestion,
     fetchPersonas,
     getAgentConfig,
     getAgentColor,
