@@ -38,6 +38,7 @@ from .agents import (
     simplify_message,
     generate_learning_personality_sections,
 )
+from .agent_preview import generate_student_preview_response
 from .graph_builder import build_graph, GraphState
 from .graph import app, GraphState
 # 导入解析函数
@@ -122,6 +123,12 @@ class AddObjectiveRequest(BaseModel):
     sceneIndex: int
     questionIndex: int
     objectiveText: str
+
+
+class AgentPreviewRequest(BaseModel):
+    agent_id: str
+    persona: Dict
+    trigger_question: str
 
 
 app_fastapi = FastAPI()
@@ -751,6 +758,21 @@ async def api_add_objective(request: AddObjectiveRequest):
         return {"status": "success", "message": "objective 已添加"}
     except Exception as e:
         logger.error(f"添加 objective 失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/agent-preview")
+async def api_agent_preview(request: AgentPreviewRequest):
+    """Generate ViewB preview bubbles with one LLM call based on current panel settings."""
+    try:
+        result = await generate_student_preview_response(
+            agent_id=str(request.agent_id or "preview_agent"),
+            persona=dict(request.persona or {}),
+            trigger_question=str(request.trigger_question or "").strip(),
+        )
+        return {"status": "success", **result}
+    except Exception as e:
+        logger.error(f"Failed to generate agent preview: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}, 500
 
 

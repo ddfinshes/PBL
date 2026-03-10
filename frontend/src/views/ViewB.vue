@@ -16,13 +16,44 @@
             :style="getCardStyle(index)"
             @click="activeIndex = index"
           >
-            <AgentCard 
-              ref="cardRefs"
-              v-model="agents[index]"
-              :interaction-roles="interactionRoles"
-              :card-color="agents[index].cardColor"
-              @delete="deleteAgent(index)"
-            />
+            <div class="agent-dual-panel">
+              <div class="agent-config-panel">
+                <AgentCard 
+                  ref="cardRefs"
+                  v-model="agents[index]"
+                  :interaction-roles="interactionRoles"
+                  :card-color="agents[index].cardColor"
+                  @delete="deleteAgent(index)"
+                />
+              </div>
+
+              <aside class="agent-preview-panel" @click.stop>
+                <div class="preview-title">Agent Preview</div>
+
+                <div class="preview-bubble before">
+                  <div class="bubble-tag">Before Adjustment</div>
+                  <p>{{ getAgentPreview(agent).before_text }}</p>
+                </div>
+
+                <div class="preview-avatar-center">
+                  <img
+                    class="preview-avatar"
+                    :src="`/avatar/${agent.avatar || 'avatar1.png'}`"
+                    :alt="agent.name || 'Agent avatar'"
+                  />
+                </div>
+
+                <div class="preview-bubble after">
+                  <div class="bubble-tag">After Adjustment</div>
+                  <p>{{ previewLoadingByAgent[agent.id] ? '正在根据当前参数生成预览...' : getAgentPreview(agent).after_text }}</p>
+                </div>
+
+                <div class="preview-description-box">
+                  <div class="description-tag">Behavior Description</div>
+                  <p>{{ previewLoadingByAgent[agent.id] ? '正在生成该 Agent 的行为描述...' : getAgentPreview(agent).behavior_description }}</p>
+                </div>
+              </aside>
+            </div>
           </div>
         </transition-group>
       </div>
@@ -54,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, inject, provide, onMounted } from 'vue';
+import { ref, watch, computed, inject, provide, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import AgentCard from '../components/AgentCard.vue';
@@ -71,6 +102,10 @@ const props = defineProps({
   theoreticalKnowledge: {
     type: Array,
     default: () => []
+  },
+  caseData: {
+    type: Object,
+    default: null
   },
   caseTitle: {
     type: String,
@@ -109,16 +144,16 @@ const createDefaultAgent = (index = 0) => ({
     layman: []     // Bad
   },
   learning_styles: {
-    surface: 2,
-    deep: 2,
-    strategic: 2
+    surface: 3,
+    deep: 3,
+    strategic: 3
   },
   personality: {
-    openness: 2,
-    conscientiousness: 2,
-    extraversion: 2,
-    agreeableness: 2,
-    neuroticism: 2
+    openness: 3,
+    conscientiousness: 3,
+    extraversion: 3,
+    agreeableness: 3,
+    neuroticism: 3
   },
   cognitiveOrientation: 'line_based',
   social: {
@@ -127,17 +162,205 @@ const createDefaultAgent = (index = 0) => ({
     participation: 'medium',
     role: 'leader'
   },
-  plasticity: 'medium',
-  biasErrors: [],
-  biasErrorOptions: [
-    'Anchoring Bias',
-    'Availability Bias',
-    'Confirmation Bias',
-    'Premature Closure'
-  ]
+  plasticity: 'medium'
 });
 
 const agents = ref([createDefaultAgent(0)]);
+const previewByAgent = ref({});
+const previewLoadingByAgent = ref({});
+const previewRequestVersionByAgent = ref({});
+const previewAbortByAgent = ref({});
+const previewDebounceByAgent = ref({});
+const previewSignatureByAgent = ref({});
+
+const getFirstQuestionFromCaseData = (caseData) => {
+  if (!caseData || typeof caseData !== 'object') return '';
+
+  const scenes = Array.isArray(caseData.scenes) ? caseData.scenes : [];
+  const firstScene = scenes[0] || null;
+  if (firstScene && typeof firstScene === 'object') {
+    const fromQuestions = Array.isArray(firstScene.questions) ? firstScene.questions : [];
+    const q1 = fromQuestions[0];
+    if (typeof q1?.question === 'string' && q1.question.trim()) return q1.question.trim();
+    if (typeof q1 === 'string' && q1.trim()) return q1.trim();
+
+    const fromTriggerQuestions = Array.isArray(firstScene.trigger_questions)
+      ? firstScene.trigger_questions
+      : [];
+    const tq1 = fromTriggerQuestions[0];
+    if (typeof tq1?.question === 'string' && tq1.question.trim()) return tq1.question.trim();
+    if (typeof tq1 === 'string' && tq1.trim()) return tq1.trim();
+  }
+
+  const rootTriggerQuestions = Array.isArray(caseData.trigger_questions)
+    ? caseData.trigger_questions
+    : [];
+  const rtq1 = rootTriggerQuestions[0];
+  if (typeof rtq1?.question === 'string' && rtq1.question.trim()) return rtq1.question.trim();
+  if (typeof rtq1 === 'string' && rtq1.trim()) return rtq1.trim();
+
+  return '';
+};
+
+const firstQuestionText = computed(() => {
+  const q = getFirstQuestionFromCaseData(props.caseData);
+  if (q) return q;
+  return 'Upload a case to preview how this agent answers the first trigger question.';
+});
+
+const hasRealFirstQuestion = computed(() => {
+  return Boolean(getFirstQuestionFromCaseData(props.caseData));
+});
+
+const toScore = (v, fallback = 3) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(1, Math.min(5, Math.round(n))) : fallback;
+};
+
+const toPreviewPersona = (agent) => {
+  const fallbackName = agent?.name || 'Student';
+  return {
+    name: fallbackName,
+    age: agent?.age || '',
+    major: agent?.major || '',
+    learning_styles: {
+      surface: toScore(agent?.learning_styles?.surface),
+      deep: toScore(agent?.learning_styles?.deep),
+      strategic: toScore(agent?.learning_styles?.strategic)
+    },
+    personality: {
+      openness: toScore(agent?.personality?.openness),
+      conscientiousness: toScore(agent?.personality?.conscientiousness),
+      extraversion: toScore(agent?.personality?.extraversion),
+      agreeableness: toScore(agent?.personality?.agreeableness),
+      neuroticism: toScore(agent?.personality?.neuroticism)
+    },
+    knowledge_background: {
+      high: Array.isArray(agent?.classifiedKnowledge?.competent) ? agent.classifiedKnowledge.competent : [],
+      medium: Array.isArray(agent?.classifiedKnowledge?.novice) ? agent.classifiedKnowledge.novice : [],
+      low: Array.isArray(agent?.classifiedKnowledge?.layman) ? agent.classifiedKnowledge.layman : []
+    },
+    cognitive_orientation: agent?.cognitiveOrientation || 'line_based',
+    learning_adaptivity: agent?.plasticity || 'medium'
+  };
+};
+
+const getAgentPreview = (agent) => {
+  const key = agent?.id;
+  const preview = key ? previewByAgent.value[key] : null;
+  if (preview) return preview;
+  return {
+    before_text: `针对“${firstQuestionText.value}”，将基于基础配置进行对照分析。`,
+    after_text: '请调整参数后查看实时生成的风格化回答。',
+    action_display: '',
+    behavior_description: '系统将根据当前参数自动生成该 Agent 的行为描述。'
+  };
+};
+
+const requestAgentPreview = async (agent) => {
+  if (!agent?.id || !hasRealFirstQuestion.value) return;
+
+  const currentPreview = previewByAgent.value[agent.id] || {};
+  const previousAfterText = String(currentPreview.after_text || '').trim();
+  const previousBeforeText = String(currentPreview.before_text || '').trim();
+
+  const prevController = previewAbortByAgent.value[agent.id];
+  if (prevController) {
+    prevController.abort();
+  }
+  const controller = new AbortController();
+  previewAbortByAgent.value = {
+    ...previewAbortByAgent.value,
+    [agent.id]: controller
+  };
+
+  const currentVersion = (previewRequestVersionByAgent.value[agent.id] || 0) + 1;
+  previewRequestVersionByAgent.value[agent.id] = currentVersion;
+  previewLoadingByAgent.value = {
+    ...previewLoadingByAgent.value,
+    [agent.id]: true
+  };
+
+  try {
+    const response = await axios.post('http://127.0.0.1:8000/api/agent-preview', {
+      agent_id: agent.name || agent.id,
+      persona: toPreviewPersona(agent),
+      trigger_question: firstQuestionText.value
+    }, {
+      signal: controller.signal
+    });
+
+    if (previewRequestVersionByAgent.value[agent.id] !== currentVersion) return;
+
+    if (response?.data?.status === 'success') {
+      const afterText = String(response.data.after_text || '').trim();
+      const beforeText = previousAfterText || previousBeforeText || String(response.data.before_text || '').trim();
+      previewByAgent.value = {
+        ...previewByAgent.value,
+        [agent.id]: {
+          before_text: beforeText,
+          after_text: afterText,
+          action_display: response.data.action_display || '',
+          behavior_description: String(response.data.behavior_description || '').trim() || '该 Agent 的行为描述生成失败，请重试。'
+        }
+      };
+    }
+  } catch (error) {
+    if (previewRequestVersionByAgent.value[agent.id] !== currentVersion) return;
+    if (error?.name !== 'CanceledError' && error?.code !== 'ERR_CANCELED') {
+      console.error('Failed to fetch agent preview:', error);
+    }
+  } finally {
+    if (previewRequestVersionByAgent.value[agent.id] === currentVersion) {
+      previewLoadingByAgent.value = {
+        ...previewLoadingByAgent.value,
+        [agent.id]: false
+      };
+    }
+
+    const latestController = previewAbortByAgent.value[agent.id];
+    if (latestController === controller) {
+      const nextMap = { ...previewAbortByAgent.value };
+      delete nextMap[agent.id];
+      previewAbortByAgent.value = nextMap;
+    }
+  }
+};
+
+const buildAgentPreviewSignature = (agent) => {
+  if (!agent?.id) return '';
+  if (!hasRealFirstQuestion.value) return `no-question:${agent.id}`;
+  const persona = toPreviewPersona(agent);
+  return JSON.stringify({
+    question: firstQuestionText.value,
+    persona
+  });
+};
+
+const scheduleAgentPreviewRefresh = (agentId) => {
+  const agent = agents.value.find(item => item.id === agentId);
+  if (!agent) return;
+
+  const runningController = previewAbortByAgent.value[agentId];
+  if (runningController) {
+    runningController.abort();
+  }
+
+  const oldTimer = previewDebounceByAgent.value[agentId];
+  if (oldTimer) clearTimeout(oldTimer);
+
+  const timerId = setTimeout(() => {
+    const nextDebounce = { ...previewDebounceByAgent.value };
+    delete nextDebounce[agentId];
+    previewDebounceByAgent.value = nextDebounce;
+    requestAgentPreview(agent);
+  }, 420);
+
+  previewDebounceByAgent.value = {
+    ...previewDebounceByAgent.value,
+    [agentId]: timerId
+  };
+};
 
 const mapBackendPersonaToAgent = (persona, index = 0, backendKey = '') => {
   const highKnowledge = Array.isArray(persona?.knowledge_background?.high)
@@ -171,16 +394,16 @@ const mapBackendPersonaToAgent = (persona, index = 0, backendKey = '') => {
     },
     structuralKnowledge: persona?.knowledge_background?.structural_level || 'medium',
     learning_styles: {
-      surface: Number(persona?.learning_styles?.surface) || 2,
-      deep: Number(persona?.learning_styles?.deep) || 2,
-      strategic: Number(persona?.learning_styles?.strategic) || 2
+      surface: Number(persona?.learning_styles?.surface) || 3,
+      deep: Number(persona?.learning_styles?.deep) || 3,
+      strategic: Number(persona?.learning_styles?.strategic) || 3
     },
     personality: {
-      openness: Number(persona?.personality?.openness) || 2,
-      conscientiousness: Number(persona?.personality?.conscientiousness) || 2,
-      extraversion: Number(persona?.personality?.extraversion) || 2,
-      agreeableness: Number(persona?.personality?.agreeableness) || 2,
-      neuroticism: Number(persona?.personality?.neuroticism) || 2
+      openness: Number(persona?.personality?.openness) || 3,
+      conscientiousness: Number(persona?.personality?.conscientiousness) || 3,
+      extraversion: Number(persona?.personality?.extraversion) || 3,
+      agreeableness: Number(persona?.personality?.agreeableness) || 3,
+      neuroticism: Number(persona?.personality?.neuroticism) || 3
     },
     cognitiveOrientation: persona?.cognitive_orientation || 'line_based',
     social: {
@@ -189,8 +412,7 @@ const mapBackendPersonaToAgent = (persona, index = 0, backendKey = '') => {
       participation: persona?.social?.participation || 'medium',
       role: persona?.interaction_role || persona?.social?.role || 'leader'
     },
-    plasticity: persona?.learning_adaptivity || 'medium',
-    biasErrors: Array.isArray(persona?.bias_errors) ? [...persona.bias_errors] : []
+    plasticity: persona?.learning_adaptivity || 'medium'
   };
 };
 
@@ -226,6 +448,69 @@ const restoreAgentsFromBackend = async () => {
 onMounted(() => {
   restoreAgentsFromBackend();
 });
+
+onBeforeUnmount(() => {
+  Object.values(previewDebounceByAgent.value).forEach(timerId => clearTimeout(timerId));
+  Object.values(previewAbortByAgent.value).forEach(controller => controller?.abort?.());
+  previewDebounceByAgent.value = {};
+  previewAbortByAgent.value = {};
+});
+
+watch(firstQuestionText, () => {
+  if (!hasRealFirstQuestion.value) return;
+  agents.value.forEach(agent => {
+    previewSignatureByAgent.value[agent.id] = '';
+    scheduleAgentPreviewRefresh(agent.id);
+  });
+}, { immediate: true });
+
+watch(agents, () => {
+  const seenIds = new Set();
+
+  agents.value.forEach(agent => {
+    const aid = agent?.id;
+    if (!aid) return;
+    seenIds.add(aid);
+
+    const nextSignature = buildAgentPreviewSignature(agent);
+    const prevSignature = previewSignatureByAgent.value[aid] || '';
+
+    if (nextSignature !== prevSignature) {
+      previewSignatureByAgent.value[aid] = nextSignature;
+      if (hasRealFirstQuestion.value) {
+        scheduleAgentPreviewRefresh(aid);
+      }
+    }
+  });
+
+  Object.keys(previewSignatureByAgent.value).forEach(aid => {
+    if (seenIds.has(aid)) return;
+
+    const timerId = previewDebounceByAgent.value[aid];
+    if (timerId) clearTimeout(timerId);
+
+    const runningController = previewAbortByAgent.value[aid];
+    if (runningController) runningController.abort();
+
+    const nextSign = { ...previewSignatureByAgent.value };
+    const nextTimer = { ...previewDebounceByAgent.value };
+    const nextAbort = { ...previewAbortByAgent.value };
+    const nextPreview = { ...previewByAgent.value };
+    const nextLoading = { ...previewLoadingByAgent.value };
+
+    delete nextSign[aid];
+    delete nextTimer[aid];
+    delete nextAbort[aid];
+    delete nextPreview[aid];
+    delete nextLoading[aid];
+
+    previewSignatureByAgent.value = nextSign;
+    previewDebounceByAgent.value = nextTimer;
+    previewAbortByAgent.value = nextAbort;
+    previewByAgent.value = nextPreview;
+    previewLoadingByAgent.value = nextLoading;
+  });
+}, { deep: true });
 
 const STACK_HEADER_HEIGHT = 85; 
 const EXPANDED_CARD_HEIGHT = 870; 
@@ -288,7 +573,7 @@ const getCardStyle = (index) => {
     top: '0',
     left: '50%',
     width: '100%',
-    maxWidth: '1200px',
+    maxWidth: '100%',
     height: `${EXPANDED_CARD_HEIGHT}px`,
     transition: 'all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
     cursor: activeIndex.value !== index ? 'pointer' : 'default',
@@ -434,16 +719,16 @@ const syncPersona = async () => {
         color: agent.cardColor,     
         cardColor: agent.cardColor, 
         learning_styles: {
-          surface: Number(agent.learning_styles?.surface) || 2,
-          deep: Number(agent.learning_styles?.deep) || 2,
-          strategic: Number(agent.learning_styles?.strategic) || 2
+          surface: Number(agent.learning_styles?.surface) || 3,
+          deep: Number(agent.learning_styles?.deep) || 3,
+          strategic: Number(agent.learning_styles?.strategic) || 3
         },
         personality: {
-          openness: Number(agent.personality?.openness) || 2,
-          conscientiousness: Number(agent.personality?.conscientiousness) || 2,
-          extraversion: Number(agent.personality?.extraversion) || 2,
-          agreeableness: Number(agent.personality?.agreeableness) || 2,
-          neuroticism: Number(agent.personality?.neuroticism) || 2
+          openness: Number(agent.personality?.openness) || 3,
+          conscientiousness: Number(agent.personality?.conscientiousness) || 3,
+          extraversion: Number(agent.personality?.extraversion) || 3,
+          agreeableness: Number(agent.personality?.agreeableness) || 3,
+          neuroticism: Number(agent.personality?.neuroticism) || 3
         },
         knowledge_background: {
            high: agent.classifiedKnowledge.competent,
@@ -451,8 +736,7 @@ const syncPersona = async () => {
             low: agent.classifiedKnowledge.layman
         },
         cognitive_orientation: agent.cognitiveOrientation || 'line_based',
-        learning_adaptivity: agent.plasticity,
-        bias_errors: Array.isArray(agent.biasErrors) ? agent.biasErrors : []
+        learning_adaptivity: agent.plasticity
       };
     });
 
@@ -475,6 +759,10 @@ const syncPersona = async () => {
 <style scoped>
 .view-b-content-wrapper {
   overflow: visible; /* 允许卡片溢出阴影显示 */
+}
+
+.view-b-scroll-area {
+  overflow-x: hidden;
 }
 
 .header {
@@ -516,6 +804,116 @@ const syncPersona = async () => {
 .agent-card-wrapper {
   transform-origin: center top;
   will-change: transform, opacity;
+}
+
+.agent-dual-panel {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.95fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.agent-config-panel {
+  min-width: 0;
+}
+
+.agent-preview-panel {
+  background: #f8f9ff;
+  border: 1px solid #d7ddf2;
+  border-radius: 20px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.preview-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f3a63;
+  text-align: center;
+  letter-spacing: 0.02em;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.preview-avatar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px 0;
+}
+
+.preview-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+  background: #ffffff;
+}
+
+.preview-bubble {
+  border-radius: 14px;
+  padding: 9px 10px;
+  border: 1px solid;
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.preview-description-box {
+  border-radius: 12px;
+  padding: 8px 10px;
+  border: 1px solid #d7ddf2;
+  background: #ffffff;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.description-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  color: #5b668a;
+}
+
+.preview-description-box p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #2a2f45;
+}
+
+.preview-bubble p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #2a2f45;
+}
+
+.preview-bubble.before {
+  background: #edf2ff;
+  border-color: #cfdaf8;
+}
+
+.preview-bubble.after {
+  background: #e9f6f2;
+  border-color: #c9e9dd;
+}
+
+.bubble-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  color: #5b668a;
 }
 
 /* Stack Transitions */

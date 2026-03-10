@@ -370,21 +370,21 @@ class ActionDistributionService:
         scores = _extract_numeric_trait_scores(persona)
         personality = scores["personality"]
 
-        agreeableness = int(personality.get("agreeableness", 2))
-        conscientiousness = int(personality.get("conscientiousness", 2))
-        extraversion = int(personality.get("extraversion", 2))
-        openness = int(personality.get("openness", 2))
+        agreeableness = int(personality.get("agreeableness", 3))
+        conscientiousness = int(personality.get("conscientiousness", 3))
+        extraversion = int(personality.get("extraversion", 3))
+        openness = int(personality.get("openness", 3))
         spa_band = ActionDistributionService.estimate_spa_band(persona)
 
-        if agreeableness >= 3:
+        if agreeableness > 3:
             weights["accumulation"] = max(weights["accumulation"], 0.78)
-        if conscientiousness >= 3:
+        if conscientiousness > 3:
             weights["accumulation"] *= 0.8
 
-        if extraversion >= 3 and openness >= 3:
+        if extraversion > 3 and openness > 3:
             weights["seeking_help_alignment"] = max(
                 weights["seeking_help_alignment"], 0.20)
-        elif extraversion >= 3 or openness >= 3:
+        elif extraversion > 3 or openness > 3:
             weights["seeking_help_alignment"] = max(
                 weights["seeking_help_alignment"], 0.16)
 
@@ -392,7 +392,7 @@ class ActionDistributionService:
             weights["seeking_help_alignment"] = max(
                 weights["seeking_help_alignment"], 0.18)
 
-        if conscientiousness >= 3:
+        if conscientiousness > 3:
             weights["correction_challenge"] = max(
                 weights["correction_challenge"], 0.13)
 
@@ -404,7 +404,7 @@ class ActionDistributionService:
             weights["correction_challenge"] = min(
                 weights["correction_challenge"], 0.029)
 
-        if agreeableness >= 3:
+        if agreeableness > 3:
             weights["correction_challenge"] = min(
                 weights["correction_challenge"], 0.012)
 

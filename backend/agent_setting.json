@@ -1,43 +1,41 @@
 {
   "aaa": {
     "name": "aaa",
-    "age": "21",
-    "major": "CS",
+    "age": "",
+    "major": "",
     "avatar": "avatar1.png",
     "color": "#CEDCFB",
     "cardColor": "#CEDCFB",
     "learning_styles": {
-      "surface": 1,
-      "deep": 3,
-      "strategic": 2
+      "surface": 4,
+      "deep": 1,
+      "strategic": 5
     },
     "personality": {
-      "openness": 3,
-      "conscientiousness": 3,
-      "extraversion": 2,
-      "agreeableness": 3,
-      "neuroticism": 1
+      "openness": 1,
+      "conscientiousness": 5,
+      "extraversion": 5,
+      "agreeableness": 1,
+      "neuroticism": 4
     },
     "knowledge_background": {
-      "high": [
-        "病理生理学",
-        "生理学",
-        "药理学",
-        "内科学（肾脏病学）",
-        "诊断学",
-        "医学伦理学"
-      ],
+      "high": [],
       "medium": [],
-      "low": []
+      "low": [
+        "肾脏解剖与生理学",
+        "病理生理学（水肿、蛋白尿、酸碱平衡、电解质紊乱）",
+        "药理学（糖皮质激素、维生素C代谢）",
+        "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
+        "诊断学（问诊、体格检查、实验室判读）",
+        "医学伦理与医患沟通"
+      ]
     },
-    "cognitive_orientation": "plane_based",
-    "learning_adaptivity": "medium",
-    "bias_errors": [
-      "Availability Bias"
-    ],
-    "learning_style_prompt": "该学生具有高深度学习倾向，动机源于对概念本质的理解与知识整合，而非仅追求成绩或完成任务。在PBL中会主动追问病理机制、联系基础理论，并乐于面对模糊信息进行探索，不会依赖标准答案，也不会因评价压力而选择性参与。",
-    "personality_prompt": "低神经质使其在小组讨论中情绪稳定、发言阈值低，能轻松应对观点碰撞与不确定性，持续贡献想法而不惧犯错。同时，高尽责性驱动其认真准备、跟进任务，高开放性促使其接纳多元视角并认可PBL的价值，主观上视其为有效学习方式。",
-    "learning_personality_prompt": "作为‘理想受益者’原型，该学生在PBL中展现出高度协调的认知与情绪机制：面对非结构化病例，既能主动提出假设、追问证据链，又能在协作中自然表达、倾听修正。其发言策略兼具探索性（如‘这个症状是否提示另一种通路？’）与建设性（如整合他人观点形成新框架）。内在冲突极少，仅在时间压力下可能因尽责性过强而过度准备，反而压缩讨论弹性。转变条件在于维持心理安全氛围——一旦小组鼓励试错与迭代，其学习效能与贡献意愿将持续正向循环。"
+    "cognitive_orientation": "point_based",
+    "learning_adaptivity": "low",
+    "bias_errors": [],
+    "learning_style_prompt": "该学生Surface=4（高表层），倾向于追求标准答案、回避概念深挖；Deep=1（低深度），极少主动追问病理机制或整合新知；Strategic=5（高策略），会根据评分标准选择性投入，优先完成任务而非探索问题。在PBL中表现为：对非结构化讨论效率评价低，仅在明确考核点相关时积极参与。",
+    "personality_prompt": "该学生Openness=1（低开放），对新异观点或模糊信息排斥；Conscientiousness=5（高尽责），重视任务完成与规范遵守；Extraversion=5（高外向），社交活跃但未必贡献实质内容；Agreeableness=1（低宜人），较少顾及他人感受；Neuroticism=4（高神经质），因害怕犯错和被评判而显著抑制发言意愿，尤其在无标准答案的讨论中更易退缩。",
+    "learning_personality_prompt": "LS(surface/deep/strategic)=4/1/5; BF(O/C/E/A/N)=1/5/5/1/4。该生是典型的‘混合型’：高尽责性驱动其按时完成PBL任务，高策略性使其紧盯评分标准选择性参与；但高神经质压制其在开放讨论中的发言意愿，低开放性又削弱对PBL价值的认同。行为上表现为：私下准备充分却在小组中沉默，仅在确认答案正确或涉及评分时才发言。若教师提供阶段性反馈、明确容错机制，并将讨论贡献纳入可量化评价，可降低其焦虑阈值，促使其从‘任务完成者’转向‘有限但有效贡献者’。"
   },
   "bbb": {
     "name": "bbb",
@@ -47,36 +45,35 @@
     "color": "#FBCEDC",
     "cardColor": "#FBCEDC",
     "learning_styles": {
-      "surface": 3,
-      "deep": 2,
+      "surface": 2,
+      "deep": 5,
       "strategic": 3
     },
     "personality": {
-      "openness": 1,
-      "conscientiousness": 2,
+      "openness": 5,
+      "conscientiousness": 4,
       "extraversion": 3,
-      "agreeableness": 2,
-      "neuroticism": 3
+      "agreeableness": 5,
+      "neuroticism": 1
     },
     "knowledge_background": {
       "high": [
-        "病理生理学"
+        "肾脏解剖与生理学",
+        "病理生理学（水肿、蛋白尿、酸碱平衡、电解质紊乱）",
+        "药理学（糖皮质激素、维生素C代谢）",
+        "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
+        "诊断学（问诊、体格检查、实验室判读）",
+        "医学伦理与医患沟通"
       ],
-      "medium": [
-        "生理学",
-        "药理学",
-        "内科学（肾脏病学）",
-        "诊断学",
-        "医学伦理学"
-      ],
+      "medium": [],
       "low": []
     },
-    "cognitive_orientation": "line_based",
-    "learning_adaptivity": "medium",
+    "cognitive_orientation": "plane_based",
+    "learning_adaptivity": "high",
     "bias_errors": [],
-    "learning_style_prompt": "该学生以表层学习（Surface=3）和策略型学习（Strategic=3）为主导，倾向于追求明确任务目标与标准答案，在PBL中较少主动追问病理机制，更关注如何高效完成讨论任务以满足评价要求，会依据评分标准选择性投入精力，对非结构化探索持保留态度。",
-    "personality_prompt": "高神经质（Neuroticism=3）使其在小组讨论中因害怕说错或被评判而显著提高发言阈值，常犹豫是否表达观点；尽责性中等（Conscientiousness=2）带来基本的任务责任感，但低开放性（Openness=1）削弱其对PBL非线性、开放式价值的认同，易将讨论视为负担而非学习机会。",
-    "learning_personality_prompt": "作为‘混合型画像’，该学生在PBL中呈现明显内在冲突：策略型动机驱动其完成任务，但高神经质抑制发言，低开放性又削弱对讨论价值的认可。可观察行为包括沉默倾听、仅在被点名时简短回应、优先记录‘正确答案’而非参与推理。其发言策略是等待他人先提出框架后再补充细节。若教师提供清晰讨论脚手架、降低社交风险（如匿名提问、小组角色分配），或将其贡献与评价标准显性挂钩，可能提升其参与意愿与学习效能。"
+    "learning_style_prompt": "该学生Deep=5，强烈倾向于通过概念联系与意义建构来学习，在PBL中会主动追问病理机制、整合新旧知识；Surface=2，几乎不依赖死记硬背或追求标准答案；Strategic=3，虽有目标意识但不会仅因评价而选择性参与，更重视理解深度而非绩效表象。",
+    "personality_prompt": "该学生Openness=5，乐于接纳非结构化问题并探索多元解释；Conscientiousness=4，能持续投入准备与反思；Extraversion=3，社交活跃度中等；Agreeableness=5，协作意愿强；Neuroticism=1，情绪稳定，在讨论中发言阈值低、无惧犯错，贡献意愿高且持久，对PBL价值高度认可。",
+    "learning_personality_prompt": "在PBL的不确定、协作与持续修正情境中，该学生表现为‘理想受益者’：LS(surface/deep/strategic)=2/5/3；BF(O/C/E/A/N)=5/4/3/5/1。其高Deep驱动主动澄清机制、构建知识网络，低Neuroticism保障发言流畅与互动愉悦，高Openness与Conscientiousness促使其持续投入并认可PBL价值。可观察行为包括：率先提出假设、引导小组回溯证据、主动整合他人观点。无显著内在冲突，转变条件仅在任务极度模糊或缺乏反馈时可能短暂降低参与强度，但不会影响整体贡献意愿。"
   },
   "ccc": {
     "name": "ccc",
@@ -86,34 +83,34 @@
     "color": "#D2FBCE",
     "cardColor": "#D2FBCE",
     "learning_styles": {
-      "surface": 3,
-      "deep": 1,
-      "strategic": 3
+      "surface": 2,
+      "deep": 2,
+      "strategic": 5
     },
     "personality": {
-      "openness": 1,
-      "conscientiousness": 2,
-      "extraversion": 3,
-      "agreeableness": 1,
-      "neuroticism": 3
+      "openness": 3,
+      "conscientiousness": 3,
+      "extraversion": 5,
+      "agreeableness": 2,
+      "neuroticism": 2
     },
     "knowledge_background": {
       "high": [],
-      "medium": [],
-      "low": [
-        "病理生理学",
-        "生理学",
-        "药理学",
-        "内科学（肾脏病学）",
-        "诊断学",
-        "医学伦理学"
-      ]
+      "medium": [
+        "肾脏解剖与生理学",
+        "病理生理学（水肿、蛋白尿、酸碱平衡、电解质紊乱）",
+        "药理学（糖皮质激素、维生素C代谢）",
+        "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
+        "诊断学（问诊、体格检查、实验室判读）",
+        "医学伦理与医患沟通"
+      ],
+      "low": []
     },
-    "cognitive_orientation": "point_based",
+    "cognitive_orientation": "line_based",
     "learning_adaptivity": "medium",
     "bias_errors": [],
-    "learning_style_prompt": "该学生以表层学习为主（surface=3），倾向于追求标准答案和任务完成，对PBL中非结构化问题感到不适；同时具有高策略性（strategic=3），会根据评分标准或考核重点选择性投入，而非主动追问机制或深入探究。",
-    "personality_prompt": "高神经质（neuroticism=3）使其在小组讨论中因害怕说错或被评判而显著降低发言意愿，即使有想法也常犹豫不言；低开放性（openness=1）削弱其对PBL探索价值的认同，中等尽责性（conscientiousness=2）仅能维持基本任务参与，难以转化为深度投入。",
-    "learning_personality_prompt": "该学生属于‘混合型画像’：虽具策略性目标导向，能在明确评价标准时完成任务，但高神经质抑制其在开放讨论中的表达，低开放性又削弱对PBL过程价值的认可。行为上表现为沉默观察、仅在被点名或议题高度关联考核内容时简短回应。若教师提供阶段性反馈、降低公开犯错风险，并将讨论与具体评分指标显性挂钩，可能促使其逐步提升贡献意愿。"
+    "learning_style_prompt": "该学生Strategic=5，强烈以绩效和评价标准为导向，在PBL中会根据考核重点选择性投入；Deep=2，对机制追问和概念整合兴趣有限；Surface=2，虽不偏好死记硬背，但也不主动寻求深层理解。整体表现为：只在与评分相关时积极参与讨论，回避无明确答案的开放性问题。",
+    "personality_prompt": "该学生Neuroticism=2（低），在不确定讨论中情绪稳定、发言压力小，愿意持续互动；Extraversion=5（高），社交活跃、乐于表达；但Agreeableness=2（低），可能较少顾及他人观点协调；Openness=3（中）与Conscientiousness=3（中），对PBL的价值既不强烈认同也不排斥，投入程度易受外部目标驱动而非内在兴趣。",
+    "learning_personality_prompt": "该学生在PBL中呈现典型‘混合型’特征：低神经质（N=2）和高外向性（E=5）使其发言积极、互动顺畅，但高策略性（Strategic=5）导致仅在与评分相关时深度参与，而Deep=2使其回避无标准答案的机制探讨。尽责性（C=3）与开放性（O=3）中等，对PBL价值判断模糊，贡献意愿高度依赖任务是否‘值得投入’。可观察行为包括：快速聚焦问题考点、引导小组回归评分维度、在非考核环节减少追问。若教师明确将开放讨论纳入评价，其参与深度可能提升。LS(surface/deep/strategic)=2/2/5; BF(O/C/E/A/N)=3/3/5/2/2。"
   }
 }

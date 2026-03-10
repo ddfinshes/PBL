@@ -12,6 +12,13 @@ import json
 from langchain_core.prompts import ChatPromptTemplate
 
 
+TRAIT_MIN = 1
+TRAIT_MAX = 5
+TRAIT_MID = 3
+TRAIT_HIGH_THRESHOLD = 3
+TRAIT_LOW_THRESHOLD = 3
+
+
 PERSONA_PATTERN_LIBRARY = {
     "learning_mechanisms": {
         "deep_high": "深度学习倾向是PBL中‘个人学习效能感’（概念澄清与新知记忆）的最强预测因子。",
@@ -36,10 +43,11 @@ def _extract_numeric_trait_scores(persona: Dict) -> Dict[str, Dict[str, int]]:
     learning_raw = persona.get("learning_styles", {})
     personality_raw = persona.get("personality", {})
 
-    def _score(raw: Dict, key: str, default: int = 2) -> int:
+    def _score(raw: Dict, key: str, default: int = TRAIT_MID) -> int:
         value = raw.get(key, default)
         try:
-            return int(value)
+            numeric = int(value)
+            return max(TRAIT_MIN, min(TRAIT_MAX, numeric))
         except (TypeError, ValueError):
             return default
 
@@ -66,39 +74,39 @@ def _build_active_pattern_context(scores: Dict[str, Dict[str, int]]) -> Dict[str
     personality_patterns: List[str] = []
     archetypes: List[str] = []
 
-    if ls["deep"] >= 3:
+    if ls["deep"] > TRAIT_HIGH_THRESHOLD:
         learning_patterns.append(
             PERSONA_PATTERN_LIBRARY["learning_mechanisms"]["deep_high"]
         )
-    if ls["surface"] >= 3:
+    if ls["surface"] > TRAIT_HIGH_THRESHOLD:
         learning_patterns.append(
             PERSONA_PATTERN_LIBRARY["learning_mechanisms"]["surface_high"]
         )
-    if ls["strategic"] >= 3:
+    if ls["strategic"] > TRAIT_HIGH_THRESHOLD:
         learning_patterns.append(
             PERSONA_PATTERN_LIBRARY["learning_mechanisms"]["strategic_high"]
         )
 
-    if p["neuroticism"] >= 3:
+    if p["neuroticism"] > TRAIT_HIGH_THRESHOLD:
         personality_patterns.append(
             PERSONA_PATTERN_LIBRARY["personality_mechanisms"]["neuroticism_high"]
         )
-    if p["neuroticism"] <= 1:
+    if p["neuroticism"] < TRAIT_LOW_THRESHOLD:
         personality_patterns.append(
             PERSONA_PATTERN_LIBRARY["personality_mechanisms"]["neuroticism_low"]
         )
-    if p["conscientiousness"] >= 3 or p["openness"] >= 3:
+    if p["conscientiousness"] > TRAIT_HIGH_THRESHOLD or p["openness"] > TRAIT_HIGH_THRESHOLD:
         personality_patterns.append(
             PERSONA_PATTERN_LIBRARY["personality_mechanisms"]["co_openness_high"]
         )
 
-    if ls["deep"] >= 3 and p["neuroticism"] >= 3:
+    if ls["deep"] > TRAIT_HIGH_THRESHOLD and p["neuroticism"] > TRAIT_HIGH_THRESHOLD:
         archetypes.append(
             PERSONA_PATTERN_LIBRARY["archetypes"]["anxious_high_achiever"])
-    if ls["surface"] >= 3 and p["neuroticism"] <= 1:
+    if ls["surface"] > TRAIT_HIGH_THRESHOLD and p["neuroticism"] < TRAIT_LOW_THRESHOLD:
         archetypes.append(
             PERSONA_PATTERN_LIBRARY["archetypes"]["social_but_shallow"])
-    if ls["deep"] >= 3 and p["neuroticism"] <= 1:
+    if ls["deep"] > TRAIT_HIGH_THRESHOLD and p["neuroticism"] < TRAIT_LOW_THRESHOLD:
         archetypes.append(
             PERSONA_PATTERN_LIBRARY["archetypes"]["ideal_beneficiary"])
     if not archetypes:
@@ -138,7 +146,7 @@ async def generate_learning_personality_sections(persona: Dict, llm: Any) -> Dic
     )
 
     user_prompt = (
-        "特质量表：1=低，2=中，3=高。\n"
+        "特质量表：1-5（1-2=低，3=中，4-5=高）。\n"
         f"学习风格：surface={ls['surface']}, deep={ls['deep']}, strategic={ls['strategic']}。\n"
         f"人格特质：openness={p['openness']}, conscientiousness={p['conscientiousness']}, extraversion={p['extraversion']}, "
         f"agreeableness={p['agreeableness']}, neuroticism={p['neuroticism']}。\n"
@@ -148,11 +156,14 @@ async def generate_learning_personality_sections(persona: Dict, llm: Any) -> Dic
         f"该学生激活的原型映射：{json.dumps(active_patterns['archetypes'], ensure_ascii=False)}\n"
         "生成要求（必须遵循上述激活模式）：\n"
         "1) learning_style_prompt（60-140字）：基于Biggs理论描述该学生的学习动机与策略（Deep/Surface/Strategic），"
-        "并明确在PBL中会如何表现（是否主动追问机制、是否偏向标准答案、是否按绩效选择性参与）。\n"
+        "并明确在PBL中会如何表现（是否主动追问机制、是否偏向标准答案、是否按绩效选择性参与）。"
+        "必须逐一包含 surface/deep/strategic 的原始分值与其行为含义。\n"
         "2) personality_prompt（80-170字）：基于大五描述社交与情绪机制，重点解释Neuroticism如何改变发言阈值与贡献意愿，"
-        "并补充Conscientiousness与Openness如何增强或削弱对PBL价值的主观判断。\n"
+        "并补充Conscientiousness与Openness如何增强或削弱对PBL价值的主观判断。"
+        "必须逐一包含 openness/conscientiousness/extraversion/agreeableness/neuroticism 的原始分值与对应特质解释。\n"
         "3) integrated_prompt（130-230字）：在PBL‘不确定+协作+持续修正’情境下，整合学习风格与人格机制，"
         "写出内在冲突、可观察行为、发言策略与转变条件；需映射到一个或多个原型（焦虑高成就者/社交活跃但浅层贡献者/理想受益者/混合型）。\n"
+        "4) integrated_prompt 中必须保留原始分值摘要，格式如：LS(surface/deep/strategic)=x/x/x; BF(O/C/E/A/N)=x/x/x/x/x。\n"
         "写作风格要求：角色指令风格，强调可执行行为，不要写成文献综述。\n"
         "只输出JSON。"
     )
@@ -229,6 +240,9 @@ def format_persona_to_string(persona: Dict) -> str:
     learning_style_desc = str(persona.get(
         "learning_style_prompt", "") or "").strip()
     personality_desc = str(persona.get("personality_prompt", "") or "").strip()
+    scores = _extract_numeric_trait_scores(persona)
+    learning_scores = scores["learning"]
+    personality_scores = scores["personality"]
 
     if not learning_style_desc:
         raise ValueError(
@@ -244,9 +258,13 @@ def format_persona_to_string(persona: Dict) -> str:
 	- **性别/专业**：{persona.get('major', '医学')} \n
 
 	- **学习风格**：
+        - 原始分值（1-5）：surface={learning_scores['surface']}，deep={learning_scores['deep']}，strategic={learning_scores['strategic']}。
+        - 分值解释：1-2=低，3=中，4-5=高。
 		- {learning_style_desc}
 
 	- **人格因素（作用：不同的人格特质显著影响学生在 PBL 中的表现与感受 。）**：
+        - 原始分值（1-5）：openness={personality_scores['openness']}，conscientiousness={personality_scores['conscientiousness']}，extraversion={personality_scores['extraversion']}，agreeableness={personality_scores['agreeableness']}，neuroticism={personality_scores['neuroticism']}。
+        - 分值解释：1-2=低，3=中，4-5=高。
 		- {personality_desc}
 
 	- **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：

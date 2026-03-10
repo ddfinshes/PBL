@@ -17,6 +17,7 @@
               <ViewB 
                 style="height: 100%;"
                 :theoretical-knowledge="caseResult?.theoretical_knowledge_points || []"
+                :case-data="caseResult"
                 :case-title="caseResult?.case_title || ''"
               />
             </div>
@@ -308,8 +309,12 @@ body {
   background: #ffffff;
 }
 
+.dashboard-layout > * {
+  min-width: 0;
+}
+
 .left-column {
-  flex: 0 0 32%;
+  flex: 0 0 clamp(680px, 40vw, 1180px);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -499,5 +504,43 @@ body {
 .right-bottom-row {
   flex: 1.6;
   min-height: 0;
+}
+
+/* 2K and below: slightly increase first-column share to avoid panel overlap at browser zoom */
+@media (max-width: 2048px) {
+  .left-column {
+    flex-basis: clamp(680px, 42vw, 1060px);
+  }
+}
+
+/* FHD and below: reserve more width for ViewA/ViewB stack */
+@media (max-width: 1920px) {
+  .left-column {
+    flex-basis: clamp(680px, 44vw, 1020px);
+  }
+}
+
+/* Laptop/common teaching screens */
+@media (max-width: 1600px) {
+  .dashboard-layout {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .left-column {
+    flex-basis: clamp(660px, 46vw, 980px);
+  }
+}
+
+/* 1366-level screens: prioritize left column to keep config+preview readable */
+@media (max-width: 1440px) {
+  .left-column {
+    flex-basis: clamp(640px, 49vw, 940px);
+  }
+
+  .dashboard-layout {
+    gap: 6px;
+    padding: 6px;
+  }
 }
 </style>

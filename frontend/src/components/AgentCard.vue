@@ -210,7 +210,25 @@
             </div>
           </div>
         </div>
+
       </section>
+
+      <section class="panel-section plasticity-panel">
+        <h3 class="panel-title">Learning Plasticity</h3>
+        <div class="plasticity-inline-options">
+          <button
+            v-for="lv in ['low', 'medium', 'high']"
+            :key="`panel-plasticity-${lv}`"
+            type="button"
+            class="level-btn plasticity-inline-btn"
+            :class="{'is-active': modelValue.plasticity === lv}"
+            @click="modelValue.plasticity = lv"
+          >
+            {{ plasticityTranslations[lv] }}
+          </button>
+        </div>
+      </section>
+
       <!-- Traits Panel -->
       <section class="panel-section traits-panel">
         <div class="radar-grid">
@@ -219,10 +237,10 @@
             <svg
               ref="learningRadarRef"
               class="radar-svg"
-              viewBox="-20 -20 180 180"
+              viewBox="-38 -34 220 220"
             >
               <polygon
-                v-for="ring in [1, 2, 3]"
+                v-for="ring in [1, 2, 3, 4, 5]"
                 :key="`ls-ring-${ring}`"
                 :points="getRadarRingPoints(learningStyleAxes, ring)"
                 class="radar-ring"
@@ -265,10 +283,10 @@
             <svg
               ref="personalityRadarRef"
               class="radar-svg"
-              viewBox="-20 -20 180 180"
+              viewBox="-38 -34 220 220"
             >
               <polygon
-                v-for="ring in [1, 2, 3]"
+                v-for="ring in [1, 2, 3, 4, 5]"
                 :key="`bf-ring-${ring}`"
                 :points="getRadarRingPoints(personalityAxes, ring)"
                 class="radar-ring"
@@ -325,56 +343,6 @@
         </div>
       </section>
 
-      <!-- Social and Learning Integration Section -->
-      <section class="panel-section combined-panel">
-        <div class="plasticity-grid">
-          <div class="plasticity-card">
-            <h3 class="panel-title">Learning Plasticity</h3>
-            <div class="plasticity-options">
-              <div v-for="lv in ['low', 'medium', 'high']" :key="lv"
-                   class="level-btn"
-                   :class="{'is-active': modelValue.plasticity === lv}"
-                   @click="modelValue.plasticity = lv">
-                {{ plasticityTranslations[lv] }}
-              </div>
-            </div>
-          </div>
-          <div class="plasticity-card plasticity-empty-panel">
-            <h3 class="panel-title">Bias & Error</h3>
-            <div class="bias-list">
-              <button
-                v-for="item in modelValue.biasErrorOptions"
-                :key="item"
-                type="button"
-                class="bias-item"
-                :class="{ 'is-active': modelValue.biasErrors.includes(item) }"
-                @click="toggleBiasError(item)"
-              >
-                {{ item }}
-              </button>
-            </div>
-
-            <div v-if="isAddingBiasError" class="bias-add-row">
-              <input
-                v-model="newBiasErrorName"
-                class="bias-add-input"
-                placeholder="Add bias or error..."
-                v-focus
-                @blur="submitAddBiasError"
-                @keyup.enter="submitAddBiasError"
-              />
-            </div>
-            <button
-              v-else
-              type="button"
-              class="bias-add-btn"
-              @click="isAddingBiasError = true"
-            >
-              +
-            </button>
-          </div>
-        </div>
-      </section>
     </div>
   </div>
 </template>
@@ -396,7 +364,7 @@ const editingField = ref(null);
 const dragOverField = ref(null);
 
 const radarCenter = 70;
-const radarRadius = 48;
+const radarRadius = 56;
 
 const learningStyleAxes = [
   { key: 'surface', label: 'Surface' },
@@ -421,57 +389,32 @@ if (!props.modelValue.cognitiveOrientation) {
 }
 
 if (!props.modelValue.learning_styles || typeof props.modelValue.learning_styles !== 'object') {
-  props.modelValue.learning_styles = { surface: 2, deep: 2, strategic: 2 };
+  props.modelValue.learning_styles = { surface: 3, deep: 3, strategic: 3 };
 }
 
 if (!props.modelValue.personality || typeof props.modelValue.personality !== 'object') {
   props.modelValue.personality = {
-    openness: 2,
-    conscientiousness: 2,
-    extraversion: 2,
-    agreeableness: 2,
-    neuroticism: 2
+    openness: 3,
+    conscientiousness: 3,
+    extraversion: 3,
+    agreeableness: 3,
+    neuroticism: 3
   };
 }
-
-const defaultBiasErrorOptions = [
-  'Anchoring Bias',
-  'Availability Bias',
-  'Confirmation Bias',
-  'Premature Closure'
-];
-
-if (!Array.isArray(props.modelValue.biasErrors)) {
-  props.modelValue.biasErrors = Array.isArray(props.modelValue.bias_errors)
-    ? [...props.modelValue.bias_errors]
-    : [];
-}
-
-const sourceBiasErrorOptions = Array.isArray(props.modelValue.biasErrorOptions)
-  ? props.modelValue.biasErrorOptions
-  : (Array.isArray(props.modelValue.bias_error_options) ? props.modelValue.bias_error_options : []);
-
-props.modelValue.biasErrorOptions = Array.from(
-  new Set([
-    ...defaultBiasErrorOptions,
-    ...sourceBiasErrorOptions,
-    ...props.modelValue.biasErrors
-  ])
-);
 
 const normalizeRadarValues = () => {
   learningStyleAxes.forEach(axis => {
     const current = Number(props.modelValue.learning_styles[axis.key]);
     props.modelValue.learning_styles[axis.key] = Number.isFinite(current)
-      ? Math.max(1, Math.min(3, Math.round(current)))
-      : 2;
+      ? Math.max(1, Math.min(5, Math.round(current)))
+      : 3;
   });
 
   personalityAxes.forEach(axis => {
     const current = Number(props.modelValue.personality[axis.key]);
     props.modelValue.personality[axis.key] = Number.isFinite(current)
-      ? Math.max(1, Math.min(3, Math.round(current)))
-      : 2;
+      ? Math.max(1, Math.min(5, Math.round(current)))
+      : 3;
   });
 };
 
@@ -488,7 +431,7 @@ const getAxisEndpoint = (total, index) => {
 };
 
 const getRadarRingPoints = (axes, ringLevel) => {
-  const ringRadius = (ringLevel / 3) * radarRadius;
+  const ringRadius = (ringLevel / 5) * radarRadius;
   return axes
     .map((_, index) => {
       const angle = getAxisAngle(axes.length, index);
@@ -501,8 +444,8 @@ const getRadarRingPoints = (axes, ringLevel) => {
 
 const getRadarHandlePoints = (valuesObj, axes) => {
   return axes.map((axis, index) => {
-    const value = Math.max(1, Math.min(3, Number(valuesObj?.[axis.key]) || 1));
-    const radius = (value / 3) * radarRadius;
+    const value = Math.max(1, Math.min(5, Number(valuesObj?.[axis.key]) || 1));
+    const radius = (value / 5) * radarRadius;
     const angle = getAxisAngle(axes.length, index);
     return {
       x: radarCenter + radius * Math.cos(angle),
@@ -517,7 +460,7 @@ const getRadarDataPoints = (valuesObj, axes) => {
     .join(' ');
 };
 
-const clampRadarScore = (value) => Math.max(1, Math.min(3, Math.round(value)));
+const clampRadarScore = (value) => Math.max(1, Math.min(5, Math.round(value)));
 //调整learning style后大五人格的影响
 const learningStylePersonalityEffects = {
   deep: {
@@ -541,7 +484,7 @@ const applyLinkedPersonalityFromLearningStyles = (changedAxisKey, delta) => {
   if (!effects || !delta) return;
 
   Object.entries(effects).forEach(([traitKey, direction]) => {
-    const current = Number(props.modelValue.personality?.[traitKey]) || 2;
+    const current = Number(props.modelValue.personality?.[traitKey]) || 3;
     const next = clampRadarScore(current + direction * delta);
     props.modelValue.personality[traitKey] = next;
   });
@@ -551,11 +494,11 @@ const getLabelPosition = (total, index) => {
   const angle = getAxisAngle(total, index);
   const labelDistance = total === 5 ? radarRadius + 30 : radarRadius + 18;
   const personalityOffsets = [
-    { x: 0, y: -6 },
-    { x: 14, y: -3 },
-    { x: 16, y: 9 },
-    { x: -16, y: 9 },
-    { x: -14, y: -3 }
+    { x: 0, y: -4 },
+    { x: 10, y: -2 },
+    { x: 10, y: 7 },
+    { x: -10, y: 7 },
+    { x: -10, y: -2 }
   ];
 
   const offset = total === 5 ? personalityOffsets[index] || { x: 0, y: 0 } : { x: 0, y: 0 };
@@ -598,7 +541,7 @@ const updateRadarScoreByPointer = (clientX, clientY) => {
   const dx = x - radarCenter;
   const dy = y - radarCenter;
   const projection = Math.max(0, Math.min(radarRadius, dx * unitX + dy * unitY));
-  const score = Math.max(1, Math.min(3, Math.round((projection / radarRadius) * 3)));
+  const score = Math.max(1, Math.min(5, Math.round((projection / radarRadius) * 5)));
 
   const targetAxis = axes[axisIndex];
   if (targetAxis) {
@@ -627,41 +570,6 @@ const startRadarDrag = (type, axisIndex, event) => {
   updateRadarScoreByPointer(event.clientX, event.clientY);
   window.addEventListener('mousemove', onRadarMouseMove);
   window.addEventListener('mouseup', stopRadarDrag);
-};
-
-const isAddingBiasError = ref(false);
-const newBiasErrorName = ref('');
-
-const toggleBiasError = (item) => {
-  if (!Array.isArray(props.modelValue.biasErrors)) {
-    props.modelValue.biasErrors = [];
-  }
-  const index = props.modelValue.biasErrors.indexOf(item);
-  if (index >= 0) {
-    props.modelValue.biasErrors.splice(index, 1);
-  } else {
-    props.modelValue.biasErrors.push(item);
-  }
-};
-
-const submitAddBiasError = () => {
-  const value = (newBiasErrorName.value || '').trim();
-  if (value) {
-    if (!Array.isArray(props.modelValue.biasErrorOptions)) {
-      props.modelValue.biasErrorOptions = [];
-    }
-    if (!props.modelValue.biasErrorOptions.includes(value)) {
-      props.modelValue.biasErrorOptions.push(value);
-    }
-    if (!Array.isArray(props.modelValue.biasErrors)) {
-      props.modelValue.biasErrors = [];
-    }
-    if (!props.modelValue.biasErrors.includes(value)) {
-      props.modelValue.biasErrors.push(value);
-    }
-  }
-  isAddingBiasError.value = false;
-  newBiasErrorName.value = '';
 };
 
 // 知识点编辑状态
@@ -809,8 +717,6 @@ const resetEditing = () => {
   editingField.value = null;
   editingKnowledge.value = { category: null, index: null, value: '' };
   isAddingKnowledge.value = false;
-  isAddingBiasError.value = false;
-  newBiasErrorName.value = '';
 };
 
 defineExpose({ resetEditing });
@@ -1060,7 +966,27 @@ defineExpose({ resetEditing });
    4. 知识背景部分 (Knowledge Background)
    ========================================= */
 .knowledge-panel {
-  height: 350px;
+  height: 280px;
+}
+
+.plasticity-panel {
+  padding: 0.25rem 0.55rem 0.45rem;
+}
+
+.plasticity-inline-options {
+  display: flex;
+  gap: 0.45rem;
+  width: 100%;
+  padding-top: 0.2rem;
+}
+
+.plasticity-inline-btn {
+  flex: 1;
+  min-height: 34px;
+  text-transform: capitalize;
+  background-color: rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  text-align: center;
 }
 
 .competence-legend {
@@ -1303,6 +1229,7 @@ defineExpose({ resetEditing });
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .radar-card-title {
@@ -1313,8 +1240,9 @@ defineExpose({ resetEditing });
 }
 
 .radar-svg {
-  width: 300px;
-  height: 160px;
+  width: 100%;
+  max-width: 320px;
+  height: 210px;
 }
 
 .radar-ring {
@@ -1536,123 +1464,6 @@ defineExpose({ resetEditing });
 /* =========================================
    6. 社交与学习综合部分 (Combined Social & Learning)
    ========================================= */
-.combined-panel {
-  height: auto;
-  padding: 0.6rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.plasticity-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.plasticity-card {
-  background-color: rgba(255, 255, 255, 0.42);
-  border-radius: 12px;
-  padding: 0.45rem 0.45rem;
-  min-height: 72px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-}
-
-.plasticity-options {
-  margin: 0.45rem auto 0.1rem;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-
-.plasticity-options .level-btn {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  text-align: center;
-  background: rgba(255, 255, 255, 0.55);
-  border-radius: 12px;
-  min-height: 34px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.plasticity-options .level-btn:hover {
-  background: rgba(197, 201, 212, 0.8);
-}
-
-.plasticity-empty-panel {
-  min-height: 58px;
-}
-
-.bias-list {
-  margin-top: 0.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.bias-item {
-  border: none;
-  background: rgba(255, 255, 255, 0.55);
-  color: #7A7A7A;
-  border-radius: 12px;
-  min-height: 28px;
-  padding: 0.2rem 0.6rem;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.bias-item:hover {
-  background: rgba(197, 201, 212, 0.8);
-}
-
-.bias-item.is-active {
-  background: #8095CA;
-  color: #ffffff;
-}
-
-.bias-add-row {
-  margin-top: 0.35rem;
-}
-
-.bias-add-input {
-  width: 100%;
-  border: 1px dashed rgba(122, 122, 122, 0.45);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.65);
-  color: #6C6565;
-  font-size: 12px;
-  padding: 0.2rem 0.55rem;
-  outline: none;
-  text-align: center;
-}
-
-.bias-add-btn {
-  margin: 0.35rem auto 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px dashed #A5A8AC;
-  background: #D9D9D9;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
 .social-attributes-row {
   display: flex;
   flex-direction: row;
