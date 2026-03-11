@@ -11,7 +11,7 @@ import json
 import uuid
 import copy
 from contextlib import suppress
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Union, List
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import logging
@@ -22,7 +22,7 @@ from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
 from langchain_core.messages import HumanMessage
@@ -44,6 +44,15 @@ from .graph import app, GraphState
 # 导入解析函数
 from .pdf_parser import parse_pbl_to_json, get_raw_pdf_images
 from .schema import PBLCaseStructure
+from .knowledge import (
+    normalize_knowledge_points as _normalize_knowledge_points_impl,
+    next_kp_id as _next_kp_id_impl,
+    ensure_question_knowledge_points as _ensure_question_knowledge_points_impl,
+    collect_case_question_knowledge_points as _collect_case_question_knowledge_points_impl,
+    sync_agent_setting_knowledge_points as _sync_agent_setting_knowledge_points_impl,
+    evaluate_progressive_coverage,
+    build_discussion_content_from_leaf,
+)
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -78,6 +87,13 @@ class ActiveSceneRequest(BaseModel):
 class InterventionSummaryRequest(BaseModel):
     session_id: str
     intervention_id: str
+    scene_index: int
+    question_index: int
+
+
+class InterventionStrategyRequest(BaseModel):
+    session_id: str
+    last_message_id: str
     scene_index: int
     question_index: int
 
@@ -125,10 +141,106 @@ class AddObjectiveRequest(BaseModel):
     objectiveText: str
 
 
+class UpdateObjectiveRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+    objectiveIndex: int
+    objectiveText: str
+
+
+class OverrideObjectiveRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+    objectiveIndex: int
+    # 【修改】支持新的override值：
+    # None = clear override (automatic evaluation)
+    # 'in_progress' = manually set to In Progress
+    # 'achieved' = manually set to Achieved
+    override: Optional[Union[str, bool]] = None
+
+
 class AgentPreviewRequest(BaseModel):
     agent_id: str
     persona: Dict
     trigger_question: str
+
+
+class ConfigLearningStyles(BaseModel):
+    surface: Optional[int] = None
+    deep: Optional[int] = None
+    strategic: Optional[int] = None
+
+
+class ConfigPersonality(BaseModel):
+    openness: Optional[int] = None
+    conscientiousness: Optional[int] = None
+    extraversion: Optional[int] = None
+    agreeableness: Optional[int] = None
+    neuroticism: Optional[int] = None
+
+
+class ConfigKnowledgeBackground(BaseModel):
+    high: Optional[List[str]] = None
+    medium: Optional[List[str]] = None
+    low: Optional[List[str]] = None
+
+
+class AgentConfigParseResult(BaseModel):
+    name: Optional[str] = None
+    age: Optional[str] = None
+    major: Optional[str] = None
+    learning_styles: Optional[ConfigLearningStyles] = None
+    personality: Optional[ConfigPersonality] = None
+    knowledge_background: Optional[ConfigKnowledgeBackground] = None
+    cognitive_orientation: Optional[str] = None
+    plasticity: Optional[str] = None
+
+
+class AgentConfigChatRequest(BaseModel):
+    instruction: str
+    current_config: Dict[str, Any] = Field(default_factory=dict)
+    chat_history: List[Dict[str, str]] = Field(default_factory=list)
+
+
+class KnowledgeCoverageRequest(BaseModel):
+    case_name: str
+    scene_index: int
+    question_index: int
+    discussion_content: str
+
+
+class QuestionKnowledgePointAddRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+    point: str
+    explanation: str = ""
+
+
+class QuestionKnowledgePointUpdateRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+    pointId: str
+    point: str
+    explanation: str = ""
+
+
+class QuestionKnowledgePointDeleteRequest(BaseModel):
+    caseName: str
+    sceneIndex: int
+    questionIndex: int
+    pointId: str
+
+
+class KnowledgeCoverageResponse(BaseModel):
+    status: str
+    total_points: int = 0
+    covered_points: List[str] = []
+    coverage_ratio: float = 0.0
+    covered_point_details: List[Dict[str, str]] = []
 
 
 app_fastapi = FastAPI()
@@ -168,6 +280,28 @@ def extract_base_filename(pdf_filename: str) -> str:
     if match:
         return match.group(1)  # 旧格式：提取时间戳前部分
     return pdf_filename.rsplit('.', 1)[0]  # 新格式：直接去掉.pdf
+
+
+def _collect_all_knowledge_points(current_cfg: Dict[str, Any]) -> List[str]:
+    points: List[str] = []
+
+    def append_unique(items: Any):
+        if not isinstance(items, list):
+            return
+        for item in items:
+            point = str(item or "").strip()
+            if point and point not in points:
+                points.append(point)
+
+    kb = current_cfg.get("knowledge_background", {}) if isinstance(
+        current_cfg, dict) else {}
+    append_unique(current_cfg.get("all_knowledge_points", []))
+    if isinstance(kb, dict):
+        append_unique(kb.get("high", []))
+        append_unique(kb.get("medium", []))
+        append_unique(kb.get("low", []))
+
+    return points
 
 
 def save_case_json(base_name: str, data: dict) -> bool:
@@ -213,16 +347,47 @@ def resolve_case_json_path(case_name: str) -> Optional[Path]:
     if direct.exists():
         return direct
 
-    # 2) Title match in JSON content (handles filename/title mismatch)
+    def _knowledge_point_count(case_data: Dict[str, Any]) -> int:
+        count = 0
+        scenes = case_data.get("scenes") or []
+        if not isinstance(scenes, list):
+            return 0
+        for scene in scenes:
+            if not isinstance(scene, dict):
+                continue
+            questions = scene.get("trigger_questions") or []
+            if not isinstance(questions, list):
+                continue
+            for q in questions:
+                if not isinstance(q, dict):
+                    continue
+                points = q.get("knowledge_points") or []
+                if isinstance(points, list):
+                    count += len(points)
+        return count
+
+    # 2) Title match in JSON content (handles filename/title mismatch).
+    # If there are multiple candidates with the same title, prefer richer case files
+    # that contain per-question knowledge points.
     target = case_name.strip()
+    candidates: List[tuple] = []
     for f in CASE_STORAGE_DIR.glob("*.json"):
         try:
             with open(f, "r", encoding="utf-8") as jf:
                 data = json.load(jf)
             if str(data.get("case_title", "")).strip() == target:
-                return f
+                kp_count = _knowledge_point_count(data)
+                scene_count = len(data.get("scenes") or [])
+                stem_exact = 1 if f.stem.strip() == target else 0
+                candidates.append(
+                    (stem_exact, kp_count, scene_count, int(f.stat().st_mtime), f)
+                )
         except Exception:
             continue
+
+    if candidates:
+        candidates.sort(reverse=True)
+        return candidates[0][4]
 
     return None
 
@@ -253,6 +418,110 @@ def resolve_objectives_from_case(case_name: str, scene_idx: int, question_idx: i
             f"读取案例目标失败: case={case_name}, scene={scene_idx}, question={question_idx}, error={e}")
         return []
 
+
+def resolve_objective_overrides_from_case(case_name: str, scene_idx: int, question_idx: int) -> Dict[str, bool]:
+    """Read persisted teacher objective overrides for current question from case JSON."""
+    path = resolve_case_json_path(case_name)
+    if not path:
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        scenes = case_data.get("scenes") or []
+        if scene_idx < 0 or scene_idx >= len(scenes):
+            return {}
+
+        rows = scenes[scene_idx].get(
+            "trigger_question_learning_objectives") or []
+        if question_idx < 0 or question_idx >= len(rows):
+            return {}
+
+        raw = rows[question_idx].get("objective_overrides") or {}
+        if not isinstance(raw, dict):
+            return {}
+
+        normalized: Dict[str, bool] = {}
+        for k, v in raw.items():
+            key = str(k or "").strip()
+            if not key:
+                continue
+            if v is True or v is False:
+                normalized[key] = bool(v)
+        return normalized
+    except Exception as e:
+        logger.error(
+            f"读取案例目标覆盖失败: case={case_name}, scene={scene_idx}, question={question_idx}, error={e}")
+        return {}
+
+
+def _sync_runtime_objectives_if_active(case_name: str, scene_idx: int, question_idx: int) -> None:
+    """If editing active question objectives, refresh runtime pbl_info immediately."""
+    try:
+        from . import pbl_info as pbl_state
+        from .pbl_info import update_pbl_info
+
+        active_case = str(
+            getattr(pbl_state, "current_case_name", "") or "").strip()
+        if not active_case or active_case != str(case_name or "").strip():
+            return
+        if int(getattr(pbl_state, "active_scene_index", -1) or -1) != int(scene_idx):
+            return
+        if int(getattr(pbl_state, "active_question_index", -1) or -1) != int(question_idx):
+            return
+
+        refreshed = resolve_objectives_from_case(
+            case_name, scene_idx, question_idx)
+        update_pbl_info(
+            story=pbl_state.pbl_story,
+            questions=pbl_state.pbl_triger_questions or (
+                [pbl_state.current_trigger_question] if pbl_state.current_trigger_question else []),
+            scene_idx=scene_idx,
+            q_idx=question_idx,
+            learning_objectives=refreshed,
+            case_name=active_case,
+        )
+        rt_key = f"{scene_idx}_{question_idx}"
+        # 【修改】刷新后不加载缓存的override，始终以干净状态开始
+        # pbl_state.objective_overrides[rt_key] = resolve_objective_overrides_from_case(...)
+        pbl_state.objective_overrides[rt_key] = {}
+    except Exception as e:
+        logger.warning("sync runtime objectives failed: %s", e)
+
+
+def _normalize_knowledge_points(raw_points: Any) -> List[Dict[str, str]]:
+    return _normalize_knowledge_points_impl(raw_points)
+
+
+def _next_kp_id(points: List[Dict[str, str]]) -> str:
+    return _next_kp_id_impl(points)
+
+
+def _load_case_data_by_name(case_name: str) -> tuple[Optional[Path], Optional[Dict[str, Any]], Optional[dict]]:
+    path = resolve_case_json_path(case_name)
+    if not path:
+        return None, None, ({"status": "error", "detail": f"案例文件不存在: {case_name}"}, 404)
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return path, data, None
+    except Exception as e:
+        return None, None, ({"status": "error", "detail": f"读取案例失败: {e}"}, 500)
+
+
+def _ensure_question_knowledge_points(case_data: Dict[str, Any], scene_idx: int, question_idx: int) -> tuple[Optional[List[Dict[str, str]]], Optional[str]]:
+    return _ensure_question_knowledge_points_impl(case_data, scene_idx, question_idx)
+
+
+def _collect_case_question_knowledge_points(case_data: Dict[str, Any]) -> List[str]:
+    return _collect_case_question_knowledge_points_impl(case_data)
+
+
+def _sync_agent_setting_knowledge_points(case_data: Dict[str, Any]) -> None:
+    _sync_agent_setting_knowledge_points_impl(case_data, AGENT_SETTING_PATH)
+
 # --- API 路由 ---
 
 
@@ -262,14 +531,48 @@ async def startup_event():
     print("Initializing agents from agent_setting.json...")
     logger.info("Starting agent initialization...")
 
-    if not AGENT_SETTING_PATH.exists():
-        print("✗ Startup: agent_setting.json not found. No agents loaded.")
-        logger.error(f"agent_setting.json not found at {AGENT_SETTING_PATH}")
-        return
+    def _default_persona() -> Dict[str, Any]:
+        return {
+            "name": "Student_1",
+            "age": "",
+            "major": "",
+            "learning_styles": {"surface": 3, "deep": 3, "strategic": 3},
+            "personality": {
+                "openness": 3,
+                "conscientiousness": 3,
+                "extraversion": 3,
+                "agreeableness": 3,
+                "neuroticism": 3,
+            },
+            "knowledge_background": {"high": [], "medium": [], "low": []},
+            "cognitive_orientation": "line_based",
+            "learning_adaptivity": "medium",
+        }
 
     try:
-        with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
-            personas = json.load(f)
+        personas: Dict[str, Dict] = {}
+        if AGENT_SETTING_PATH.exists():
+            with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
+                raw = f.read()
+
+            # Startup steady-state handling: empty/invalid JSON should not fail startup.
+            if not raw.strip():
+                logger.warning(
+                    "agent_setting.json is empty during startup, using fallback persona.")
+                personas = {"Student_1": _default_persona()}
+            else:
+                try:
+                    loaded = json.loads(raw)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "agent_setting.json is invalid JSON during startup, using fallback persona.")
+                    loaded = {}
+                personas = loaded if isinstance(loaded, dict) and loaded else {
+                    "Student_1": _default_persona()}
+        else:
+            logger.warning(
+                f"agent_setting.json not found at {AGENT_SETTING_PATH}, using fallback persona.")
+            personas = {"Student_1": _default_persona()}
 
         async def enrich_persona(agent_id: str, persona_data: Dict):
             enriched = dict(persona_data or {})
@@ -277,10 +580,20 @@ async def startup_event():
             enriched.update(generated_sections)
             return agent_id, enriched
 
-        enriched_pairs = await asyncio.gather(
-            *(enrich_persona(agent_id, persona_data) for agent_id, persona_data in personas.items())
-        )
-        personas = {agent_id: persona for agent_id, persona in enriched_pairs}
+        if personas:
+            try:
+                enriched_pairs = await asyncio.gather(
+                    *(enrich_persona(agent_id, persona_data) for agent_id, persona_data in personas.items())
+                )
+                personas = {agent_id: persona for agent_id,
+                            persona in enriched_pairs}
+            except Exception as enrich_error:
+                # Keep startup resilient when LLM enrichment is unavailable.
+                logger.warning(
+                    f"Startup persona enrichment failed, fallback to raw personas: {enrich_error}")
+
+        if not personas:
+            personas = {"Student_1": _default_persona()}
 
         with open(AGENT_SETTING_PATH, 'w', encoding='utf-8') as f:
             json.dump(personas, f, ensure_ascii=False, indent=2)
@@ -302,6 +615,18 @@ async def startup_event():
         logger.error(
             f"✗ Startup: Error loading agents: {type(e).__name__}: {e}", exc_info=True)
         print(f"✗ Startup: Error loading agents: {type(e).__name__}: {e}")
+
+        # Last-resort fallback to prevent WebSocket graph.app=None failures.
+        try:
+            student_personas.clear()
+            student_nodes.clear()
+            register_student_agent("Student_1", _default_persona())
+            graph.app = build_graph(list(student_nodes.keys()))
+            logger.warning(
+                "Startup fallback graph initialized with default Student_1 persona.")
+        except Exception as fallback_error:
+            logger.error(
+                f"Startup fallback graph initialization failed: {fallback_error}", exc_info=True)
 
 
 @app_fastapi.get("/")
@@ -478,6 +803,10 @@ async def set_active_scene(request: ActiveSceneRequest):
         learning_objectives=effective_objectives,
         case_name=request.case_name,
     )
+    from . import pbl_info as pbl_state
+    rt_key = f"{request.scene_index}_{request.question_index}"
+    # 【修改】刷新后不加载缓存的override，始终以干净状态开始
+    pbl_state.objective_overrides[rt_key] = {}
     return {
         "status": "success",
         "message": "Global PBL info updated.",
@@ -755,10 +1084,327 @@ async def api_add_objective(request: AddObjectiveRequest):
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(case_data, f, ensure_ascii=False, indent=2)
 
+        _sync_runtime_objectives_if_active(case_name, scene_idx, question_idx)
+
         return {"status": "success", "message": "objective 已添加"}
     except Exception as e:
         logger.error(f"添加 objective 失败: {e}", exc_info=True)
         return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/update-objective")
+async def api_update_objective(request: UpdateObjectiveRequest):
+    """编辑当前场景当前问题下的一条学习目标。"""
+    try:
+        case_name = request.caseName
+        scene_idx = request.sceneIndex
+        question_idx = request.questionIndex
+        objective_idx = request.objectiveIndex
+        objective_text = request.objectiveText.strip()
+
+        if not objective_text:
+            return {"status": "error", "detail": "objectiveText 不能为空"}, 400
+
+        json_path = CASE_STORAGE_DIR / f"{case_name}.json"
+        if not json_path.exists():
+            matching_files = list(CASE_STORAGE_DIR.glob("*.json"))
+            json_path = None
+            for f in matching_files:
+                try:
+                    with open(f, 'r', encoding='utf-8') as file:
+                        data = json.load(file)
+                        if data.get("case_title", "").strip() == case_name.strip():
+                            json_path = f
+                            break
+                except Exception:
+                    continue
+            if not json_path:
+                return {"status": "error", "detail": f"案例文件不存在: {case_name}"}, 404
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            case_data = json.load(f)
+
+        scenes = case_data.get("scenes", [])
+        if scene_idx >= len(scenes):
+            return {"status": "error", "detail": "场景索引越界"}, 400
+
+        scene = scenes[scene_idx]
+        questions = scene.get("trigger_questions", [])
+        if question_idx >= len(questions):
+            return {"status": "error", "detail": "问题索引越界"}, 400
+
+        q_text = str(questions[question_idx].get("question", "") or "").strip()
+        rows = scene.get("trigger_question_learning_objectives")
+        if not isinstance(rows, list):
+            rows = []
+            scene["trigger_question_learning_objectives"] = rows
+
+        while len(rows) <= question_idx:
+            rows.append({"trigger_question": "", "learning_objectives": []})
+
+        row = rows[question_idx]
+        if not isinstance(row, dict):
+            row = {"trigger_question": "", "learning_objectives": []}
+            rows[question_idx] = row
+
+        row["trigger_question"] = q_text
+        if not isinstance(row.get("learning_objectives"), list):
+            row["learning_objectives"] = []
+
+        if objective_idx < 0 or objective_idx >= len(row["learning_objectives"]):
+            return {"status": "error", "detail": "objectiveIndex 越界"}, 400
+
+        row["learning_objectives"][objective_idx] = objective_text
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        _sync_runtime_objectives_if_active(case_name, scene_idx, question_idx)
+
+        return {"status": "success", "message": "objective 已更新"}
+    except Exception as e:
+        logger.error(f"更新 objective 失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/override-objective")
+async def api_override_objective(request: OverrideObjectiveRequest):
+    """【修改】教师手动覆盖某条学习目标的达成状态。
+
+    override 可以是：
+    - None: 清除覆盖，使用自动评估
+    - 'in_progress': 手动设置为进行中
+    - 'achieved': 手动设置为完成
+    - 布尔值（向后兼容）：true=achieved, false=not_achieved
+    """
+    try:
+        json_path, case_data, err = _load_case_data_by_name(request.caseName)
+        if err:
+            return err
+
+        scene_idx = request.sceneIndex
+        question_idx = request.questionIndex
+        objective_idx = request.objectiveIndex
+
+        scenes = case_data.get("scenes", [])
+        if scene_idx >= len(scenes):
+            return {"status": "error", "detail": "场景索引越界"}, 400
+
+        scene = scenes[scene_idx]
+        rows = scene.setdefault("trigger_question_learning_objectives", [])
+        while len(rows) <= question_idx:
+            rows.append({"trigger_question": "",
+                        "learning_objectives": [], "objective_overrides": {}})
+
+        row = rows[question_idx]
+        if not isinstance(row, dict):
+            row = {"trigger_question": "",
+                   "learning_objectives": [], "objective_overrides": {}}
+            rows[question_idx] = row
+
+        objectives = row.get("learning_objectives", [])
+        if objective_idx < 0 or objective_idx >= len(objectives):
+            return {"status": "error", "detail": "objectiveIndex 越界"}, 400
+
+        obj_text = str(objectives[objective_idx])
+        if not isinstance(row.get("objective_overrides"), dict):
+            row["objective_overrides"] = {}
+
+        # 【修改】处理新的override值类型
+        if request.override is None:
+            # 清除覆盖
+            row["objective_overrides"].pop(obj_text, None)
+            override_value = None
+        elif isinstance(request.override, str):
+            # 字符串值：'in_progress' 或 'achieved'
+            if request.override in ('in_progress', 'achieved'):
+                row["objective_overrides"][obj_text] = request.override
+                override_value = request.override
+            else:
+                return {"status": "error", "detail": f"Invalid override value: {request.override}"}, 400
+        else:
+            # 布尔值（向后兼容）
+            row["objective_overrides"][obj_text] = bool(request.override)
+            override_value = bool(request.override)
+
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        # 同步到运行时覆盖表，供 router_node 实时读取
+        from . import pbl_info as _pbl_info_mod
+        rt_key = f"{scene_idx}_{question_idx}"
+        if not isinstance(_pbl_info_mod.objective_overrides.get(rt_key), dict):
+            _pbl_info_mod.objective_overrides[rt_key] = {}
+        if request.override is None:
+            _pbl_info_mod.objective_overrides[rt_key].pop(obj_text, None)
+        else:
+            _pbl_info_mod.objective_overrides[rt_key][obj_text] = override_value
+
+        print(
+            f"DEBUG: [Override API] Updated: rt_key={rt_key} obj_text={obj_text} to {override_value}")
+        print(
+            f"DEBUG: [Override API] Current overrides for {rt_key}: {_pbl_info_mod.objective_overrides[rt_key]}")
+
+        return {"status": "success", "override": override_value}
+    except Exception as e:
+        logger.error(f"override-objective 失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
+@app_fastapi.get("/api/question-knowledge-points")
+async def api_get_question_knowledge_points(case_name: str, scene_index: int, question_index: int):
+    """返回 ViewE 使用的当前问题知识点列表（统一来源）。"""
+    path, case_data, err = _load_case_data_by_name(case_name)
+    if err:
+        return err
+
+    points, msg = _ensure_question_knowledge_points(
+        case_data, scene_index, question_index)
+    if msg:
+        return {"status": "error", "detail": msg}, 400
+
+    return {
+        "status": "success",
+        "knowledge_points": points,
+        "total": len(points or []),
+        "case_path": str(path) if path else "",
+    }
+
+
+@app_fastapi.post("/api/question-knowledge-points/add")
+async def api_add_question_knowledge_point(request: QuestionKnowledgePointAddRequest):
+    """在 ViewE 的问题知识点列表中新增知识点，并同步 agent_setting.json。"""
+    path, case_data, err = _load_case_data_by_name(request.caseName)
+    if err:
+        return err
+
+    points, msg = _ensure_question_knowledge_points(
+        case_data, request.sceneIndex, request.questionIndex)
+    if msg:
+        return {"status": "error", "detail": msg}, 400
+
+    point = str(request.point or "").strip()
+    explanation = str(request.explanation or "").strip()
+    if not point:
+        return {"status": "error", "detail": "point 不能为空"}, 400
+
+    if any(p.get("point") == point for p in points):
+        return {"status": "error", "detail": "该知识点已存在"}, 400
+
+    points.append({
+        "id": _next_kp_id(points),
+        "point": point,
+        "explanation": explanation,
+    })
+
+    # 写回双份字段，保证历史路径兼容。
+    _ensure_question_knowledge_points(
+        case_data, request.sceneIndex, request.questionIndex)
+    scenes = case_data.get("scenes", [])
+    scene = scenes[request.sceneIndex]
+    scene["trigger_question_learning_objectives"][request.questionIndex]["knowledge_points"] = points
+    scene["trigger_questions"][request.questionIndex]["knowledge_points"] = points
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+    _sync_agent_setting_knowledge_points(case_data)
+
+    return {
+        "status": "success",
+        "knowledge_points": points,
+        "total": len(points),
+    }
+
+
+@app_fastapi.post("/api/question-knowledge-points/update")
+async def api_update_question_knowledge_point(request: QuestionKnowledgePointUpdateRequest):
+    """编辑 ViewE 的问题知识点内容，并同步 agent_setting.json。"""
+    path, case_data, err = _load_case_data_by_name(request.caseName)
+    if err:
+        return err
+
+    points, msg = _ensure_question_knowledge_points(
+        case_data, request.sceneIndex, request.questionIndex)
+    if msg:
+        return {"status": "error", "detail": msg}, 400
+
+    point_id = str(request.pointId or "").strip()
+    point = str(request.point or "").strip()
+    explanation = str(request.explanation or "").strip()
+    if not point_id:
+        return {"status": "error", "detail": "pointId 不能为空"}, 400
+    if not point:
+        return {"status": "error", "detail": "point 不能为空"}, 400
+
+    hit = None
+    for item in points:
+        if item.get("id") == point_id:
+            hit = item
+            break
+
+    if not hit:
+        return {"status": "error", "detail": "知识点不存在"}, 404
+
+    # 除当前编辑对象外，不允许重名。
+    if any(p.get("point") == point and p.get("id") != point_id for p in points):
+        return {"status": "error", "detail": "该知识点名称已存在"}, 400
+
+    hit["point"] = point
+    hit["explanation"] = explanation
+
+    scenes = case_data.get("scenes", [])
+    scene = scenes[request.sceneIndex]
+    scene["trigger_question_learning_objectives"][request.questionIndex]["knowledge_points"] = points
+    scene["trigger_questions"][request.questionIndex]["knowledge_points"] = points
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+    _sync_agent_setting_knowledge_points(case_data)
+
+    return {
+        "status": "success",
+        "knowledge_points": points,
+        "total": len(points),
+    }
+
+
+@app_fastapi.post("/api/question-knowledge-points/delete")
+async def api_delete_question_knowledge_point(request: QuestionKnowledgePointDeleteRequest):
+    """删除 ViewE 的问题知识点，并同步 agent_setting.json。"""
+    path, case_data, err = _load_case_data_by_name(request.caseName)
+    if err:
+        return err
+
+    points, msg = _ensure_question_knowledge_points(
+        case_data, request.sceneIndex, request.questionIndex)
+    if msg:
+        return {"status": "error", "detail": msg}, 400
+
+    point_id = str(request.pointId or "").strip()
+    if not point_id:
+        return {"status": "error", "detail": "pointId 不能为空"}, 400
+
+    filtered = [p for p in points if str(p.get("id", "")).strip() != point_id]
+    if len(filtered) == len(points):
+        return {"status": "error", "detail": "知识点不存在"}, 404
+
+    scenes = case_data.get("scenes", [])
+    scene = scenes[request.sceneIndex]
+    scene["trigger_question_learning_objectives"][request.questionIndex]["knowledge_points"] = filtered
+    scene["trigger_questions"][request.questionIndex]["knowledge_points"] = filtered
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+    _sync_agent_setting_knowledge_points(case_data)
+
+    return {
+        "status": "success",
+        "knowledge_points": filtered,
+        "total": len(filtered),
+    }
 
 
 @app_fastapi.post("/api/agent-preview")
@@ -776,94 +1422,178 @@ async def api_agent_preview(request: AgentPreviewRequest):
         return {"status": "error", "detail": str(e)}, 500
 
 
+@app_fastapi.post("/api/agent-config-chat")
+async def api_agent_config_chat(request: AgentConfigChatRequest):
+    """Parse natural-language instruction into partial agent config updates via structured LLM output."""
+    instruction = str(request.instruction or "").strip()
+    if not instruction:
+        return {
+            "status": "error",
+            "detail": "instruction is required",
+        }, 400
+
+    try:
+        llm = ChatOpenAI(
+            model=LLM_MODEL_NAME,
+            base_url=BASE_URL,
+            api_key=DASHSCOPE_API_KEY,
+            temperature=0,
+            timeout=60.0,
+            max_retries=2,
+        )
+
+        history = request.chat_history[-6:] if request.chat_history else []
+        history_text = "\n".join(
+            f"{str(item.get('role', 'user')).strip()}: {str(item.get('content', '')).strip()}"
+            for item in history
+            if str(item.get("content", "")).strip()
+        ) or "无"
+
+        prompt = (
+            "你是一个 PBL 学生 Agent 配置解析器。\n"
+            "你的任务是：把用户的自然语言描述解析为结构化的 Agent 配置更新。\n\n"
+
+            "重要原则：\n"
+            "1) 返回的是『增量更新建议』，不是完整配置；\n"
+            "2) 只有在有把握时才填写字段；\n"
+            "3) 如果无法确定某个字段，必须返回 null；\n"
+            "4) personality 和 learning_styles 的评分范围是 1-5；\n"
+            "5) cognitive_orientation 只能是：point_based / line_based / plane_based；\n"
+            "6) plasticity 只能是：low / medium / high。\n\n"
+
+            "语义解析要求（必须执行）：\n"
+            "1) 对‘成绩好/中等生/基础薄弱’等水平描述，不要只改一个字段；要综合推断并尽量同时给出 learning_styles、cognitive_orientation、knowledge_background。\n"
+            "2) 对‘X年级医学生’（例如：三年级医学生）要按医学课程进度推断能力层次：\n"
+            "   - 推断学习风格与推理取向；\n"
+            "   - 若给定知识点列表，则按 high/medium/low 对每个知识点分类，不要遗漏。\n"
+            "3) knowledge_background 必须是 high/medium/low 三个数组；如果你决定更新该字段，尽量覆盖给定知识点全集。\n"
+            "4) 若用户已有明确偏好（如‘线性推理’），优先尊重用户表达。\n\n"
+
+            "字段说明：\n"
+            "name: 学生姓名\n"
+            "age: 学生年龄\n"
+            "major: 专业\n"
+            "learning_styles: 学习方式评分（surface / deep / strategic，范围1-5）\n"
+            "personality: 大五人格评分（openness / conscientiousness / extraversion / agreeableness / neuroticism，范围1-5）\n"
+            "knowledge_background: 知识基础，分为 high / medium / low 三个层级，每个是知识点列表\n"
+            "cognitive_orientation: 认知取向（point_based / line_based / plane_based）\n"
+            "plasticity: 学习可塑性（low / medium / high）\n\n"
+
+            "示例：\n"
+            "用户输入：\n"
+            "“这是一个很内向但非常认真的医学生。”\n\n"
+            "输出：\n"
+            "{\n"
+            '  "major": "medicine",\n'
+            '  "personality": {\n'
+            '    "extraversion": 1,\n'
+            '    "conscientiousness": 5\n'
+            "  }\n"
+            "}\n\n"
+
+            f"[当前配置]\n{json.dumps(request.current_config or {}, ensure_ascii=False)}\n\n"
+            f"[可用于分类的知识点全集]\n{json.dumps(_collect_all_knowledge_points(request.current_config or {}), ensure_ascii=False)}\n\n"
+            f"[近期对话]\n{history_text}\n\n"
+            f"[用户指令]\n{instruction}\n\n"
+
+            "请返回 JSON 格式的配置更新。"
+        )
+
+        structured_llm = llm.with_structured_output(AgentConfigParseResult)
+        parsed = await structured_llm.ainvoke(prompt)
+
+        if hasattr(parsed, "model_dump"):
+            config_update = parsed.model_dump(exclude_none=True)
+        else:
+            config_update = parsed.dict(exclude_none=True)
+
+        # Light normalization only: keep outputs inside schema constraints.
+        if isinstance(config_update.get("learning_styles"), dict):
+            for key in ["surface", "deep", "strategic"]:
+                if key in config_update["learning_styles"]:
+                    val = config_update["learning_styles"].get(key)
+                    if isinstance(val, (int, float)):
+                        config_update["learning_styles"][key] = max(
+                            1, min(5, int(round(val))))
+
+        if isinstance(config_update.get("personality"), dict):
+            for key in ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]:
+                if key in config_update["personality"]:
+                    val = config_update["personality"].get(key)
+                    if isinstance(val, (int, float)):
+                        config_update["personality"][key] = max(
+                            1, min(5, int(round(val))))
+
+        if config_update.get("cognitive_orientation") not in {None, "point_based", "line_based", "plane_based"}:
+            config_update.pop("cognitive_orientation", None)
+
+        if config_update.get("plasticity") not in {None, "low", "medium", "high"}:
+            config_update.pop("plasticity", None)
+
+        assistant_message = "已根据自然语言完成配置解析（由模型自动判断水平、推理风格与知识分层）。"
+
+        return {
+            "status": "success",
+            "config_update": config_update,
+            "assistant_message": assistant_message,
+        }
+    except Exception as e:
+        logger.error(
+            f"Failed to parse agent config instruction: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "detail": str(e),
+            "config_update": {},
+        }, 500
+
+
+@app_fastapi.post("/api/evaluate-knowledge-coverage")
+async def api_evaluate_knowledge_coverage(request: KnowledgeCoverageRequest):
+    """
+    评估当前讨论路径对 trigger question 的知识点覆盖程度。
+
+    输入：
+    - case_name: 案例名称
+    - scene_index: 场景索引
+    - question_index: 问题索引
+    - discussion_content: 当前路径的完整讨论内容
+
+    输出：
+    - total_points: 该问题总知识点数
+    - covered_points: 已覆盖的知识点名称列表
+    - coverage_ratio: 覆盖比例 (0-1)
+    - covered_point_details: 每个知识点的详细信息 (point, explanation)
+    """
+    try:
+        case_path = resolve_case_json_path(request.case_name)
+        if not case_path:
+            return {"status": "error", "message": "Case not found"}, 404
+
+        with open(case_path, "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        result = await evaluate_progressive_coverage(
+            case_data=case_data,
+            scene_index=request.scene_index,
+            question_index=request.question_index,
+            discussion_content=request.discussion_content,
+        )
+
+        if result.get("status") == "error":
+            return result, 400
+
+        # 将 ViewE 主来源回填后的结构持久化，保证后续稳定。
+        with open(case_path, "w", encoding="utf-8") as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        return result
+    except Exception as e:
+        logger.error(
+            f"Failed to evaluate knowledge coverage: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
 @app_fastapi.post("/update_personas")
-# async def update_personas(request: Dict[str, Dict]):
-#     """接收前端配置，清空、注册所有 agent，并重新编译图。"""
-#     # 1. 清空现有的 agent 配置
-#     student_personas.clear()
-#     student_nodes.clear()
-#     print("Cleared existing agent configurations.")
-#     # 2. 根据请求注册新的 agent
-#     request = {
-#         "Alice": {
-#             "name": "Alice",
-#             "age": 22,
-#             "major": "female",
-#             "knowledge_background": {
-#                 "high": ["hypertension"],
-#                 "medium": ["haemodynamics"],
-#                 "low": ["diabete"]
-#                 },
-#             "cognitive_orientation":
-#                 {
-#                     "attentional_anchor":[
-#                         "patient_events",
-#                         "symptoms",
-#                         "social_cues",
-#                     ],
-#                     "reasoning_entry": ["mechanism"],
-#                     "causal_structure": ["linear_causality"]
-#                 },
-#             "social_interaction_style": {
-#                 "verbal_confidence": "high",
-#                 "language_register": "medium",
-#                 "interaction_role": "leader"
-#                  },
-#             "learning_adaptivity": "high"
-#         },
-#         "Bob": {
-#             "name": "Bob",
-#             "age": 23,
-#             "major": "male",
-#             "knowledge_background": {
-#                 "high": ["hypertension"],
-#                 "medium": ["haemodynamics"],
-#                 "low": ["diabete"]
-#                 },
-#             "cognitive_orientation":
-#                 {
-#                     "attentional_anchor":[
-#                         "symptoms",
-#                         "social_cues",
-#                     ],
-#                     "reasoning_entry": ["external_factors"],
-#                     "causal_structure": ["linear_causality", "multi_concurrent"]
-#                 },
-#             "social_interaction_style": {
-#                 "verbal_confidence": "low",
-#                 "language_register": "low",
-#                 "interaction_role": "follower"
-#                  },
-#             "learning_adaptivity": "medium"
-#         },
-#         "Lily": {
-#             "name": "Lily",
-#             "age": 22,
-#             "major": "female",
-#             "knowledge_background": {
-#                 "high": ["hypertension"],
-#                 "medium": ["haemodynamics"],
-#                 "low": ["diabete"]
-#                 },
-#             "cognitive_orientation":
-#                 {
-#                     "attentional_anchor":[
-#                         "social_cues",
-#                     ],
-#                     "reasoning_entry": ["external_factors"],
-#                     "causal_structure": ["multi_concurrent"]
-#                 },
-#             "social_interaction_style": {
-#                 "verbal_confidence": "high",
-#                 "language_register": "high",
-#                 "interaction_role": "follower"
-#                  },
-#             "learning_adaptivity": "medium"
-#         },
-#     }
-#     for agent_id, persona_data in request.items():
-#         register_student_agent(agent_id, persona_data)
-#     return {"status": "success", "message": f"Personas updated and graph rebuilt for {len(agent_ids)} agents."}
 async def update_personas_v1(request: Dict[str, Dict]):
     """接收前端配置，保存到 JSON 文件，清空并重新注册所有 agent，并重新构建图。"""
     try:
@@ -1206,6 +1936,88 @@ async def api_save_intervention_summary(request: SaveSummaryRequest):
         return {"status": "error", "detail": str(e)}, 500
 
 
+@app_fastapi.post("/api/generate-intervention-suggestions")
+async def api_generate_intervention_suggestions(request: InterventionStrategyRequest):
+    """并行调用 LLM 生成四种类型的教师干预策略建议"""
+    try:
+        logger.info(
+            f"=== Generating intervention suggestions for session {request.session_id} ===")
+
+        # 1. 获取消息地图和上下文
+        messages_map = {}
+        if request.session_id in session_histories:
+            messages_map = session_histories[request.session_id]["messages_map"]
+        else:
+            # 兼容性处理：尝试从磁盘获取
+            if DISCUSSION_FILE.exists():
+                with open(DISCUSSION_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if request.session_id in data:
+                        # 扫描所有 block_key 以填充 messages_map
+                        full_history = data[request.session_id]
+                        for q_key, q_data in full_history.items():
+                            if isinstance(q_data, dict):
+                                for m in q_data.get("messages", []):
+                                    if m["id"] not in messages_map:
+                                        messages_map[m["id"]] = m
+
+        if not messages_map:
+            return {"status": "error", "message": "Discussion history not found"}
+
+        # 构建讨论上下文
+        discussion_history = build_discussion_content_from_leaf(
+            messages_map, request.last_message_id)
+
+        # 2. 定义四种类型及其 Prompt
+        types = [
+            {"type": "提问", "desc": "最常见，推进整个讨论的流程"},
+            {"type": "解释", "desc": "解释自己提问的意图等"},
+            {"type": "回答", "desc": "扮演病人回答，需要提示LLM生成的策略包含“我现在要扮演病人请你回答我”"},
+            {"type": "点评", "desc": "one of my favorite questions"}
+        ]
+
+        # 3. 并行调用 (Qwen-3-Max)
+        llm = ChatOpenAI(
+            model=LLM_MODEL_NAME,
+            openai_api_key=DASHSCOPE_API_KEY,
+            openai_api_base=BASE_URL,
+            temperature=0.7
+        )
+
+        async def generate_one(t_info):
+            prompt = f"""你是一名资深的医学 PBL 导师（或者是参与 PBL 讨论的标准化病人/家属）。当前讨论背景（最近的消息在最后）如下：
+{discussion_history}
+
+请根据当前讨论进度，生成一条建议的教师/导师干预内容。
+类型：{t_info['type']} ({t_info['desc']})
+
+要求：
+1. 语言专业、亲切，符合医学教育场景。
+2. 简明扼要，直接输出干预内容，不要包含任何前缀（如“教师建议内容：”）。
+3. 如果是“回答”类型且当前没有待答复的问题，可以提供一条关于病情的补充信息。
+4. 确保与上述讨论上下文紧密相关。
+"""
+            msg = HumanMessage(content=prompt)
+            # 注意：ainvoke 是异步的
+            try:
+                resp = await llm.ainvoke([msg])
+                return {"type": t_info['type'], "content": resp.content.strip()}
+            except Exception as e:
+                logger.error(f"Error invoking LLM for {t_info['type']}: {e}")
+                return {"type": t_info['type'], "content": f"无法生成该建议：{e}"}
+
+        tasks = [generate_one(t) for t in types]
+        suggestions = await asyncio.gather(*tasks)
+
+        return {
+            "status": "success",
+            "suggestions": suggestions
+        }
+    except Exception as e:
+        logger.error(f"Error generating intervention suggestions: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @app_fastapi.get("/get_personas")
 async def get_personas():
     """从 agent_setting.json 读取所有 agent 的配置并返回。"""
@@ -1213,7 +2025,23 @@ async def get_personas():
         if not AGENT_SETTING_PATH.exists():
             return {}
         with open(AGENT_SETTING_PATH, 'r', encoding='utf-8') as f:
-            personas = json.load(f)
+            raw = f.read()
+
+        # 稳态处理：空文件不作为错误，直接返回空配置，前端无需展示。
+        if not raw.strip():
+            logger.info(
+                "agent_setting.json is empty, returning empty personas.")
+            return {}
+
+        try:
+            personas = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning(
+                "agent_setting.json is invalid JSON, returning empty personas.")
+            return {}
+
+        if not isinstance(personas, dict):
+            return {}
         return personas
     except Exception as e:
         logger.error(f"Error reading personas: {e}")
@@ -1380,6 +2208,14 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
         rows = snap.get("objective_evaluations", []) or []
         if not isinstance(rows, list):
             rows = []
+
+        # 获取当前活跃 leaf 关联的预缓存知识覆盖度
+        leaf_id = sh.get("active_id")
+        cached_coverage = None
+        if leaf_id and leaf_id in sh["messages_map"]:
+            cached_coverage = sh["messages_map"][leaf_id].get(
+                "knowledge_coverage")
+
         await websocket.send_json({
             "type": "state_restored",
             "scene_index": int(scene_idx),
@@ -1389,7 +2225,58 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
             "achieved_all": bool(snap.get("achieved_all", False)),
             "end_reason": snap.get("end_reason", ""),
             "state_snapshot": snap,
+            "knowledge_coverage": cached_coverage,  # 【新增】返回历史快照中记录的评估结果
         })
+
+    async def _recompute_and_emit_context_evaluations(scene_idx: int, question_idx: int, leaf_id: Optional[str], emit_ws: bool = True) -> Dict[str, Any]:
+        """Re-evaluate knowledge coverage from current branch leaf context."""
+        from . import pbl_info
+
+        case_name = str(
+            getattr(pbl_info, "current_case_name", "") or "").strip()
+        if not case_name or not leaf_id:
+            return {}
+
+        case_path = resolve_case_json_path(case_name)
+        if not case_path or not case_path.exists():
+            return {}
+
+        discussion_content = build_discussion_content_from_leaf(
+            sh["messages_map"], leaf_id)
+        if not discussion_content.strip():
+            return {}
+
+        with open(case_path, "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        coverage_payload = await evaluate_progressive_coverage(
+            case_data=case_data,
+            scene_index=int(scene_idx),
+            question_index=int(question_idx),
+            discussion_content=discussion_content,
+        )
+
+        # 【新增】将最新的覆盖率结果保存到 messages_map 中，实现回退后的即时恢复
+        if leaf_id in sh["messages_map"]:
+            sh["messages_map"][leaf_id]["knowledge_coverage"] = coverage_payload
+            persist_discussion(session_id, sh["messages_map"])
+
+        # 持久化一次可能发生的知识点回填。
+        with open(case_path, "w", encoding="utf-8") as f:
+            json.dump(case_data, f, ensure_ascii=False, indent=2)
+
+        if emit_ws:
+            await websocket.send_json({
+                "type": "knowledge_coverage_update",
+                "scene_index": int(scene_idx),
+                "question_index": int(question_idx),
+                "node_id": leaf_id,
+                "coverage": coverage_payload,
+            })
+
+        return {
+            "coverage": coverage_payload,
+        }
 
     # 【新增】连接时自动从文件恢复历史，防止重启后内存丢失
     if not sh["messages_map"] and DISCUSSION_FILE.exists():
@@ -1506,6 +2393,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
             f"Starting stream for {s_idx}_{q_idx} with thread_id: {current_config.get('configurable').get('thread_id')}")
         try:
             async for event in graph.app.astream(state, config=current_config):
+                # 【优化】检查暂停请求：如果暂停被请求，立即停止处理新事件
+                if pause_requested:
+                    logger.info(
+                        "Pause requested in stream_langgraph; stopping event processing.")
+                    break
                 # 将输出放入队列，附带 context 索引
                 await output_queue.put((event, s_idx, q_idx))
         except asyncio.CancelledError:
@@ -1517,6 +2409,10 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     async def output_processor():
         """处理输出队列的任务"""
         nonlocal runtime_state, graph_task, pause_requested, discussion_paused
+        # 【优化】追踪上一次发送的topic和objectives，用于检测变化并立即更新
+        previous_topic = None
+        previous_objectives = None
+
         while True:
             try:
                 item = await output_queue.get()
@@ -1529,6 +2425,24 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     event, s_idx, q_idx = item
 
                 for node, out in event.items():
+                    # 处理知识覆盖率评估结果 (由 knowledge_evaluator 节点产生)
+                    if node == "knowledge_evaluator" and out:
+                        kb_data = out.get("knowledge_state")
+                        if kb_data and kb_data.get("status") == "success":
+                            # 将知识覆盖率直接推送到前端，这会触发 ViewD 的更新
+                            # 携带 leaf_id，使其能精确对应到 graphData 的节点
+                            leaf_id = sh.get("active_id")
+                            if leaf_id:
+                                await websocket.send_json({
+                                    "type": "message_update",
+                                    "id": leaf_id,
+                                    "knowledge_coverage": kb_data,
+                                    "scene_index": s_idx,
+                                    "question_index": q_idx
+                                })
+                                logger.info(
+                                    f"DEBUG: [Server] Pushed sync coverage for {leaf_id} (Ratio: {kb_data.get('coverage_ratio')})")
+
                     runtime_state = _apply_out_to_runtime_state(
                         runtime_state, out)
 
@@ -1566,11 +2480,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             # 更新特定问题的指针
                             update_q_state(s_idx, q_idx, msg_id, branch_id)
 
-                            simplified = m.content
-                            # 只有学生 Agent 的长发言才需要精简显示在 Storyline 中
-                            if sender and sender not in ["case_introduction", "teacher", "host", "system"]:
-                                simplified = await simplify_message(m.content)
-
+                            # 【优化】立即发送消息到前端，不等待简化和评估
+                            # 简化和评估改为异步后台任务，完成后通过单独消息更新前端
                             await websocket.send_json({
                                 "id": msg_id,
                                 "parent_id": parent_id,
@@ -1578,22 +2489,54 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                 "node": node,
                                 "agent": sender,
                                 "content": m.content,
-                                "summary": simplified,
+                                "summary": m.content,  # 暂时为原文，异步更新
                                 "type": "agent_output",
                                 "scene_index": s_idx,
                                 "question_index": q_idx,
                                 "state_snapshot": msg_data.get("state_snapshot", {}),
+                                "knowledge_coverage": {},  # 暂时为空，异步更新
                             })
 
-                    # 处理主题更新
-                    if "current_topic" in out:
-                        # 主题更新通常发生在消息之后，我们也带上当前的 active_id
+                            # 【后台任务】异步进行消息简化
+                            async def _async_postprocess_message():
+                                """后台异步处理消息的简化，完成后通过WS更新前端"""
+                                try:
+                                    simplified = m.content
+                                    # 只有学生 Agent 的长发言才需要精简显示在 Storyline 中
+                                    if sender and sender not in ["case_introduction", "teacher", "host", "system"]:
+                                        simplified = await simplify_message(m.content)
+
+                                    # 【优化】覆盖评估已在 summarizer 节点后同步执行，这里只做消息简化
+                                    # 异步更新前端
+                                    if simplified != m.content:
+                                        await websocket.send_json({
+                                            "type": "message_update",
+                                            "id": msg_id,
+                                            "summary": simplified,
+                                        })
+
+                                    # 更新内存中的消息数据
+                                    if msg_id in sh["messages_map"]:
+                                        sh["messages_map"][msg_id]["summary"] = simplified
+                                except Exception as e:
+                                    logger.error(
+                                        f"Error in async message postprocessing: {e}")
+
+                            # 提交后台任务，不阻塞当前流程
+                            asyncio.create_task(_async_postprocess_message())
+
+                    # 【优化】处理主题更新：检测变化并立即发送，不等待其他处理
+                    current_topic = runtime_state.get(
+                        "current_topic", "Undefined")
+                    if current_topic and current_topic != previous_topic:
+                        # 主题发生变化，立即通知前端
                         await websocket.send_json({
                             "id": sh["active_id"],  # 关联到最后一条消息
                             "node": node,
-                            "topic": out["current_topic"],
+                            "topic": current_topic,
                             "type": "topic_update"
                         })
+                        previous_topic = current_topic
 
                     # Keep the active message snapshot aligned with latest state updates
                     # from non-message nodes (topic_manager/summarizer/router).
@@ -1609,21 +2552,25 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             "state_snapshot": sh["messages_map"][active_id].get("state_snapshot", {}),
                         })
 
-                    # 目标达成状态更新（由 router blackbox 给出）
-                    if "objective_evaluations" in out:
+                    # 【优化】目标达成状态更新：检测变化并立即发送到前端
+                    current_objectives = runtime_state.get(
+                        "objective_evaluations", [])
+                    if current_objectives and current_objectives != previous_objectives:
+                        # 目标评估发生变化，立即通知前端
                         logger.info(
                             "WS objective_update send scene=%s question=%s rows=%s",
                             s_idx,
                             q_idx,
-                            len(out.get("objective_evaluations", []) or []),
+                            len(current_objectives or []),
                         )
                         await websocket.send_json({
                             "type": "objective_update",
                             "scene_index": s_idx,
                             "question_index": q_idx,
-                            "trigger_question": out.get("trigger_question", ""),
-                            "objective_evaluations": out.get("objective_evaluations", []),
+                            "trigger_question": runtime_state.get("trigger_question", ""),
+                            "objective_evaluations": current_objectives,
                         })
+                        previous_objectives = copy.deepcopy(current_objectives)
 
                     # 讨论结束事件（用于前端提示 END 原因）
                     if out.get("next_speaker") == "END":
@@ -1728,6 +2675,9 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     learning_objectives=preserved_objectives,
                     case_name=preserved_case_name,
                 )
+                rt_key = f"{scene_idx}_{question_idx}"
+                # 【修改】刷新后不加载缓存的override，始终以干净状态开始
+                pbl_state.objective_overrides[rt_key] = {}
 
                 # 为初始消息生成 ID 并记录
                 msg_id = f"init_{scene_idx}_{question_idx}_{str(uuid.uuid4())[:4]}"
@@ -1788,6 +2738,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     sh["current_branch"] = state["current_branch"]
                     runtime_state = _snapshot_for_message(sh["active_id"])
                     await _emit_state_restore(s_idx, q_idx, runtime_state)
+                    await _recompute_and_emit_context_evaluations(
+                        scene_idx=int(s_idx),
+                        question_idx=int(q_idx),
+                        leaf_id=sh.get("active_id"),
+                    )
                     logger.info(
                         f"Context switched to {q_key}: active_id={sh['active_id']}, branch={sh['current_branch']}")
                 else:
@@ -1813,6 +2768,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                    target_question_idx, target_id, target_branch)
                     runtime_state = _snapshot_for_message(target_id)
                     await _emit_state_restore(target_scene_idx, target_question_idx, runtime_state)
+                    await _recompute_and_emit_context_evaluations(
+                        scene_idx=int(target_scene_idx),
+                        question_idx=int(target_question_idx),
+                        leaf_id=target_id,
+                    )
 
                     logger.info(
                         f"Context switched to branch: {sh['current_branch']}")
@@ -1837,6 +2797,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     update_q_state(target_scene_idx,
                                    target_question_idx, target_id, branch_id)
                     await _emit_state_restore(target_scene_idx, target_question_idx, runtime_state)
+                    await _recompute_and_emit_context_evaluations(
+                        scene_idx=int(target_scene_idx),
+                        question_idx=int(target_question_idx),
+                        leaf_id=target_id,
+                    )
 
                     logger.info(
                         f"✓ Switched node focus to: {target_id} on branch: {branch_id}")
@@ -1852,7 +2817,10 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
             elif action == "teacher_intervention":
                 teacher_content = msg.get("content", "")
 
-                # Ensure previous branch in-flight operations are fully applied before branching intervention.
+                # 【修改】趁着暂停把暂停前的 agent 更新执行完，但不调用 host
+                # 设置 pause_requested 为 True，让 output_processor 在处理完当前排队事件后自动进入暂停状态，
+                # 但不强行 cancel graph_task，直到我们手动重新启动它。
+                # 这样可以确保之前的 topic/objective/coverage 等异步评估在教师消息发出前更有可能完成。
                 await _stop_graph_tasks(drain_pending=True, clear_queue=True)
 
                 # 优先使用前端传入的 parent_id，实现点击节点后分支
@@ -1972,8 +2940,60 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     logger.info(
                         "Pause requested; waiting for current in-flight event to finish.")
 
-            elif action == "resume_discussion":
-                logger.info("教师指令：恢复讨论。")
+            elif action == "resume_discussion" or action == "force_resume":
+                logger.info(f"教师指令：恢复讨论 (Action: {action})。")
+                if pause_requested and not discussion_paused:
+                    try:
+                        await asyncio.wait_for(_wait_until_paused(), timeout=8.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Resume requested before pause barrier completed; forcing stop.")
+
+                await _stop_graph_tasks(drain_pending=False, clear_queue=True)
+
+                from . import pbl_info
+
+                chain = []
+                curr_ptr = sh["active_id"]
+                while curr_ptr:
+                    m_data = sh["messages_map"].get(curr_ptr)
+                    if not m_data:
+                        break
+                    chain.append(m_data["langchain_msg"])
+                    curr_ptr = m_data.get("parent_id")
+                chain.reverse()
+
+                resume_state = None
+                if chain:
+                    # 【修复】使用当前runtime_state中的total_messages，而不是snapshot中的静态值
+                    historical_turns = int(
+                        runtime_state.get("total_messages", 0) or 0)
+                    resume_state = {
+                        "messages": chain,
+                        "total_messages": historical_turns,
+                        "private_memory": copy.deepcopy(runtime_state.get("private_memory", {}) or {}),
+                        "knowledge_state": copy.deepcopy(runtime_state.get("knowledge_state", {}) or {}),
+                        "cognitive_load": copy.deepcopy(runtime_state.get("cognitive_load", {}) or {}),
+                        "self_efficacy": copy.deepcopy(runtime_state.get("self_efficacy", {}) or {}),
+                        "discussion_active": True,
+                        "is_teacher_interrupted": False,
+                        "force_no_silence_once": False,
+                        "current_topic": runtime_state.get("current_topic", "Undefined"),
+                        "next_speaker": "router"
+                    }
+                    runtime_state = _build_state_snapshot(resume_state)
+                else:
+                    runtime_state = _build_state_snapshot(runtime_state)
+
+                graph_task = asyncio.create_task(stream_langgraph(
+                    resume_state, pbl_info.active_scene_index, pbl_info.active_question_index))
+                output_task = asyncio.create_task(output_processor())
+                discussion_paused = False
+                logger.info("教师强制恢复讨论（override-triggered）")
+                await websocket.send_json({"type": "discussion_resumed"})
+
+            elif action == "force_resume":
+                logger.info("教师强制恢复讨论（override触发，不受 isPaused 限制）")
                 if pause_requested and not discussion_paused:
                     try:
                         await asyncio.wait_for(_wait_until_paused(), timeout=8.0)
@@ -2003,20 +3023,20 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 # 如果链条为空，说明只有初始消息，使用 None 让 checkpoint 恢复
                 resume_state = None
                 if chain:
-                    snapshot = _snapshot_for_message(sh.get("active_id"))
+                    # 【修复】使用当前runtime_state中的total_messages，而不是snapshot中的静态值
                     historical_turns = int(
-                        snapshot.get("total_messages", 0) or 0)
+                        runtime_state.get("total_messages", 0) or 0)
                     resume_state = {
                         "messages": chain,
                         "total_messages": historical_turns,
-                        "private_memory": copy.deepcopy(snapshot.get("private_memory", {}) or {}),
-                        "knowledge_state": copy.deepcopy(snapshot.get("knowledge_state", {}) or {}),
-                        "cognitive_load": copy.deepcopy(snapshot.get("cognitive_load", {}) or {}),
-                        "self_efficacy": copy.deepcopy(snapshot.get("self_efficacy", {}) or {}),
-                        "discussion_active": bool(snapshot.get("discussion_active", True)),
-                        "is_teacher_interrupted": bool(snapshot.get("is_teacher_interrupted", False)),
-                        "force_no_silence_once": bool(snapshot.get("force_no_silence_once", False)),
-                        "current_topic": snapshot.get("current_topic", "Undefined"),
+                        "private_memory": copy.deepcopy(runtime_state.get("private_memory", {}) or {}),
+                        "knowledge_state": copy.deepcopy(runtime_state.get("knowledge_state", {}) or {}),
+                        "cognitive_load": copy.deepcopy(runtime_state.get("cognitive_load", {}) or {}),
+                        "self_efficacy": copy.deepcopy(runtime_state.get("self_efficacy", {}) or {}),
+                        "discussion_active": bool(runtime_state.get("discussion_active", True)),
+                        "is_teacher_interrupted": bool(runtime_state.get("is_teacher_interrupted", False)),
+                        "force_no_silence_once": bool(runtime_state.get("force_no_silence_once", False)),
+                        "current_topic": runtime_state.get("current_topic", "Undefined"),
                         "next_speaker": "router"
                     }
                     runtime_state = _build_state_snapshot(resume_state)

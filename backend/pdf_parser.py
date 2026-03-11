@@ -90,19 +90,22 @@ class PBLFastParser:
             【场景拆分】请根据剧情推进（如"第一页"、"第二页"）将教案拆分为细粒度的 Scene。
             每个Scene对应教案中的一个独立病情阶段或检查阶段。
             
-            【内容提取】对每个Scene，提取：
+                        【内容提取】对每个Scene，提取：
             - story_content：该场景的病历描述、临床表现、检查结果等
             - key_discussion_points：核心讨论要点
             - trigger_questions：引导问题
-                - trigger_question_learning_objectives：按 trigger question 拆分的学习目标
+                                - 每个 trigger question 内必须包含：
+                                    1) learning_objectives
+                                    2) knowledge_points
 
-                【学习目标拆分规则 - 必须遵守】
-                1. 每个 Scene 的每一个 trigger question 都必须有对应的学习目标。
-                2. 使用结构：
-                    - trigger_question: 问题原文
-                    - learning_objectives: 该问题下 1-4 条可评估目标
-                3. learning_objectives 必须是可观察、可检验的医学学习任务，不要写空泛口号。
-                4. 若原文未显式给出，结合该场景病情与问题语义进行合理补全。
+                【学习目标与知识点规则 - 必须遵守】
+                1. learning_objectives 必须绑定到具体 trigger question；无法明确绑定则返回空列表。
+                2. 严禁创建与 trigger question 无关的全局学习目标。
+                3. learning_objectives 是“讨论后学生能做到什么”的能力表述，需可观察、可检验。
+                4. knowledge_points 是实现目标所需的医学知识，粒度要细（机制、诊断标准、鉴别逻辑、治疗原则等）。
+                5. knowledge_points 要比 learning_objectives 更具体；每个问题尽量给 8-10 条。
+                6. knowledge_points 每项包含 concept 与 explanation；若信息不足返回空列表，不要臆造。
+                7. 避免与 theoretical_knowledge_points 重复罗列同一层级标签，问题级知识点应更细。
             
             【图片处理 - 关键规则】
             1. 只在 Markdown 中寻找 `![](img/xxx.jpg)` 格式的图片
@@ -192,13 +195,14 @@ class PBLFastParser:
                 scene_dict['images_base64'] = images_b64
                 scene_dict['local_image_paths'] = local_paths
 
-                # 兜底对齐：确保每个 trigger question 都有对应的 learning objectives。
+                # 兜底对齐：将历史结构 trigger_question_learning_objectives 回填到 trigger_questions。
                 trigger_questions = scene_dict.get(
                     'trigger_questions', []) or []
                 objective_rows = scene_dict.get(
                     'trigger_question_learning_objectives', []) or []
 
                 normalized_rows = []
+                normalized_questions = []
                 for q_idx, q_item in enumerate(trigger_questions):
                     q_text = str((q_item or {}).get('question', '')).strip()
                     matched = None
@@ -215,16 +219,54 @@ class PBLFastParser:
                     if matched is None and q_idx < len(objective_rows):
                         matched = objective_rows[q_idx]
 
-                    objectives = []
-                    if matched is not None:
-                        objectives = matched.get(
-                            'learning_objectives', []) or []
+                    # Priority: use per-question objectives first, then merge legacy objective rows as fallback.
+                    q_objectives = (q_item or {}).get(
+                        'learning_objectives', [])
+                    row_objectives = matched.get(
+                        'learning_objectives', []) if matched is not None else []
 
+                    merged_objectives = []
+                    for obj in (q_objectives if isinstance(q_objectives, list) else []):
+                        text = str(obj).strip()
+                        if text and text not in merged_objectives:
+                            merged_objectives.append(text)
+                    for obj in (row_objectives if isinstance(row_objectives, list) else []):
+                        text = str(obj).strip()
+                        if text and text not in merged_objectives:
+                            merged_objectives.append(text)
+
+                    clean_objectives = merged_objectives
                     normalized_rows.append({
                         'trigger_question': q_text,
-                        'learning_objectives': [str(obj).strip() for obj in objectives if str(obj).strip()],
+                        'learning_objectives': clean_objectives,
                     })
 
+                    # Ensure required per-question fields exist; keep empty list when missing instead of hallucinating.
+                    raw_knowledge_points = (q_item or {}).get(
+                        'knowledge_points', [])
+                    cleaned_kps = []
+                    if isinstance(raw_knowledge_points, list):
+                        for kp in raw_knowledge_points:
+                            if not isinstance(kp, dict):
+                                continue
+                            concept = str(kp.get('concept', '')).strip()
+                            explanation = str(
+                                kp.get('explanation', '')).strip()
+                            if not concept and not explanation:
+                                continue
+                            cleaned_kps.append({
+                                'concept': concept,
+                                'explanation': explanation,
+                            })
+
+                    normalized_questions.append({
+                        'question': q_text,
+                        'type': str((q_item or {}).get('type', 'discussion')).strip() or 'discussion',
+                        'learning_objectives': clean_objectives,
+                        'knowledge_points': cleaned_kps,
+                    })
+
+                scene_dict['trigger_questions'] = normalized_questions
                 scene_dict['trigger_question_learning_objectives'] = normalized_rows
 
                 if 'relevant_image_filenames' in scene_dict:
@@ -238,7 +280,8 @@ class PBLFastParser:
                 "case_title": result.case_title,
                 "theoretical_knowledge_points": result.theoretical_knowledge_points,
                 "knowledge_alignments": [a.model_dump() for a in alignment_result.alignments],
-                "learning_objectives": [obj.model_dump() for obj in result.learning_objectives],
+                # Global objectives are intentionally disabled for strict question-level binding.
+                "learning_objectives": [],
                 "total_scenes": len(final_scenes),
                 "scenes": final_scenes,
                 "case_folder": str(case_root_dir),

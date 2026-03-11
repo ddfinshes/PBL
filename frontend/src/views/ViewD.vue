@@ -81,21 +81,37 @@ import axios from 'axios';
 
 const { 
   messages, 
-  currentTopic, 
   selectedTopic, 
   activeMessageId,
   activeQuestionInfo,
   selectedNodeLeafId,
   interventionSummaries,
-  personas,
+  knowledgeCoverageByQuestion,
   getAgentColor,
-  fetchPersonas,
   isPaused,
   switchNodeFocus
 } = inject('pblSocket', {});
 const sessionId = inject('sessionId');
 const svgRef = ref(null);
 const svgWrapper = ref(null);
+
+// Store knowledge coverage data
+const knowledgeCoverageMap = ref(new Map()); // nodeId -> { totalPoints, coveredPoints, ratio, score, details, pointScores }
+
+// 追踪节点的前驱关系，用于累积覆盖率
+const nodeAncestorMap = ref(new Map()); // nodeId -> parentNodeId
+
+// 【修复】避免直接清空覆盖率导致UI闪烁，改为延迟清空或保留
+// 当问题真的改变时，在下一次覆盖率数据到达时再进行合并
+watch(activeQuestionInfo, () => {
+  // 不直接清空，而是标记需要重新映射
+  // remapCoverageFromQuestionCache 会自动处理新旧数据的合并
+  nodeAncestorMap.value = new Map();
+  
+  // 【新增】当切换问题时，重置已评估的节点跟踪，这样新问题的所有节点都会重新计算覆盖率
+  lastEvaluatedNodeIds.value = new Set();
+  console.debug('[ViewD] activeQuestionInfo changed, reset coverage evaluation state');
+}, { deep: true });
 
 // --- 总结功能相关状态 ---
 const showSummaryModal = ref(false);
@@ -167,6 +183,137 @@ const saveSummary = async () => {
   }
 };
 
+// 评估知识覆盖度
+const evaluateKnowledgeCoverage = async (caseInfo, discussionContent, nodeId) => {
+  try {
+    const response = await axios.post(
+      'http://127.0.0.1:8000/api/evaluate-knowledge-coverage',
+      {
+        case_name: caseInfo.caseName || 'unknown',
+        scene_index: caseInfo.sceneIndex || 0,
+        question_index: caseInfo.questionIndex || 0,
+        discussion_content: discussionContent
+      }
+    );
+
+    if (response.data.status === 'success') {
+      const coverageData = {
+        totalPoints: Number(response.data.total_points || 0),
+        coveredPoints: Array.isArray(response.data.covered_points) ? response.data.covered_points : [],
+        pointScores: Array.isArray(response.data.point_scores) ? response.data.point_scores : [],
+        score: Number(response.data.coverage_score || 0),
+        ratio: Number(response.data.coverage_ratio || 0),
+        details: response.data.covered_point_details,
+        updatedAt: Date.now()
+      };
+      
+      // 存储到本地的 knowledgeCoverageMap
+      knowledgeCoverageMap.value.set(nodeId, coverageData);
+      
+      // 同时尝试更新全局的 knowledgeCoverageByQuestion（用于与 ViewE 同步）
+      if (knowledgeCoverageByQuestion !== undefined && knowledgeCoverageByQuestion !== null) {
+        const key = `${caseInfo.sceneIndex}_${caseInfo.questionIndex}`;
+        const node = graphData.value?.nodes?.find(n => n.id === nodeId);
+        const leafId = node?.turnsList?.[node.turnsList.length - 1]?.id;
+        
+        if (leafId && typeof knowledgeCoverageByQuestion === 'object') {
+          if (!knowledgeCoverageByQuestion[key]) {
+            knowledgeCoverageByQuestion[key] = {};
+          }
+          knowledgeCoverageByQuestion[key][leafId] = coverageData;
+          console.debug('[ViewD] ✓ Coverage evaluated for node', { nodeId: nodeId.substring(0, 20), points: coverageData.pointScores.length, ratio: Math.round(coverageData.ratio * 100) + '%' });
+        }
+      }
+      
+      return response.data.coverage_ratio;
+    }
+  } catch (err) {
+    console.error('Failed to evaluate knowledge coverage:', err);
+  }
+  return 0;
+};
+
+// 为某个节点评估知识覆盖度
+const evaluateCoverageForNode = async (nodeId) => {
+  try {
+    const node = graphData.value.nodes.find(n => n.id === nodeId);
+    if (!node || !node.turnsList.length) {
+      return;
+    }
+
+    // 收集该节点关联的所有消息的讨论内容
+    const nodeMsgIds = new Set(node.turnsList.map(t => t.id));
+    const questionMessages = messages.value.filter(m => 
+      m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
+      m.questionIndex === activeQuestionInfo.value.questionIndex
+    );
+    
+    // 从节点的最后一条消息开始，向上溯源到根，收集完整的讨论路径
+    let leafMsg = null;
+    for (let i = questionMessages.length - 1; i >= 0; i--) {
+      const msg = questionMessages[i];
+      if (nodeMsgIds.has(msg.id)) {
+        leafMsg = msg;
+        break;
+      }
+    }
+
+    if (!leafMsg) {
+      return;
+    }
+
+    // 收集从根到当前节点的所有讨论内容
+    const discussionParts = [];
+    let curr = leafMsg;
+    let safety = 0;
+    const msgMap = new Map(questionMessages.map(m => [m.id, m]));
+
+    while (curr && safety < 1000) {
+      if (curr.text && curr.agent !== 'case_introduction' && curr.agent !== 'Start Discussion') {
+        discussionParts.unshift(`[${curr.agent}]: ${curr.text}`);
+      }
+      curr = msgMap.get(curr.parent_id);
+      safety++;
+    }
+
+    const discussionContent = discussionParts.join('\n\n');
+
+    if (!discussionContent.trim()) {
+      console.warn('[coverage] empty discussion content for node', nodeId);
+      return;
+    }
+
+    // 调用评估函数
+    await evaluateKnowledgeCoverage(
+      {
+        caseName: activeQuestionInfo.value.caseName,
+        sceneIndex: activeQuestionInfo.value.sceneIndex,
+        questionIndex: activeQuestionInfo.value.questionIndex
+      },
+      discussionContent,
+      nodeId
+    );
+  } catch (err) {
+    console.error('Failed to evaluate coverage for node:', err);
+  }
+};
+
+const evaluateCoverageForAllNodes = async () => {
+  if (!activeQuestionInfo.value?.caseName) {
+    console.warn('[coverage] skip evaluate: activeQuestionInfo.caseName is empty');
+    return;
+  }
+
+  const pending = graphData.value.nodes
+    .filter(n => n.turnsList?.length > 0)
+    .filter(n => !knowledgeCoverageMap.value.has(n.id))
+    .map(n => n.id);
+
+  for (const nodeId of pending) {
+    await evaluateCoverageForNode(nodeId);
+  }
+};
+
 // 计算基于选中节点或活跃节点的“主路径” (包含祖先和后代)
 const mainPathSet = computed(() => {
   const path = new Set();
@@ -230,47 +377,6 @@ const mainPathSet = computed(() => {
   return path;
 });
 
-// 计算当前选定路径/分支的所有祖先消息 ID
-const currentPathMsgIds = computed(() => {
-  const ids = new Set();
-  if (!messages.value?.length) return ids;
-
-  // Filter messages by active question
-  const questionMessages = messages.value.filter(m => 
-    m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
-    m.questionIndex === activeQuestionInfo.value.questionIndex
-  );
-
-  // 确定“叶子”消息 ID
-  let leafId = activeMessageId.value;
-  // 如果当前活跃消息不在当前问题的范围内，则尝试寻找该问题范围内的最后一条
-  if (!questionMessages.find(m => m.id === leafId) && questionMessages.length > 0) {
-    leafId = questionMessages[questionMessages.length - 1].id;
-  }
-
-  if (selectedTopic.value) {
-    // 如果选中了某个节点，以该节点关联的最后一条消息作为“叶子”
-    const selectedNode = graphData.value.nodes.find(n => n.id === selectedTopic.value);
-    if (selectedNode && selectedNode.turnsList.length > 0) {
-      leafId = selectedNode.turnsList[selectedNode.turnsList.length - 1].id;
-    }
-  }
-
-  if (!leafId) return ids;
-
-  let curr = leafId;
-  let safety = 0;
-  while (curr && safety < 1000) {
-    ids.add(curr);
-    const m = messages.value.find(msg => msg.id === curr);
-    const next = m ? m.parent_id : null;
-    if (!next || next === curr) break;
-    curr = next;
-    safety++;
-  }
-  return ids;
-});
-
 // 数据处理：支持树状演化路径与干预标识
 const graphData = computed(() => {
   const nodes = [];
@@ -316,46 +422,12 @@ const graphData = computed(() => {
   };
   const activePath = getActivePathMsgIds();
 
-  // 3. 识别分叉点以及每个分叉点的"老路径"消息
-  const forkPointMap = new Map(); // fork_parent_id -> [old_branch_msgs, new_branch_msgs]
-  const getOldBranchMsgs = (forkParentId) => {
-    const children = childrenMap.get(forkParentId) || [];
-    if (children.length <= 1) return [];
-    
-    // 识别活跃路径中的下一条消息（新分支）
-    const forkParent = msgMap.get(forkParentId);
-    let activeChild = null;
-    if (forkParent) {
-      let curr = forkParent;
-      while (curr) {
-        const next = msgMap.get(curr.parent_id);
-        if (next && next.id === forkParentId) {
-          activeChild = curr;
-          break;
-        }
-        curr = next;
-      }
-    }
-    
-    const oldBranch = [];
-    children.forEach(child => {
-      if (!activeChild || child.id !== activeChild.id) {
-        // 这是旧分支，递归收集其所有后代
-        const collectDescendants = (msg) => {
-          oldBranch.push(msg);
-          const descendants = childrenMap.get(msg.id) || [];
-          descendants.forEach(d => collectDescendants(d));
-        };
-        collectDescendants(child);
-      }
-    });
-    return oldBranch;
-  };
-
-  // 4. 映射消息到节点
+  // 3. 映射消息到节点
   questionMessages.forEach((msg) => {
-    let topicName = msg.topic || (msg.agent === 'teacher' ? 'Convention' : 'Unrecognized');
-    if (topicName === 'Unrecognized' || topicName === 'Start Discussion') return;
+    let topicName = (msg.topic || (msg.agent === 'teacher' ? 'Convention' : 'Unrecognized')).trim();
+    // 过滤掉所有变体的开始讨论话题
+    const skipTopics = ['unrecognized', 'start discussion', 'start_discussion', '开始讨论'];
+    if (!topicName || skipTopics.includes(topicName.toLowerCase())) return;
 
     const branch = msg.branch_id || 'main';
     let shouldStartNewNode = false;
@@ -370,7 +442,6 @@ const graphData = computed(() => {
         shouldStartNewNode = true;
       } else {
         const ptName = pMsg.topic || (pMsg.agent === 'teacher' ? 'Convention' : 'Unrecognized');
-        const isSystemParent = (ptName === 'Unrecognized' || ptName === 'Convention');
         pNodeId = msgToNodeIdMap.get(msg.parent_id);
 
         // 判断是否应该创建新节点：
@@ -698,6 +769,19 @@ const updateGraph = () => {
     .attr('stroke-width', 3)
     .style('filter', 'url(#glow)');
 
+  // 添加 hover tooltip (知识点详情)
+  nodeEnter.append('title')
+    .text(d => {
+      const coverage = knowledgeCoverageMap.value.get(d.id);
+      if (!coverage || !Array.isArray(coverage.pointScores) || coverage.pointScores.length === 0) {
+        return 'No knowledge points covered yet';
+      }
+      const pointsList = coverage.pointScores
+        .map(pt => `• ${pt.point}: ${Math.round((Number(pt.coverage_score || 0)) * 100)}%`)
+        .join('\n');
+      return `Knowledge Coverage: ${Math.round((coverage.ratio || 0) * 100)}%\n\nCovered Points:\n${pointsList}`;
+    });
+
   // 主题名称标签
   const labelGroup = nodeEnter.append('g').attr('class', 'label-group');
   
@@ -721,6 +805,44 @@ const updateGraph = () => {
   allNodes.select('.core-circle')
     .transition().duration(500)
     .attr('r', d => 14 + Math.sqrt(d.turns) * 3);
+
+  // 【新增】为新创建的节点初始化覆盖率：继承父节点的覆盖率
+  /*
+  const parentMap = new Map(); // nodeId -> parentNodeId
+  links.forEach(link => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    parentMap.set(targetId, sourceId);
+  });
+
+  allNodes.each(function(d) {
+    const nodeId = d.id;
+    const parentId = parentMap.get(nodeId);
+
+    // 如果节点没有覆盖率数据，且有父节点，则继承父节点的覆盖率
+    if (!knowledgeCoverageMap.value.has(nodeId) && parentId && knowledgeCoverageMap.value.has(parentId)) {
+      const parentCoverage = knowledgeCoverageMap.value.get(parentId);
+      knowledgeCoverageMap.value.set(nodeId, {
+        ...parentCoverage,
+        ratio: parentCoverage.ratio
+      });
+    }
+  });
+  */
+
+  // 更新 tooltip 内容
+  allNodes.select('title')
+    .text(d => {
+      let coverage = knowledgeCoverageMap.value.get(d.id);
+      
+      if (!coverage || !Array.isArray(coverage.pointScores) || coverage.pointScores.length === 0) {
+        return 'No knowledge points covered yet';
+      }
+      const pointsList = coverage.pointScores
+        .map(pt => `• ${pt.point}: ${Math.round((Number(pt.coverage_score || 0)) * 100)}%`)
+        .join('\n');
+      return `Knowledge Coverage: ${Math.round((coverage.ratio || 0) * 100)}%\n\nCovered Points:\n${pointsList}`;
+    });
 
   // 动态调整标签位置和大小
   allNodes.each(function(d) {
@@ -809,6 +931,53 @@ const updateGraph = () => {
       .merge(flag)
       .attr('transform', `translate(${-radius - 12}, ${-radius - 20}) scale(1.5)`)
       .style('cursor', 'help');
+
+    // 绘制知识覆盖度 - 灌水进度条 (圆形进度条)
+    let coverageData = knowledgeCoverageMap.value.get(d.id) || { ratio: 0 };
+    
+    const waterRadius = radius - 2;
+    const waterAngle = (coverageData.ratio || 0) * Math.PI * 2;
+    
+    const waterPath = nodeG.selectAll('.knowledge-water')
+      .data([null]);
+    
+    waterPath.enter().append('path')
+      .attr('class', 'knowledge-water')
+      .merge(waterPath)
+      .attr('d', d3.arc()
+        .innerRadius(waterRadius - 4)
+        .outerRadius(waterRadius)
+        .startAngle(-Math.PI / 2)
+        .endAngle(-Math.PI / 2 + waterAngle))
+      .attr('fill', (() => {
+        const ratio = coverageData.ratio || 0;
+        if (ratio < 0.5) {
+          const t = ratio * 2;
+          return d3.interpolate('#EF4444', '#FBBF24')(t);
+        }
+        const t = (ratio - 0.5) * 2;
+        return d3.interpolate('#FBBF24', '#10B981')(t);
+      })())
+      .attr('opacity', 0.8)
+      .attr('stroke', 'white')
+      .attr('stroke-width', 1);
+    
+    // 添加覆盖度百分比标签
+    const coverageLabel = nodeG.selectAll('.coverage-label')
+      .data([null]);
+    
+    coverageLabel.exit().remove();
+    coverageLabel.enter().append('text')
+      .attr('class', 'coverage-label')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.3em')
+      .attr('font-size', '10px')
+      .attr('font-weight', 'bold')
+      .attr('fill', '#1F2937')
+      .attr('pointer-events', 'none')
+      .merge(coverageLabel)
+      .text(() => `${Math.round(coverageData.ratio * 100)}%`)
+        .attr('y', 3);
   });
 
   // 4. 重启模拟
@@ -897,13 +1066,127 @@ watch([selectedTopic, mainPathSet, isHighlightingFlags], ([newTopic, newPath, is
   }
 }, { deep: true });
 
+// 【新增】追踪覆盖率评估状态，防止频繁重复计算
+const isCoverageEvaluating = ref(false);
+const lastEvaluatedNodeIds = ref(new Set()); // 记录已评估过的节点
+const lastMessageCount = ref(0); // 追踪上一轮的消息数量
+
+// 【新增】直接监听消息到达，仅在必要时补充漏掉的覆盖率
+// 绝大多数覆盖率现在由后端推送到 knowledgeCoverageByQuestion 缓存中，ViewD 自动同步
+watch(() => messages?.value?.length, async (newLength) => {
+  if (!newLength || !activeQuestionInfo.value?.caseName) return;
+  
+  if (newLength > (lastMessageCount.value || 0)) {
+    lastMessageCount.value = newLength;
+    
+    // 延迟检查是否有缺失评估的节点
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 检查是否有后端没推过来的节点（例如切换旧分支时）
+    const key = `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`;
+    const coverageCache = knowledgeCoverageByQuestion?.value?.[key] || {};
+    
+    const pendingNodes = graphData.value?.nodes?.filter(n => 
+      n.turnsList?.length > 0 && 
+      !knowledgeCoverageMap.value.has(n.id) &&
+      !Object.keys(coverageCache).some(leafId => n.turnsList.some(t => t.id === leafId))
+    ) || [];
+
+    if (pendingNodes.length > 0 && !isCoverageEvaluating.value) {
+      isCoverageEvaluating.value = true;
+      try {
+        console.debug('[ViewD] 补充评估缺失节点:', pendingNodes.length);
+        for (const node of pendingNodes) {
+          await evaluateCoverageForNode(node.id);
+        }
+      } finally {
+        isCoverageEvaluating.value = false;
+      }
+    }
+  }
+}, { immediate: false });
+
 // 监听数据变化并重新渲染
 watch(graphData, () => {
   updateGraph();
 }, { deep: true });
 
+// 监听知识覆盖度数据变化，更新可视化
+watch(knowledgeCoverageMap, () => {
+  updateGraph();
+}, { deep: true });
+
+// 追踪当前问题，用于检测问题变化
+const previousQuestionKey = ref(null);
+
+const remapCoverageFromQuestionCache = () => {
+  if (!activeQuestionInfo?.value) return;
+  const key = `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`;
+  const incoming = knowledgeCoverageByQuestion?.value?.[key] || {};
+  
+  // 【优化】只在问题真正改变时清空旧问题的覆盖率
+  if (previousQuestionKey.value !== null && previousQuestionKey.value !== key) {
+    // 问题已改变，清空旧问题的覆盖率
+    knowledgeCoverageMap.value = new Map();
+  }
+  previousQuestionKey.value = key;
+  
+  // 从现有的map读取（如果问题相同）或从空开始
+  const nextMap = new Map(knowledgeCoverageMap.value);
+
+  // 建立节点的前驱关系映射
+  const { links } = graphData.value;
+  const parentMap = new Map(); // nodeId -> parentNodeId
+  links.forEach(link => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    parentMap.set(targetId, sourceId);
+  });
+  nodeAncestorMap.value = parentMap;
+
+  const findNodeForLeafId = (leafId) => {
+    const found = graphData.value.nodes.find(n => n.turnsList?.some(t => t.id === leafId));
+    return found ? found.id : null;
+  };
+
+  // 【增量更新】只更新传入的新数据，保留未变更的数据
+  Object.entries(incoming).forEach(([leafId, payload]) => {
+    const nodeId = findNodeForLeafId(leafId);
+    if (!nodeId) return;
+    
+    // 只更新新数据，保留未变更的字段
+    const existing = nextMap.get(nodeId) || {};
+    nextMap.set(nodeId, {
+      totalPoints: Number(payload.total_points ?? existing.totalPoints ?? 0),
+      coveredPoints: Array.isArray(payload.covered_points) ? payload.covered_points : (existing.coveredPoints || []),
+      pointScores: Array.isArray(payload.point_scores) ? payload.point_scores : (existing.pointScores || []),
+      score: Number(payload.coverage_score ?? existing.score ?? 0),
+      ratio: Number(payload.coverage_ratio ?? existing.ratio ?? 0),
+      details: Array.isArray(payload.covered_point_details) ? payload.covered_point_details : (existing.details || [])
+    });
+  });
+
+  // 【单调性约束】确保覆盖率单调递增（累积特性）
+  const ensureMonotonicCoverage = () => {
+    // 移除单调性检查，因为在回滚或分支切换时，节点 ID 的重用可能导致父子关系发生变化
+    // 且知识覆盖率应严格遵循后端返回的针对各节点的评估结果
+    return;
+  };
+
+  ensureMonotonicCoverage();
+  knowledgeCoverageMap.value = nextMap;
+};
+
+watch(knowledgeCoverageByQuestion, () => {
+  remapCoverageFromQuestionCache();
+}, { deep: true });
+
+// topic_update 会触发图重分组并导致 nodeId 变化；这里强制按 leafId 重新映射，避免覆盖率掉回 0
+watch(graphData, () => {
+  remapCoverageFromQuestionCache();
+}, { deep: true });
+
 onMounted(async () => {
-  if (fetchPersonas) await fetchPersonas();
   initGraph();
 });
 </script>
@@ -930,27 +1213,16 @@ onMounted(async () => {
 .node-group:active { cursor: grabbing; }
 .topic-link { transition: stroke-dashoffset 0.5s; }
 
-.animate-pulse-custom {
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  transform-box: fill-box;
-  transform-origin: center;
+/* Knowledge Coverage Styles */
+.knowledge-water {
+  transition: fill 0.3s ease, stroke 0.3s ease;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.8);
-    opacity: 0.8;
-    stroke-width: 2;
-  }
-  50% {
-    transform: scale(1.5);
-    opacity: 0.3;
-    stroke-width: 10;
-  }
-  100% {
-    transform: scale(0.8);
-    opacity: 0.8;
-    stroke-width: 2;
-  }
+.coverage-label {
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
 }
+
 </style>

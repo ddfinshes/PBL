@@ -28,6 +28,48 @@
               </div>
 
               <aside class="agent-preview-panel" @click.stop>
+                <section class="preview-config-chat" @click.stop>
+                  <div class="preview-config-title">Natural Language Config</div>
+                  <div class="preview-chat-log">
+                    <div
+                      v-for="(msg, idx) in getConfigChatMessages(agent)"
+                      :key="`${agent.id}-chat-${idx}`"
+                      class="preview-chat-msg"
+                      :class="msg.role"
+                    >
+                      <span class="preview-chat-role">{{ msg.role === 'user' ? 'You' : 'Assistant' }}</span>
+                      <p>{{ msg.content }}</p>
+                    </div>
+                    <div v-if="!getConfigChatMessages(agent).length" class="preview-chat-empty">
+                      例如：帮我设置一个好学生，性格腼腆不爱发言。
+                    </div>
+                  </div>
+
+                  <div class="preview-chat-input-row">
+                    <input
+                      v-model="chatInstructionByAgent[agent.id]"
+                      class="preview-chat-input"
+                      :disabled="Boolean(chatSubmittingByAgent[agent.id])"
+                      placeholder="继续用自然语言描述该 Agent..."
+                      @keyup.enter="submitAgentConfigInstruction(agent)"
+                    />
+                    <button
+                      class="preview-chat-submit"
+                      :disabled="Boolean(chatSubmittingByAgent[agent.id])"
+                      @click="submitAgentConfigInstruction(agent)"
+                    >
+                      {{ chatSubmittingByAgent[agent.id] ? 'Parsing...' : 'Apply' }}
+                    </button>
+                  </div>
+
+                  <div v-if="chatErrorByAgent[agent.id]" class="preview-chat-error">
+                    {{ chatErrorByAgent[agent.id] }}
+                  </div>
+                  <div v-if="getConfigUnresolvedFields(agent).length" class="preview-chat-warning">
+                    仍有字段未解析（左侧对应模块已标红）：可手动调，或继续补充描述。
+                  </div>
+                </section>
+
                 <div class="preview-title">Agent Preview</div>
 
                 <div class="preview-bubble before">
@@ -95,7 +137,8 @@ const {
   fetchPersonas,
   updateKnowledge,
   addKnowledge,
-  deleteKnowledge
+  deleteKnowledge,
+  isPaused
 } = inject('pblSocket', {});
 
 const props = defineProps({
@@ -110,6 +153,10 @@ const props = defineProps({
   caseTitle: {
     type: String,
     default: ''
+  },
+  isLeftColumnCollapsed: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -155,14 +202,18 @@ const createDefaultAgent = (index = 0) => ({
     agreeableness: 3,
     neuroticism: 3
   },
-  cognitiveOrientation: 'line_based',
+  cognitiveOrientation: '',
   social: {
     confidence: 'medium',
     register: 'medium',
     participation: 'medium',
     role: 'leader'
   },
-  plasticity: 'medium'
+  plasticity: '',
+  configChat: {
+    messages: [],
+    unresolvedFields: []
+  }
 });
 
 const agents = ref([createDefaultAgent(0)]);
@@ -172,6 +223,9 @@ const previewRequestVersionByAgent = ref({});
 const previewAbortByAgent = ref({});
 const previewDebounceByAgent = ref({});
 const previewSignatureByAgent = ref({});
+const chatInstructionByAgent = ref({});
+const chatSubmittingByAgent = ref({});
+const chatErrorByAgent = ref({});
 
 const getFirstQuestionFromCaseData = (caseData) => {
   if (!caseData || typeof caseData !== 'object') return '';
@@ -240,9 +294,168 @@ const toPreviewPersona = (agent) => {
       medium: Array.isArray(agent?.classifiedKnowledge?.novice) ? agent.classifiedKnowledge.novice : [],
       low: Array.isArray(agent?.classifiedKnowledge?.layman) ? agent.classifiedKnowledge.layman : []
     },
-    cognitive_orientation: agent?.cognitiveOrientation || 'line_based',
-    learning_adaptivity: agent?.plasticity || 'medium'
+    cognitive_orientation: agent?.cognitiveOrientation || '',
+    learning_adaptivity: agent?.plasticity || ''
   };
+};
+
+const ensureConfigChatState = (agent) => {
+  if (!agent || typeof agent !== 'object') return;
+  if (!agent.configChat || typeof agent.configChat !== 'object') {
+    agent.configChat = { messages: [], unresolvedFields: [] };
+  }
+  if (!Array.isArray(agent.configChat.messages)) {
+    agent.configChat.messages = [];
+  }
+  if (!Array.isArray(agent.configChat.unresolvedFields)) {
+    agent.configChat.unresolvedFields = [];
+  }
+};
+
+const getConfigChatMessages = (agent) => {
+  ensureConfigChatState(agent);
+  return agent.configChat.messages;
+};
+
+const getConfigUnresolvedFields = (agent) => {
+  ensureConfigChatState(agent);
+  return agent.configChat.unresolvedFields;
+};
+
+const appendConfigChatMessage = (agent, role, content) => {
+  ensureConfigChatState(agent);
+  agent.configChat.messages.push({ role, content: String(content || '').trim() });
+};
+
+const getCurrentConfigSnapshot = (agent) => ({
+  name: agent?.name || '',
+  age: agent?.age || '',
+  major: agent?.major || '',
+  learning_styles: {
+    surface: Number(agent?.learning_styles?.surface) || 3,
+    deep: Number(agent?.learning_styles?.deep) || 3,
+    strategic: Number(agent?.learning_styles?.strategic) || 3
+  },
+  personality: {
+    openness: Number(agent?.personality?.openness) || 3,
+    conscientiousness: Number(agent?.personality?.conscientiousness) || 3,
+    extraversion: Number(agent?.personality?.extraversion) || 3,
+    agreeableness: Number(agent?.personality?.agreeableness) || 3,
+    neuroticism: Number(agent?.personality?.neuroticism) || 3
+  },
+  knowledge_background: {
+    high: Array.isArray(agent?.classifiedKnowledge?.competent) ? agent.classifiedKnowledge.competent : [],
+    medium: Array.isArray(agent?.classifiedKnowledge?.novice) ? agent.classifiedKnowledge.novice : [],
+    low: Array.isArray(agent?.classifiedKnowledge?.layman) ? agent.classifiedKnowledge.layman : []
+  },
+  all_knowledge_points: [
+    ...(Array.isArray(agent?.unclassifiedKnowledge) ? agent.unclassifiedKnowledge : []),
+    ...(Array.isArray(agent?.classifiedKnowledge?.competent) ? agent.classifiedKnowledge.competent : []),
+    ...(Array.isArray(agent?.classifiedKnowledge?.novice) ? agent.classifiedKnowledge.novice : []),
+    ...(Array.isArray(agent?.classifiedKnowledge?.layman) ? agent.classifiedKnowledge.layman : []),
+  ],
+  cognitive_orientation: agent?.cognitiveOrientation || '',
+  plasticity: agent?.plasticity || ''
+});
+
+const mergeKnowledgeIncremental = (agent, kb) => {
+  if (!kb || typeof kb !== 'object' || !agent) return;
+  if (!agent.classifiedKnowledge || typeof agent.classifiedKnowledge !== 'object') {
+    agent.classifiedKnowledge = { competent: [], novice: [], layman: [] };
+  }
+  if (!Array.isArray(agent.unclassifiedKnowledge)) {
+    agent.unclassifiedKnowledge = [];
+  }
+
+  const bucketMap = { high: 'competent', medium: 'novice', low: 'layman' };
+  Object.entries(bucketMap).forEach(([apiKey, uiKey]) => {
+    const items = kb[apiKey];
+    if (!Array.isArray(items)) return;
+
+    items.forEach((raw) => {
+      const point = String(raw || '').trim();
+      if (!point) return;
+
+      Object.values(bucketMap).forEach((otherUiKey) => {
+        if (otherUiKey === uiKey) return;
+        agent.classifiedKnowledge[otherUiKey] = (agent.classifiedKnowledge[otherUiKey] || []).filter((x) => x !== point);
+      });
+
+      agent.unclassifiedKnowledge = agent.unclassifiedKnowledge.filter((x) => x !== point);
+      if (!(agent.classifiedKnowledge[uiKey] || []).includes(point)) {
+        agent.classifiedKnowledge[uiKey].push(point);
+      }
+    });
+  });
+};
+
+const applyConfigUpdateToAgent = (agent, update) => {
+  if (!agent || !update || typeof update !== 'object') return;
+
+  if (typeof update.name === 'string' && update.name.trim()) agent.name = update.name.trim();
+  if (typeof update.age === 'string' && update.age.trim()) agent.age = update.age.trim();
+  if (typeof update.major === 'string' && update.major.trim()) agent.major = update.major.trim();
+
+  if (update.learning_styles && typeof update.learning_styles === 'object') {
+    ['surface', 'deep', 'strategic'].forEach((key) => {
+      const next = Number(update.learning_styles[key]);
+      if (Number.isFinite(next)) agent.learning_styles[key] = Math.max(1, Math.min(5, Math.round(next)));
+    });
+  }
+
+  if (update.personality && typeof update.personality === 'object') {
+    ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism'].forEach((key) => {
+      const next = Number(update.personality[key]);
+      if (Number.isFinite(next)) agent.personality[key] = Math.max(1, Math.min(5, Math.round(next)));
+    });
+  }
+
+  if (typeof update.cognitive_orientation === 'string' && ['point_based', 'line_based', 'plane_based'].includes(update.cognitive_orientation)) {
+    agent.cognitiveOrientation = update.cognitive_orientation;
+  }
+
+  if (typeof update.plasticity === 'string' && ['low', 'medium', 'high'].includes(update.plasticity)) {
+    agent.plasticity = update.plasticity;
+  }
+
+  mergeKnowledgeIncremental(agent, update.knowledge_background);
+};
+
+const submitAgentConfigInstruction = async (agent) => {
+  if (!agent?.id) return;
+  const instruction = String(chatInstructionByAgent.value[agent.id] || '').trim();
+  if (!instruction || chatSubmittingByAgent.value[agent.id]) return;
+
+  chatErrorByAgent.value[agent.id] = '';
+  chatSubmittingByAgent.value[agent.id] = true;
+  appendConfigChatMessage(agent, 'user', instruction);
+  chatInstructionByAgent.value[agent.id] = '';
+
+  try {
+    const response = await axios.post('http://127.0.0.1:8000/api/agent-config-chat', {
+      instruction,
+      current_config: getCurrentConfigSnapshot(agent),
+      chat_history: getConfigChatMessages(agent)
+    });
+
+    if (response?.data?.status !== 'success') {
+      throw new Error(response?.data?.detail || 'Failed to parse instruction');
+    }
+
+    applyConfigUpdateToAgent(agent, response.data.config_update || {});
+    ensureConfigChatState(agent);
+    agent.configChat.unresolvedFields = Array.isArray(response.data.unresolved_fields)
+      ? response.data.unresolved_fields
+      : [];
+
+    appendConfigChatMessage(agent, 'assistant', response.data.assistant_message || '已尝试更新可解析配置。');
+  } catch (error) {
+    const message = error?.message || '解析失败，请稍后重试。';
+    chatErrorByAgent.value[agent.id] = message;
+    appendConfigChatMessage(agent, 'assistant', `解析失败：${message}`);
+  } finally {
+    chatSubmittingByAgent.value[agent.id] = false;
+  }
 };
 
 const getAgentPreview = (agent) => {
@@ -338,6 +551,38 @@ const buildAgentPreviewSignature = (agent) => {
 };
 
 const scheduleAgentPreviewRefresh = (agentId) => {
+  // 【修复】如果左侧面板已折叠，则不生成预览，节省API调用
+  if (props.isLeftColumnCollapsed) {
+    console.log(`[Preview] Skipping generation for ${agentId} - left panel collapsed`);
+    return;
+  }
+
+  // 【修复】如果讨论正在进行中（未暂停），则延迟或跳过预览生成，避免与图执行并发
+  if (isPaused?.value === false) {
+    // 讨论进行中，延迟预览生成至少3秒，给graph有时间完成
+    const delayMs = 3000 + Math.random() * 2000; // 3-5秒随机延迟
+    const timerId = setTimeout(() => {
+      const nextDebounce = { ...previewDebounceByAgent.value };
+      delete nextDebounce[agentId];
+      previewDebounceByAgent.value = nextDebounce;
+      
+      // 再次检查讨论是否仍在进行
+      if (isPaused?.value === false) {
+        console.log(`[Preview] Skipping generation for ${agentId} - discussion still active`);
+        return;
+      }
+      
+      const agent = agents.value.find(item => item.id === agentId);
+      if (agent) requestAgentPreview(agent);
+    }, delayMs);
+    
+    previewDebounceByAgent.value = {
+      ...previewDebounceByAgent.value,
+      [agentId]: timerId
+    };
+    return;
+  }
+
   const agent = agents.value.find(item => item.id === agentId);
   if (!agent) return;
 
@@ -405,14 +650,14 @@ const mapBackendPersonaToAgent = (persona, index = 0, backendKey = '') => {
       agreeableness: Number(persona?.personality?.agreeableness) || 3,
       neuroticism: Number(persona?.personality?.neuroticism) || 3
     },
-    cognitiveOrientation: persona?.cognitive_orientation || 'line_based',
+    cognitiveOrientation: persona?.cognitive_orientation || '',
     social: {
       confidence: persona?.social?.confidence || 'medium',
       register: persona?.social?.register || 'medium',
       participation: persona?.social?.participation || 'medium',
       role: persona?.interaction_role || persona?.social?.role || 'leader'
     },
-    plasticity: persona?.learning_adaptivity || 'medium'
+    plasticity: persona?.learning_adaptivity || ''
   };
 };
 
@@ -497,23 +742,32 @@ watch(agents, () => {
     const nextAbort = { ...previewAbortByAgent.value };
     const nextPreview = { ...previewByAgent.value };
     const nextLoading = { ...previewLoadingByAgent.value };
+    const nextChatInput = { ...chatInstructionByAgent.value };
+    const nextChatSubmitting = { ...chatSubmittingByAgent.value };
+    const nextChatError = { ...chatErrorByAgent.value };
 
     delete nextSign[aid];
     delete nextTimer[aid];
     delete nextAbort[aid];
     delete nextPreview[aid];
     delete nextLoading[aid];
+    delete nextChatInput[aid];
+    delete nextChatSubmitting[aid];
+    delete nextChatError[aid];
 
     previewSignatureByAgent.value = nextSign;
     previewDebounceByAgent.value = nextTimer;
     previewAbortByAgent.value = nextAbort;
     previewByAgent.value = nextPreview;
     previewLoadingByAgent.value = nextLoading;
+    chatInstructionByAgent.value = nextChatInput;
+    chatSubmittingByAgent.value = nextChatSubmitting;
+    chatErrorByAgent.value = nextChatError;
   });
 }, { deep: true });
 
 const STACK_HEADER_HEIGHT = 85; 
-const EXPANDED_CARD_HEIGHT = 870; 
+const EXPANDED_CARD_HEIGHT = 900; 
 const VISIBLE_GAP_UP = 30;    // 上方堆叠露出的高度
 const VISIBLE_GAP_DOWN = 15;  // 下方堆叠露出的高度（更紧凑）
 
@@ -697,7 +951,7 @@ const syncPersona = async () => {
       const levelMap = { low: 3, medium: 6, high: 9 };
       
       return {
-        reasoning_path: agent.cognitiveOrientation || 'line_based',
+        reasoning_path: agent.cognitiveOrientation || '',
         knowledge_integration: agent.plasticity === 'high' ? '系统化' : '碎片化',
         core_biases: [],
         sensitivity: levelMap[agent.social.confidence] || 5,
@@ -735,8 +989,8 @@ const syncPersona = async () => {
            medium: agent.classifiedKnowledge.novice,
             low: agent.classifiedKnowledge.layman
         },
-        cognitive_orientation: agent.cognitiveOrientation || 'line_based',
-        learning_adaptivity: agent.plasticity
+        cognitive_orientation: agent.cognitiveOrientation || '',
+        learning_adaptivity: agent.plasticity || ''
       };
     });
 
@@ -828,8 +1082,117 @@ const syncPersona = async () => {
   flex-direction: column;
   justify-content: flex-start;
   gap: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.preview-config-chat {
+  border: 1px solid #d7ddf2;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview-config-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2f3a63;
+}
+
+.preview-chat-log {
+  max-height: 120px;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: #f7f9ff;
+  border: 1px solid #e2e8f8;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.preview-chat-msg {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #243047;
+  padding: 5px 6px;
+  border-radius: 7px;
+}
+
+.preview-chat-msg.user {
+  background: #edf2ff;
+}
+
+.preview-chat-msg.assistant {
+  background: #eaf8f1;
+}
+
+.preview-chat-role {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: #4d5d82;
+}
+
+.preview-chat-msg p {
+  margin: 0;
+}
+
+.preview-chat-empty {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.preview-chat-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.preview-chat-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid #cfdaf8;
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.preview-chat-input:focus {
+  outline: none;
+  border-color: #8095ca;
+}
+
+.preview-chat-submit {
+  height: 30px;
+  min-width: 70px;
+  border: none;
+  border-radius: 7px;
+  background: #5f77b2;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.preview-chat-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.preview-chat-error {
+  font-size: 11px;
+  color: #b91c1c;
+}
+
+.preview-chat-warning {
+  font-size: 11px;
+  color: #991b1b;
 }
 
 .preview-title {

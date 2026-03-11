@@ -22,6 +22,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   const objectiveEvaluationMap = ref({}); // key: "scene_question" -> latest + rounds
   const discussionEndByQuestion = ref({}); // key: "scene_question" -> end payload
   const agentStateByQuestion = ref({}); // key: "scene_question" -> latest runtime snapshot
+  const knowledgeCoverageByQuestion = ref({}); // key: "scene_question" -> { nodeLeafId -> coverage }
 
   const applyAgentStateSnapshot = (sceneIndex, questionIndex, snapshot) => {
     if (!Number.isFinite(sceneIndex) || !Number.isFinite(questionIndex)) return;
@@ -160,10 +161,62 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         activeMessageId.value = newMsg.id;
         applyAgentStateSnapshot(Number(newMsg.sceneIndex), Number(newMsg.questionIndex), newMsg.stateSnapshot);
 
+        // 即时消费后端同包返回的知识覆盖评估（与 summary 同步到达）
+        if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const key = `${sceneIndex}_${questionIndex}`;
+          const leafId = String(data.id || '').trim();
+          if (leafId) {
+            const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
+            knowledgeCoverageByQuestion.value = {
+              ...knowledgeCoverageByQuestion.value,
+              [key]: {
+                ...prevByLeaf,
+                [leafId]: {
+                  ...data.knowledge_coverage,
+                  updatedAt: Date.now(),
+                },
+              },
+            };
+          }
+        }
+
         // DOM 更新后自动滚动到底部
         nextTick(() => {
           onScrollToBottom();
         });
+      }
+
+      // 【新增】处理异步消息更新（简化版本和知识覆盖）
+      if (data.type === 'message_update' && data.id) {
+        const msgIdx = messages.value.findIndex(m => m.id === data.id);
+        if (msgIdx !== -1) {
+          // 更新消息的summary和知识覆盖
+          if (data.summary) {
+            messages.value[msgIdx].summary = data.summary;
+          }
+          if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
+            const msg = messages.value[msgIdx];
+            const sceneIndex = Number(msg.sceneIndex ?? -1);
+            const questionIndex = Number(msg.questionIndex ?? -1);
+            const key = `${sceneIndex}_${questionIndex}`;
+            const leafId = String(msg.id || '').trim();
+            if (leafId) {
+              const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
+              knowledgeCoverageByQuestion.value = {
+                ...knowledgeCoverageByQuestion.value,
+                [key]: {
+                  ...prevByLeaf,
+                  [leafId]: {
+                    ...data.knowledge_coverage,
+                    updatedAt: Date.now(),
+                  },
+                },
+              };
+            }
+          }
+        }
       }
 
       if (data.type === 'rollback_ack') {
@@ -267,6 +320,24 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         const restoredRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
         const restoredAt = Date.now();
 
+        // 【新增】恢复该快照点对应的知识覆盖评估数据
+        if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
+          const leafId = activeMessageId.value;
+          if (leafId) {
+            const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
+            knowledgeCoverageByQuestion.value = {
+              ...knowledgeCoverageByQuestion.value,
+              [key]: {
+                ...prevByLeaf,
+                [leafId]: {
+                  ...data.knowledge_coverage,
+                  updatedAt: Date.now()
+                }
+              }
+            };
+          }
+        }
+
         objectiveEvaluationMap.value = {
           ...objectiveEvaluationMap.value,
           [key]: {
@@ -320,6 +391,27 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
       }
 
+      if (data.type === 'knowledge_coverage_update') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        const key = `${sceneIndex}_${questionIndex}`;
+        const leafId = String(data.node_id || '').trim();
+        const coverage = data.coverage || {};
+        if (leafId) {
+          const prev = knowledgeCoverageByQuestion.value[key] || {};
+          knowledgeCoverageByQuestion.value = {
+            ...knowledgeCoverageByQuestion.value,
+            [key]: {
+              ...prev,
+              [leafId]: {
+                ...coverage,
+                updatedAt: Date.now()
+              }
+            }
+          };
+        }
+      }
+
       if (data.type === 'stage_update' && data.stage_name) {
         // 翻译中文阶段名到英文
         const stageNameCn = data.stage_name.split('】')[0].replace('【', '');
@@ -359,7 +451,8 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     if (socket && isConnected.value) {
       selectedTopic.value = null; // 开始新讨论时清空选中状态
       selectedNodeLeafId.value = null;
-      activeQuestionInfo.value = { sceneIndex, questionIndex };
+      // Preserve caseName (and any other fields) set by handleInspectQuestion in App.vue.
+      activeQuestionInfo.value = { ...activeQuestionInfo.value, sceneIndex, questionIndex };
 
       // 使用 nextTick 确保在 watch(activeQuestionInfo) 之后执行，防止被 watch 覆盖为暂停状态
       nextTick(() => {
@@ -463,6 +556,16 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     }
   };
 
+  /**
+   * 强制恢复讨论（不受 isPaused 限制），用于教师 Override 触发后需要继续讨论的场景
+   */
+  const forceResume = () => {
+    if (socket && isConnected.value) {
+      socket.send(JSON.stringify({ action: 'force_resume' }));
+      isPaused.value = false;
+    }
+  };
+
   // --- 生命周期钩子 ---
   onUnmounted(() => {
     if (socket) {
@@ -491,6 +594,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     objectiveEvaluationMap,
     discussionEndByQuestion,
     agentStateByQuestion,
+    knowledgeCoverageByQuestion,
     fetchPersonas,
     getAgentConfig,
     getAgentColor,
@@ -500,7 +604,8 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     togglePause,
     sendTeacherIntervention,
     rollbackTo,
-    switchNodeFocus
+    switchNodeFocus,
+    forceResume
   };
 }
 

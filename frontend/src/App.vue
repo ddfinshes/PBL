@@ -19,6 +19,7 @@
                 :theoretical-knowledge="caseResult?.theoretical_knowledge_points || []"
                 :case-data="caseResult"
                 :case-title="caseResult?.case_title || ''"
+                :is-left-column-collapsed="isLeftColumnCollapsed"
               />
             </div>
           </div>
@@ -141,6 +142,8 @@ const {
   objectiveEvaluationMap,
   discussionEndByQuestion,
   agentStateByQuestion,
+  knowledgeCoverageByQuestion,
+  forceResume,
 } = usePBLSocket(sessionId, () => {});
 
 const selectedTopic = ref(null);
@@ -216,6 +219,7 @@ provide('pblSocket', {
   objectiveEvaluationMap,
   discussionEndByQuestion,
   agentStateByQuestion,
+  knowledgeCoverageByQuestion,
   personas,
   fetchPersonas,
   getAgentConfig,
@@ -225,6 +229,7 @@ provide('pblSocket', {
   updateKnowledge,
   addKnowledge,
   deleteKnowledge
+  ,forceResume
 });
 
 const caseResult = ref(null);
@@ -253,7 +258,8 @@ const handleInspectQuestion = (payload) => {
   
   activeQuestionInfo.value = { 
     sceneIndex: payload.sceneIndex, 
-    questionIndex: payload.questionIndex 
+    questionIndex: payload.questionIndex,
+    caseName: caseResult.value?.case_title || ''
   };
 
   if (caseResult.value && caseResult.value.scenes[payload.sceneIndex]) {

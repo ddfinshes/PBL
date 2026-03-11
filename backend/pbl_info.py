@@ -1,6 +1,6 @@
 """PBL 案例信息存储（无阶段约束版本）。"""
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 # 病例文本与触发问题
 pbl_story = "正在准备病例资料..."
@@ -15,6 +15,11 @@ active_question_index = 0
 
 # 病例整体难度（1-9），用于与学生知识背景做差值
 pbl_story_difficult = 3
+
+# 教师手动覆盖目标达成状态的运行时存储
+# 格式: { "scene_idx_question_idx": { "objective_text": true | false } }
+# None 表示清除覆盖（恢复自动判断）
+objective_overrides: Dict[str, Dict[str, bool]] = {}
 
 
 def update_pbl_info(

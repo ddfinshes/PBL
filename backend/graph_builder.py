@@ -51,18 +51,21 @@ def build_graph(agent_ids: List[str]):
     # 1. 动态添加所有学生节点
     for agent_id in agent_ids:
         wf.add_node(agent_id, agents.student_nodes[agent_id])
-        # 每个学生发言后，先更新主题（前端立刻可见），再做内化。
+        # 每位学生发言后进入 topic_manager 进行主题识别
         wf.add_edge(agent_id, "topic_manager")
 
     # 2. 添加固定的辅助节点
     wf.add_node("teacher_handler", agents.teacher_handler_node)
     wf.add_node("topic_manager", agents.topic_manager_node)
+    wf.add_node("knowledge_evaluator", agents.knowledge_eval_node)
     wf.add_node("summarizer", agents.summarizer_node)
     wf.add_node("router", agents.router_node)
 
     # 3. 设置边关系
     wf.add_edge("teacher_handler", "router")
-    wf.add_edge("topic_manager", "summarizer")
+    # 【优化】线性流水线：识别主题 -> 评估知识覆盖 -> 记忆内化 -> 路由
+    wf.add_edge("topic_manager", "knowledge_evaluator")
+    wf.add_edge("knowledge_evaluator", "summarizer")
     wf.add_edge("summarizer", "router")
 
     # 4. 设置入口点

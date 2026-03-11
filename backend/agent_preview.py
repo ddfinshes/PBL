@@ -84,7 +84,7 @@ def _preview_baseline_text(trigger_question: str, action: str) -> str:
 
 
 async def _generate_behavior_description(persona: Dict, action_plan: Dict, after_text: str) -> str:
-    """Generate a concise and balanced behavior description for preview panel footer."""
+    """Generate a structured behavior explanation with dimension-by-dimension impact."""
     persona_str = _format_persona_to_string_safe(persona)
     action = str(action_plan.get("action", "accumulation") or "accumulation")
     action_desc = str(action_plan.get("action_description", "") or "").strip()
@@ -92,31 +92,47 @@ async def _generate_behavior_description(persona: Dict, action_plan: Dict, after
     limitation_hint = _local_limitation_hint(persona)
 
     prompt = (
-        "你是医学PBL课堂中的行为画像生成器。\n"
-        "请根据学生配置和本轮动作规划，生成1句平衡的行为描述（26-52字）。\n"
-        "要求：\n"
-        "1) 必须同时包含一个相对优势和一个明确局限（缺点/偏差）；\n"
-        "2) 局限需可观察，如过早下结论、忽略反例、求助不足、分析不深、只积累不收束等；\n"
-        "3) 不要复述问题，不要输出步骤编号；\n"
-        "4) 禁止只写正面评价。\n"
-        "5) 只输出这一句话。\n\n"
-        "3) 语气客观、可读；\n"
+        "你是医学PBL课堂中的行为画像解释器。\n"
+        "任务：不要写成一句话总结，要写成‘维度化影响说明’，解释每个维度如何影响该Agent。\n"
+        "输出要求：\n"
+        "1) 输出4行，每行一个维度，格式严格为：\n"
+        "学习风格影响：...\n"
+        "人格影响：...\n"
+        "认知取向影响：...\n"
+        "本轮行为表现：...\n"
+        "2) 每行必须包含‘机制 -> 可观察行为 -> 风险/局限’三段含义；\n"
+        "3) 必须体现相对优势与明确局限，禁止只写正面评价；\n"
+        "4) 内容具体，不要复述题目，不要写步骤编号，不要Markdown。\n\n"
         f"[局限提示]\n{limitation_hint}\n\n"
         f"[人设]\n{persona_str}\n\n"
         f"[动作]\naction={action}; action_description={action_desc}; reply_focus={reply_focus}\n\n"
         f"[当前回答]\n{after_text}"
     )
 
-    fallback = f"该同学能够承接讨论推进分析，但{limitation_hint}。"
+    fallback = (
+        "学习风格影响：该生会按既有学习偏好组织信息并推进讨论，但在复杂机制整合上仍可能出现深度不足。\n"
+        "人格影响：其人格特质决定了发言主动性和互动方式，优势是能维持讨论连续性，局限是压力下可能回避高冲突观点。\n"
+        "认知取向影响：其推理路径会偏向固定结构以提升稳定性，但可能忽略替代假设与反例，导致结论收敛偏快。\n"
+        f"本轮行为表现：本轮回答能承接问题并给出方向，但{limitation_hint}，后续需通过追问与证据对照修正。"
+    )
 
     try:
         result = await _ainvoke_with_log(SUM_LLM, prompt, "preview_behavior_description")
         text = str(getattr(result, "content", "") or "").strip()
         if not text:
             return fallback
-        if _contains_limitation_cue(text):
-            return text
-        return f"{text}，但{limitation_hint}。"
+
+        required_prefixes = (
+            "学习风格影响：",
+            "人格影响：",
+            "认知取向影响：",
+            "本轮行为表现：",
+        )
+        if all(prefix in text for prefix in required_prefixes):
+            if _contains_limitation_cue(text):
+                return text
+            return f"{text}\n本轮行为表现：虽然具备一定推进能力，但{limitation_hint}。"
+        return fallback
     except Exception:
         return fallback
 

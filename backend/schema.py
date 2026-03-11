@@ -15,6 +15,14 @@ class TriggerQuestion(BaseModel):
     """
     question: str = Field(description="问题或讨论点的内容")
     type: str = Field("discussion", description="类型标记")
+    learning_objectives: List[str] = Field(
+        default=[],
+        description="该触发问题对应的可评估学习目标；无法明确关联时应为空列表。",
+    )
+    knowledge_points: List[dict] = Field(
+        default=[],
+        description="回答该问题所需的细粒度医学知识点列表。每项建议包含 concept 和 explanation。",
+    )
 
 
 class BackgroundKnowledge(BaseModel):
@@ -109,7 +117,8 @@ class PBLCaseStructure(BaseModel):
     )
 
     learning_objectives: List[BackgroundKnowledge] = Field(
-        description="总体学习目的"
+        default=[],
+        description="总体学习目的（兼容字段）。若无法明确归属 trigger question，建议留空。"
     )
 
     scenes: List[Scene] = Field(description="场景列表")

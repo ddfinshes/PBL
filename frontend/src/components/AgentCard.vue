@@ -34,7 +34,7 @@
         </el-popover>
         
         <!-- Name Interaction Area -->
-        <div class="name-interactive-area">
+        <div class="name-interactive-area" :class="{ 'warning-outline': isFieldUnresolved('name') }">
           <div v-if="editingField !== 'name'" 
                @click.stop="editingField = 'name'" 
                class="name-display"
@@ -53,7 +53,7 @@
 
       <!-- Right Side Metadata Column (Age, Major) -->
       <div class="metadata-column">
-        <div class="meta-item-box" @click.stop="editingField = 'age'">
+        <div class="meta-item-box" :class="{ 'warning-outline': isFieldUnresolved('age') }" @click.stop="editingField = 'age'">
           <span class="meta-label">Age:</span>
           <div v-if="editingField !== 'age'" class="meta-value" :class="{'is-empty': !modelValue.age}">
             {{ modelValue.age || 'Enter Age' }}
@@ -67,7 +67,7 @@
                  class="meta-input" />
         </div>
 
-        <div class="meta-item-box" @click.stop="editingField = 'major'">
+        <div class="meta-item-box" :class="{ 'warning-outline': isFieldUnresolved('major') }" @click.stop="editingField = 'major'">
           <span class="meta-label">Major:</span>
           <div v-if="editingField !== 'major'" class="meta-value" :class="{'is-empty': !modelValue.major}">
             {{ modelValue.major || 'Enter Major' }}
@@ -92,12 +92,11 @@
 
     <!-- Main Content Container -->
     <div class="card-content-wrapper">
-      <!-- Knowledge Background Section -->
       <section class="panel-section knowledge-panel">
-        <h3 class="panel-title">Knowledge Base</h3>
+        <h3 class="panel-title" :class="{ 'field-warning': hasUnresolvedPrefix('knowledge_background') }">Knowledge Base</h3>
         
 
-        <div class="panel-body row-layout">
+        <div class="panel-body row-layout" :class="{ 'warning-outline': hasUnresolvedPrefix('knowledge_background') }">
           <!-- Left: Unclassified Knowledge Points -->
           <div class="theoretical-tags-container"
                @dragover.prevent
@@ -214,14 +213,14 @@
       </section>
 
       <section class="panel-section plasticity-panel">
-        <h3 class="panel-title">Learning Plasticity</h3>
+        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('plasticity') }">Learning Plasticity</h3>
         <div class="plasticity-inline-options">
           <button
             v-for="lv in ['low', 'medium', 'high']"
             :key="`panel-plasticity-${lv}`"
             type="button"
             class="level-btn plasticity-inline-btn"
-            :class="{'is-active': modelValue.plasticity === lv}"
+            :class="{'is-active': modelValue.plasticity === lv, 'field-warning': isFieldUnresolved('plasticity')}"
             @click="modelValue.plasticity = lv"
           >
             {{ plasticityTranslations[lv] }}
@@ -232,8 +231,8 @@
       <!-- Traits Panel -->
       <section class="panel-section traits-panel">
         <div class="radar-grid">
-          <div class="radar-card">
-            <div class="radar-card-title">Learning Style</div>
+          <div class="radar-card" :class="{ 'warning-outline': hasUnresolvedPrefix('learning_styles') }">
+            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('learning_styles') }">Learning Style</div>
             <svg
               ref="learningRadarRef"
               class="radar-svg"
@@ -278,8 +277,8 @@
             </svg>
           </div>
 
-          <div class="radar-card">
-            <div class="radar-card-title">Personality</div>
+          <div class="radar-card" :class="{ 'warning-outline': hasUnresolvedPrefix('personality') }">
+            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('personality') }">Personality</div>
             <svg
               ref="personalityRadarRef"
               class="radar-svg"
@@ -328,13 +327,13 @@
 
       <!-- Cognitive Tendency Section -->
       <section class="panel-section cognitive-panel">
-        <h3 class="panel-title">Cognitive Orientation</h3>
+        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('cognitive_orientation') }">Cognitive Orientation</h3>
         <div class="cognitive-choice-grid">
           <div
             v-for="item in cognitiveChoices"
             :key="item.value"
             class="cognitive-choice-item"
-            :class="{ 'is-active': modelValue.cognitiveOrientation === item.value }"
+            :class="{ 'is-active': modelValue.cognitiveOrientation === item.value, 'warning-outline': isFieldUnresolved('cognitive_orientation') }"
             @click="modelValue.cognitiveOrientation = item.value"
           >
             <img :src="item.icon" :alt="item.label" class="cognitive-choice-icon" />
@@ -348,7 +347,7 @@
 </template>
 
 <script setup>
-import { ref, inject } from 'vue';
+import { ref, inject, computed } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -362,6 +361,33 @@ const knowledgeActions = inject('knowledgeActions', {});
 
 const editingField = ref(null);
 const dragOverField = ref(null);
+
+const ensureConfigChatState = () => {
+  if (!props.modelValue.configChat || typeof props.modelValue.configChat !== 'object') {
+    props.modelValue.configChat = { messages: [], unresolvedFields: [] };
+  }
+  if (!Array.isArray(props.modelValue.configChat.messages)) {
+    props.modelValue.configChat.messages = [];
+  }
+  if (!Array.isArray(props.modelValue.configChat.unresolvedFields)) {
+    props.modelValue.configChat.unresolvedFields = [];
+  }
+};
+
+ensureConfigChatState();
+
+const configChatMessages = computed(() => {
+  ensureConfigChatState();
+  return props.modelValue.configChat.messages;
+});
+
+const unresolvedFields = computed(() => {
+  ensureConfigChatState();
+  return props.modelValue.configChat.unresolvedFields;
+});
+
+const isFieldUnresolved = (field) => unresolvedFields.value.includes(field);
+const hasUnresolvedPrefix = (prefix) => unresolvedFields.value.some((item) => item === prefix || item.startsWith(`${prefix}.`));
 
 const radarCenter = 70;
 const radarRadius = 56;
@@ -383,10 +409,6 @@ const personalityAxes = [
 const learningRadarRef = ref(null);
 const personalityRadarRef = ref(null);
 const draggingRadar = ref({ type: null, axisIndex: -1 });
-
-if (!props.modelValue.cognitiveOrientation) {
-  props.modelValue.cognitiveOrientation = 'line_based';
-}
 
 if (!props.modelValue.learning_styles || typeof props.modelValue.learning_styles !== 'object') {
   props.modelValue.learning_styles = { surface: 3, deep: 3, strategic: 3 };
@@ -960,6 +982,15 @@ defineExpose({ resetEditing });
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.8rem; /* 进一步减小间距 */
+}
+
+.warning-outline {
+  border: 1.5px solid #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+.field-warning {
+  color: #b91c1c !important;
 }
 
 /* =========================================

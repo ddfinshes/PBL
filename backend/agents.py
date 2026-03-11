@@ -3,7 +3,7 @@
 """
 from __future__ import annotations
 
-from typing import Dict, List, Callable
+from typing import Dict, List, Callable, Optional
 import time
 import asyncio
 import json
@@ -29,6 +29,7 @@ from .config import DASHSCOPE_API_KEY, BASE_URL, LLM_MODEL_NAME, EXTRA_BODY, MOD
 
 MES_INDEX = -3
 MAX_DISCUSSION_TURNS = 20
+OBJECTIVE_EVAL_INTERVAL = 3
 
 ACTION_OPTIONS = [
     "seeking_help_alignment",
@@ -438,6 +439,7 @@ async def _parallel_internalize_for_all_agents(state: Dict, messages: List[BaseM
             state={
                 "cognitive_load": cognitive_load_state,
                 "self_efficacy": self_efficacy_state,
+                "total_messages": int(state.get("total_messages", 0) or 0),
             },
             private_memory=private_memory,
             agent_id=aid,
@@ -614,6 +616,7 @@ async def _objectives_achieved_by_llm(
     messages: List[BaseMessage],
     trigger_question: str,
     learning_objectives: List[str],
+    teacher_overrides: Optional[Dict[str, bool]] = None,
 ) -> Dict:
     """Ask LLM whether current trigger-question objectives have been achieved.
 
@@ -658,11 +661,25 @@ async def _objectives_achieved_by_llm(
     if not objective_text:
         return False
 
+    teacher_overrides = teacher_overrides or {}
+    override_lines = []
+    for obj in learning_objectives:
+        cleaned = str(obj).strip()
+        if not cleaned:
+            continue
+        ov = teacher_overrides.get(cleaned)
+        if ov is True:
+            override_lines.append(f"- {cleaned}: 教师手动标记=已达成（评估可更宽松）")
+        elif ov is False:
+            override_lines.append(f"- {cleaned}: 教师手动标记=未达成（评估需更谨慎）")
+    override_hint = "\n".join(override_lines) if override_lines else "无"
+
     judge_prompt = (
         "你是医学PBL讨论的学习目标评估器。\n"
         "请判断当前触发问题下的学习目标是否已经达到可结束讨论的程度。\n\n"
         f"当前触发问题：{trigger_question or '未提供'}\n"
         f"学习目标：\n{objective_text}\n\n"
+        f"教师手动覆盖偏好（如有）：\n{override_hint}\n\n"
         "最近讨论记录：\n"
         f"{recent_dialogue}\n\n"
         "判定规则：\n"
@@ -1467,10 +1484,20 @@ async def _update_dynamic_levels_from_private_memory(
     self_efficacy_state: Dict[str, int] = dict(
         state.get("self_efficacy", {}) or {})
 
+    total_messages = int(state.get("total_messages", 0) or 0)
+    should_run_dynamic_eval = (
+        total_messages > 0 and total_messages % OBJECTIVE_EVAL_INTERVAL == 0
+    )
+
     current_load = _normalize_level_369(
         int(cognitive_load_state.get(agent_id, init_cognitive_load(persona))))
     current_se = _normalize_level_369(
         int(self_efficacy_state.get(agent_id, self_efficacy_init(persona))))
+
+    if not should_run_dynamic_eval:
+        cognitive_load_state[agent_id] = current_load
+        self_efficacy_state[agent_id] = current_se
+        return cognitive_load_state, self_efficacy_state, current_load, current_se
 
     recent_memory = list(private_memory.get(agent_id, []) or [])
     memory_brief = recent_memory[-5:]
@@ -1787,6 +1814,21 @@ async def summarizer_node(state: Dict) -> Dict:
     """每轮发言后并行内化到所有学生私有记忆。"""
     messages: List[BaseMessage] = state["messages"]
 
+    # 【优化】如果最后一条消息是沉默内容，则跳过内化，避免不必要的延迟
+    if messages:
+        last_msg = messages[-1]
+        last_content = getattr(last_msg, "content", "")
+        if _is_silence_like_content(last_content):
+            print(
+                "DEBUG: [Summarizer] Latest message is silence; skipping internalization.")
+            return {
+                "private_memory": dict(state.get("private_memory", {}) or {}),
+                "cognitive_load": dict(state.get("cognitive_load", {}) or {}),
+                "self_efficacy": dict(state.get("self_efficacy", {}) or {}),
+                "knowledge_state": dict(state.get("knowledge_state", {}) or {}),
+                "next_speaker": "router",
+            }
+
     # 并行内化最新一条消息到所有 agent 的私有记忆，不存原文。
     internalize_payload = await _parallel_internalize_for_all_agents(
         state=state,
@@ -1833,6 +1875,7 @@ async def topic_manager_node(state: Dict) -> Dict:
         f"3. 若当前主题为 undefined 或不是知识点，请基于近期对话立即提炼一个具体医学知识点作为新主题。\n"
         f"4. 输出长度尽量简短专业，不超过4个词。\n"
         f"5. 不要给出过细分层级。\n"
+        f"6. 若有人询问，请翻译为询问的主题而不是给出回答。\n"
         f"只返回知识点名称，不要附加解释。"
     )
 
@@ -1849,6 +1892,77 @@ async def topic_manager_node(state: Dict) -> Dict:
     except Exception as e:
         print(f"ERROR: [Topic Manager] failed: {e}")
         return {"current_topic": current_topic}
+
+# --------- 知识覆盖率评估节点 ---------
+
+
+async def knowledge_eval_node(state: Dict) -> Dict:
+    """评估当前讨论路径对 trigger question 的知识点覆盖程度。
+    该节点位于 topic_manager 之后。
+    """
+    from .knowledge import evaluate_progressive_coverage, build_discussion_content_from_leaf
+    from . import pbl_info
+    import json
+    from pathlib import Path
+
+    messages: List[BaseMessage] = state["messages"]
+    if not messages:
+        return {}
+
+    # 如果最后一条消息是沉默内容，跳过评估以节省 API 调用
+    last_msg = messages[-1]
+    last_content = getattr(last_msg, "content", "")
+    if _is_silence_like_content(last_content):
+        return {}
+
+    # 构建带父子关系的消息字典，用于 build_discussion_content_from_leaf
+    messages_map = {}
+    for i, m in enumerate(messages):
+        m_id = str(getattr(m, "id", None) or f"msg_{i}")
+        p_id = str(getattr(m, "parent_id", None))
+        if i > 0 and not p_id:
+            p_id = str(getattr(messages[i-1], "id", None) or f"msg_{i-1}")
+
+        messages_map[m_id] = {
+            "agent": getattr(m, "name", "unknown"),
+            "content": getattr(m, "content", ""),
+            "parent_id": p_id
+        }
+
+    leaf_id = str(getattr(last_msg, "id", None) or f"msg_{len(messages)-1}")
+    discussion_content = build_discussion_content_from_leaf(
+        messages_map, leaf_id)
+
+    if not discussion_content.strip():
+        return {}
+
+    case_name = getattr(pbl_info, "current_case_name", "")
+    scene_index = getattr(pbl_info, "active_scene_index", 0)
+    question_index = getattr(pbl_info, "active_question_index", 0)
+
+    try:
+        from .server import resolve_case_json_path
+        case_path = resolve_case_json_path(case_name)
+        if not case_path or not case_path.exists():
+            return {}
+
+        with open(case_path, "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        eval_result = await evaluate_progressive_coverage(
+            case_data=case_data,
+            scene_index=scene_index,
+            question_index=question_index,
+            discussion_content=discussion_content
+        )
+
+        if eval_result.get("status") == "success":
+            return {"knowledge_state": eval_result}  # 直接返回结果，让其在事件流中被捕获
+
+    except Exception as e:
+        print(f"ERROR: [Knowledge Eval] failed: {e}")
+
+    return {}
 
 # --------- 动态路由器节点 ---------
 
@@ -1904,25 +2018,85 @@ async def router_node(state: Dict) -> Dict:
     current_learning_objectives = list(
         getattr(pbl_info, "current_learning_objectives", []) or []
     )
-    objective_eval_result = await _objectives_achieved_by_llm(
-        messages=messages,
-        trigger_question=current_trigger_question,
-        learning_objectives=current_learning_objectives,
+    rt_key = f"{getattr(pbl_info, 'active_scene_index', 0)}_{getattr(pbl_info, 'active_question_index', 0)}"
+    current_overrides = dict(
+        getattr(pbl_info, "objective_overrides", {}).get(rt_key, {}) or {}
     )
-    objective_update_payload = {
-        "trigger_question": objective_eval_result.get("trigger_question", current_trigger_question),
-        "objective_evaluations": objective_eval_result.get("objective_evaluations", []),
-    }
+    should_run_objective_eval = (
+        total_messages > 0 and total_messages % OBJECTIVE_EVAL_INTERVAL == 0
+    )
 
-    if objective_eval_result.get("achieved_all", False):
+    if should_run_objective_eval:
+        objective_eval_result = await _objectives_achieved_by_llm(
+            messages=messages,
+            trigger_question=current_trigger_question,
+            learning_objectives=current_learning_objectives,
+            teacher_overrides=current_overrides,
+        )
+
+        # 教师覆盖用于“倾向性”而非硬覆盖每条 objective 结果。
+        # 仍保留 LLM 对每条 objective 的自动变化能力。
+        rows = list(objective_eval_result.get(
+            "objective_evaluations", []) or [])
+        llm_achieved_all = (
+            len(rows) > 0 and all(bool((r or {}).get("achieved", False))
+                                  for r in rows)
+        )
+
+        # 【修改】处理新的override值类型：'achieved', 'in_progress'（以及向后兼容的True/False）
+        any_forced_not_achieved = any(
+            v in (False, 'in_progress') for v in current_overrides.values())
+        # 【修复】all_overrides_positive：只有当所有objectives都有override且都是positive时才为True
+        all_overrides_positive = (
+            len(current_learning_objectives) > 0 and
+            len(current_overrides) == len(current_learning_objectives) and
+            all(current_overrides.get(str(obj or "").strip()) in (True, 'achieved')
+                for obj in current_learning_objectives if str(obj or "").strip())
+        )
         print(
-            "DEBUG: [Router Node] learning objectives achieved, routing to END")
-        return {
-            "next_speaker": "END",
-            "end_reason": "learning_objectives_achieved",
-            "achieved_all": True,
-            **objective_update_payload,
+            f"DEBUG: [Router Node] override check - any_forced_not_achieved={any_forced_not_achieved}, all_overrides_positive={all_overrides_positive}, override_count={len(current_overrides)}, objective_count={len(current_learning_objectives)}")
+
+        # 偏置策略：
+        # - 存在 false 覆盖 => 更谨慎，不允许 achieved_all
+        # - 全部覆盖为 true => 更宽松，允许 achieved_all
+        # - 否则沿用 LLM
+        if any_forced_not_achieved:
+            objective_eval_result["achieved_all"] = False
+        elif all_overrides_positive:
+            objective_eval_result["achieved_all"] = True
+        else:
+            objective_eval_result["achieved_all"] = llm_achieved_all
+
+        objective_update_payload = {
+            "trigger_question": objective_eval_result.get("trigger_question", current_trigger_question),
+            "objective_evaluations": objective_eval_result.get("objective_evaluations", []),
+            "achieved_all": bool(objective_eval_result.get("achieved_all", False)),
         }
+    else:
+        objective_eval_result = {
+            "achieved_all": bool(state.get("achieved_all", False)),
+            "trigger_question": str(state.get("trigger_question", current_trigger_question) or current_trigger_question),
+            "objective_evaluations": list(state.get("objective_evaluations", []) or []),
+        }
+        objective_update_payload = {}
+
+    if should_run_objective_eval and objective_eval_result.get("achieved_all", False):
+        # 教师手动覆盖检查：如果任意目标被覆盖为"未达成"，强制不结束讨论
+        teacher_overrides = current_overrides
+        any_forced_not_achieved = any(
+            v in (False, 'in_progress') for v in teacher_overrides.values())
+        if any_forced_not_achieved:
+            print(
+                "DEBUG: [Router Node] teacher override prevents END, continuing discussion")
+        else:
+            print(
+                "DEBUG: [Router Node] learning objectives achieved, routing to END")
+            return {
+                "next_speaker": "END",
+                "end_reason": "learning_objectives_achieved",
+                "achieved_all": True,
+                **objective_update_payload,
+            }
 
     agent_ids = list(student_nodes.keys())
     if not agent_ids:
