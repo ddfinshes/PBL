@@ -4,6 +4,10 @@ This module hosts reusable configuration-oriented logic so `agents.py`
 can focus on workflow orchestration.
 """
 from __future__ import annotations
+from langchain_core.messages import BaseMessage
+from typing import Dict, List, Any, Optional
+import logging
+import json
 
 from typing import Dict, List
 import re
@@ -25,6 +29,166 @@ BASE_NON_SILENCE_PRIOR_WEIGHTS = {
 
 class KnowledgeStateService:
     """Encapsulates knowledge-state parsing, initialization and aggregation logic."""
+
+    @staticmethod
+    def get_latest_internalized_note(state: Dict, agent_id: str, private_memory: Dict) -> str:
+        """获取指定 Agent 最近的一条内化笔记。"""
+        agent_memory = private_memory.get(agent_id, [])
+        if not isinstance(agent_memory, list):
+            return "暂无上一条可用内化信息。"
+
+        for item in reversed(agent_memory[-8:]):
+            if str(item.get("action", "")) == "internalize_message":
+                source = str(item.get("source_speaker", "") or "unknown")
+                note = str(item.get("internalized_note", "") or "").strip()
+                if note:
+                    return f"来源={source}; 内化={note}"
+        return "暂无上一条可用内化信息。"
+
+    @staticmethod
+    def apply_knowledge_updates(
+        persona: Dict,
+        agent_knowledge_state: Dict[str, Dict],
+        payload: Dict,
+        load_level: int,
+        trigger_objectives: List[str] = None,
+    ) -> Dict[str, Dict]:
+        """根据内化结果更新知识状态。
+
+        考虑因素：
+        1. 学习可塑性 (learning_adaptivity): 影响掌握知识点的成功率 (high: 1.0, medium: 0.7, low: 0.4)
+        2. 认知方式 (cognitive_orientation): 影响知识掌握的深度与关联性
+        3. 触发问题目标 (trigger_objectives): 优先掌握目标范围内的知识
+        """
+        normalized = KnowledgeStateService._normalize_agent_state_schema(
+            agent_knowledge_state)
+        kb = dict(normalized.get("knowledge_background", {}) or {})
+        for level in ("high", "medium", "low"):
+            values = kb.get(level, [])
+            kb[level] = list(values) if isinstance(values, list) else []
+        mastered_points = list(normalized.get("mastered_points", []) or [])
+
+        # 获取学生特性
+        adaptivity = str(persona.get("learning_adaptivity", "medium")).lower()
+        orientation = str(persona.get(
+            "cognitive_orientation", "point_based")).lower()
+
+        # 可塑性影响掌握门槛
+        adaptivity_map = {"high": 1.0, "medium": 0.7, "low": 0.4}
+        success_rate = adaptivity_map.get(adaptivity, 0.7)
+
+        # 根据认知负荷决定本轮能处理的知识点上限
+        max_mastered_points = 2 if load_level <= 6 else (
+            1 if load_level <= 8 else 0)
+
+        points_to_check = payload.get(
+            "mastered_points", []) if isinstance(payload, dict) else []
+        if not isinstance(points_to_check, list):
+            points_to_check = []
+
+        mastered_used = 0
+        for point in points_to_check:
+            if mastered_used >= max_mastered_points:
+                break
+
+            cleaned = str(point or "").strip()
+            if not cleaned:
+                continue
+
+            # 学习可塑性校验：概率决定是否真正“掌握”
+            if random.random() > success_rate:
+                continue
+
+            # 知识点关联性校验 (基于认知方式)
+            # 点思维 (point_based) 只能掌握孤立点，线思维 (line_based) 可初步建立联系
+            if orientation == "point_based" and len(cleaned) > 20:
+                # 点思维可能难以一次性内化复杂的长知识链
+                pass
+
+            # 校验所属领域级别
+            domain = KnowledgeStateService.extract_domain(cleaned)
+            initial_level = KnowledgeStateService.normalize_level(
+                KnowledgeStateService.persona_domain_level(persona, domain))
+
+            # 低相关领域知识不轻易标记为已掌握，除非可塑性高
+            if initial_level == "low" and adaptivity != "high":
+                continue
+
+            mastered_points.append(cleaned)
+            mastered_used += 1
+
+        for level in ("high", "medium", "low"):
+            kb[level] = KnowledgeStateService._dedupe_keep_order(kb[level])
+        mastered_points = KnowledgeStateService._dedupe_keep_order(
+            mastered_points)
+
+        return {
+            "knowledge_background": kb,
+            "mastered_points": mastered_points,
+        }
+
+    @staticmethod
+    def append_private_memory(
+        state: Dict,
+        agent_id: str,
+        action_type: str,
+        reason: str,
+        load_level: int,
+        self_efficacy_level: int,
+        source_speaker: str = "",
+        internalized_note: str = "",
+    ) -> Dict[str, List[Dict]]:
+        """向 Agent 的私有记忆中追加一条记录并保持最近 20 条。"""
+        private_memory = dict(state.get("private_memory", {}) or {})
+        agent_memory = list(private_memory.get(agent_id, []) or [])
+        agent_state = ((state.get("knowledge_state", {})
+                       or {}).get(agent_id, {}) or {})
+        kb_snapshot = agent_state.get(
+            "knowledge_background", {}) if isinstance(agent_state, dict) else {}
+
+        import time
+        knowledge_domains = {
+            domain: level
+            for level in ["high", "medium", "low"]
+            for domain in (kb_snapshot.get(level, []) if isinstance(kb_snapshot, dict) else [])
+        }
+        agent_memory.append(
+            {
+                "timestamp": int(time.time()),
+                "action": action_type,
+                "reason": reason,
+                "cognitive_load": load_level,
+                "self_efficacy": self_efficacy_level,
+                "topic": state.get("current_topic", ""),
+                "source_speaker": source_speaker,
+                "internalized_note": internalized_note,
+                "knowledge_domains": knowledge_domains,
+            }
+        )
+        private_memory[agent_id] = agent_memory[-20:]
+        return private_memory
+
+    @staticmethod
+    def build_private_memory_brief(private_memory: Dict, agent_id: str, window: int = 5) -> List[Dict]:
+        """构建私有记忆的简短摘要，用于 Prompt 上下文。"""
+        agent_memory = private_memory.get(agent_id, [])
+        if not isinstance(agent_memory, list):
+            return []
+        recent = agent_memory[-window:]
+        brief: List[Dict] = []
+        for item in recent:
+            brief.append(
+                {
+                    "action": item.get("action", ""),
+                    "reason": item.get("reason", ""),
+                    "cognitive_load": item.get("cognitive_load", 6),
+                    "self_efficacy": item.get("self_efficacy", 6),
+                    "topic": item.get("topic", ""),
+                    "source_speaker": item.get("source_speaker", ""),
+                    "internalized_note": item.get("internalized_note", ""),
+                }
+            )
+        return brief
 
     @staticmethod
     def _empty_knowledge_background() -> Dict[str, List[str]]:
@@ -296,6 +460,83 @@ class ActionDistributionService:
     """Encapsulates distribution normalization and action-prior construction."""
 
     @staticmethod
+    def compute_router_trait_weight(agent_id: str, persona: Dict, self_efficacy_state: Dict) -> float:
+        """基于人格特质计算路由偏好权重，优先选择外向、宜人、深度学习型成员。"""
+        scores = _extract_numeric_trait_scores(persona)
+        learning = scores["learning"]
+        personality = scores["personality"]
+
+        weight = 1.0  # 基础权重，确保每个人都有机会被选
+        weight += 0.55 * max(0, learning["deep"] - 3)
+        weight += 0.45 * max(0, personality["agreeableness"] - 3)
+        weight += 0.55 * max(0, 3 - personality["neuroticism"])
+        weight += 0.35 * max(0, 3 - learning["strategic"])
+
+        # 自我效能感的微量调整
+        se_level = self_efficacy_state.get(agent_id, 6)
+        weight += 0.15 * max(0, (se_level - 3) / 3)
+        return max(0.05, weight)
+
+    @staticmethod
+    def build_router_preference_summary(agent_ids: List[str], personas: Dict[str, Dict], self_efficacy_state: Dict) -> str:
+        """生成描述性路由偏好摘要，供 LLM 参考。"""
+        ranking = []
+        for aid in agent_ids:
+            persona = personas.get(aid, {})
+            weight = ActionDistributionService.compute_router_trait_weight(
+                aid, persona, self_efficacy_state)
+            ranking.append((aid, weight))
+
+        ranking.sort(key=lambda item: item[1], reverse=True)
+        if not ranking:
+            return "无可用学生偏好信息。"
+
+        total = sum(weight for _, weight in ranking)
+        if total <= 0:
+            total = float(len(ranking))
+            ranking = [(aid, 1.0) for aid, _ in ranking]
+
+        natural_lines: List[str] = []
+        for aid, weight in ranking:
+            share = weight / total
+            if share >= 0.40:
+                band = "极高优先：积极主动，非常适合优先发言"
+            elif share >= 0.28:
+                band = "高优先：较为主动，适合作为候选"
+            elif share >= 0.18:
+                band = "中优先：正常发言节奏"
+            else:
+                band = "低优先：通常保持观察，除非必要不建议频繁点名"
+            natural_lines.append(f"{aid} -> {band}")
+
+        return "；".join(natural_lines)
+
+    @staticmethod
+    def deterministic_router_fallback(
+        candidates: List[str],
+        personas: Dict[str, Dict],
+        self_efficacy_state: Dict,
+        turn_counts: Dict[str, int],
+        last_speaker: str,
+    ) -> str:
+        """启发式路由兜底逻辑：公平性第一（最少发言），人格权重第二，ID 稳定性第三。"""
+        pool = [aid for aid in candidates if aid and aid !=
+                last_speaker] or list(candidates)
+        if not pool:
+            return ""
+
+        min_turn = min(turn_counts.get(aid, 0) for aid in pool)
+        least_spoken = [
+            aid for aid in pool if turn_counts.get(aid, 0) == min_turn]
+
+        ranked = sorted(
+            least_spoken,
+            key=lambda aid: (-ActionDistributionService.compute_router_trait_weight(
+                aid, personas.get(aid, {}), self_efficacy_state), aid),
+        )
+        return ranked[0]
+
+    @staticmethod
     def normalize_distribution(
             raw_probs: Dict,
             allowed_keys: List[str],
@@ -431,3 +672,106 @@ class ActionDistributionService:
             "silence": silence_prior,
         }
         return ActionDistributionService.normalize_distribution(prior, action_options, fallback=prior)
+
+
+logger = logging.getLogger(__name__)
+
+
+def is_silence_like_content(content: str) -> bool:
+    """Return True when content is a silence marker such as '...' or '...（沉默）'."""
+    text = str(content or "").strip()
+    if not text:
+        return False
+
+    # Normalize full-width punctuation and ellipsis variants.
+    text = text.replace("\u2026", "...").replace("。", ".")
+
+    # Accepted examples:
+    #   ...
+    #   ...(沉默)
+    #   ...（沉默）
+    #   ...(silence)
+    silence_pattern = r"^\.{3}\s*(?:[\(（]\s*(?:沉默|silence)\s*[\)）])?$"
+    return re.match(silence_pattern, text, flags=re.IGNORECASE) is not None
+
+
+def extract_json_object(text: str) -> Dict[str, Any]:
+    """Best-effort JSON object extraction for LLM outputs."""
+    raw = str(text or "").strip()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except Exception:
+        pass
+
+    match = re.search(r"\{[\s\S]*\}", raw)
+    if not match:
+        return {}
+    try:
+        return json.loads(match.group(0))
+    except Exception:
+        return {}
+
+
+def find_recent_dominant_speaker(messages: List[BaseMessage], window: int = 6):
+    recent = messages[-window:] if messages else []
+    speaker_count: Dict[str, int] = {}
+    for message in recent:
+        speaker = getattr(message, "name", None)
+        if speaker:
+            speaker_count[speaker] = speaker_count.get(speaker, 0) + 1
+    if not speaker_count:
+        return None, 0
+    dominant = max(speaker_count.items(), key=lambda x: x[1])
+    return dominant[0], dominant[1]
+
+
+def get_last_agent_utterance(messages: List[BaseMessage], agent_id: str) -> str:
+    for message in reversed(messages):
+        if getattr(message, "name", None) == agent_id:
+            return str(getattr(message, "content", "") or "").strip()
+    return ""
+
+
+def build_recent_silence_context(messages: List[BaseMessage], window: int = 6) -> str:
+    recent = messages[-window:] if messages else []
+    silence_names: List[str] = []
+    for message in recent:
+        content = str(getattr(message, "content", "") or "").strip()
+        name = str(getattr(message, "name", "") or "").strip()
+        if content == "..." and name:
+            silence_names.append(name)
+
+    if not silence_names:
+        return "No recent peer silence."
+
+    return f"Recent peers who chose silence: {', '.join(silence_names)}"
+
+
+def extract_teacher_nominated_agent(messages: List[BaseMessage], agent_ids: List[str]) -> str:
+    if not messages or not agent_ids:
+        return ""
+
+    teacher_content = ""
+    for message in reversed(messages):
+        speaker = str(getattr(message, "name", "") or "").strip().lower()
+        if speaker == "teacher":
+            teacher_content = str(getattr(message, "content", "") or "")
+            break
+
+    if not teacher_content:
+        return ""
+
+    lowered = teacher_content.lower()
+    for aid in agent_ids:
+        aid_lower = aid.lower()
+        if re.search(rf"\b{re.escape(aid_lower)}\b", lowered):
+            return aid
+    return ""
+
+
+def has_high_knowledge_profile(persona: Dict) -> bool:
+    kb = persona.get("knowledge_background", {}) or {}
+    high_terms = kb.get("high", []) if isinstance(kb, dict) else []
+    return isinstance(high_terms, list) and len(high_terms) > 0

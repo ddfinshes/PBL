@@ -52,6 +52,7 @@ from .knowledge import (
     sync_agent_setting_knowledge_points as _sync_agent_setting_knowledge_points_impl,
     evaluate_progressive_coverage,
     build_discussion_content_from_leaf,
+    get_historical_scores_from_leaf,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -70,9 +71,13 @@ class Persona(BaseModel):
 
 
 class UpdatePersonasRequest(BaseModel):
-    student_analyst: Persona
-    student_observer: Persona
-    student_skeptic: Persona
+    personas: Dict[str, Any]
+
+
+class AgentTagsRequest(BaseModel):
+    agent_id: str
+    persona: Dict[str, Any]
+    trigger_question: str
 
 
 class ActiveSceneRequest(BaseModel):
@@ -1422,6 +1427,21 @@ async def api_agent_preview(request: AgentPreviewRequest):
         return {"status": "error", "detail": str(e)}, 500
 
 
+@app_fastapi.post("/api/agent-tags")
+async def api_agent_tags(request: AgentTagsRequest):
+    """Generate 3-5 short tags for the agent based on persona and trigger question."""
+    try:
+        from .agent_preview import generate_agent_tags
+        tags = await generate_agent_tags(
+            persona=dict(request.persona or {}),
+            trigger_question=str(request.trigger_question or "").strip(),
+        )
+        return {"status": "success", "tags": tags}
+    except Exception as e:
+        logger.error(f"Failed to generate agent tags: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
+
+
 @app_fastapi.post("/api/agent-config-chat")
 async def api_agent_config_chat(request: AgentConfigChatRequest):
     """Parse natural-language instruction into partial agent config updates via structured LLM output."""
@@ -2249,11 +2269,17 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
         with open(case_path, "r", encoding="utf-8") as f:
             case_data = json.load(f)
 
+        # 【新增】获取历史分数和消息轮数以支撑增量评估和动态严格度约束
+        historical_scores, message_count = get_historical_scores_from_leaf(
+            sh["messages_map"], leaf_id)
+
         coverage_payload = await evaluate_progressive_coverage(
             case_data=case_data,
             scene_index=int(scene_idx),
             question_index=int(question_idx),
             discussion_content=discussion_content,
+            historical_scores=historical_scores,
+            message_count=message_count
         )
 
         # 【新增】将最新的覆盖率结果保存到 messages_map 中，实现回退后的即时恢复
@@ -2433,6 +2459,14 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             # 携带 leaf_id，使其能精确对应到 graphData 的节点
                             leaf_id = sh.get("active_id")
                             if leaf_id:
+                                # 【核心同步修复】不仅发送到前端，还要立即更新内存中的 messages_map，
+                                # 否则下一条消息评估时 get_historical_scores 拿不到这个值。
+                                if leaf_id in sh["messages_map"]:
+                                    sh["messages_map"][leaf_id]["knowledge_coverage"] = kb_data
+                                    # 如果有 persist_discussion 需求也建议在这里触发
+                                    persist_discussion(
+                                        session_id, sh["messages_map"])
+
                                 await websocket.send_json({
                                     "type": "message_update",
                                     "id": leaf_id,
@@ -2601,6 +2635,18 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         with suppress(asyncio.CancelledError):
                             await graph_task
                         graph_task = None
+
+                    # 【核心修复】在真正进入暂停状态前，由 server 主核触发一次最终评估。
+                    # LangGraph 节点内部可能因 teacher_interrupted/silence 跳过，
+                    # 这里的触发确保了即使学生保持沉默被暂停，知识点覆盖也能刷新。
+                    from . import pbl_info
+                    await _recompute_and_emit_context_evaluations(
+                        scene_idx=int(pbl_info.active_scene_index),
+                        question_index=int(pbl_info.active_question_index),
+                        leaf_id=sh.get("active_id"),
+                        emit_ws=True
+                    )
+
                     _clear_output_queue()
                     pause_requested = False
                     discussion_paused = True
@@ -2933,6 +2979,16 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                 logger.info("教师指令：暂停讨论。")
                 if not graph_task and not output_task:
                     discussion_paused = True
+                    # 【新增】暂停时立即触发一次异步评估，确保前端显示最新
+
+                    async def _pause_eval():
+                        from . import pbl_info
+                        await _recompute_and_emit_context_evaluations(
+                            scene_idx=int(pbl_info.active_scene_index),
+                            question_index=int(pbl_info.active_question_index),
+                            leaf_id=sh.get("active_id"),
+                        )
+                    asyncio.create_task(_pause_eval())
                     await websocket.send_json({"type": "discussion_paused"})
                 else:
                     # Defer stopping until current event is fully processed and persisted.

@@ -10,6 +10,7 @@ from typing import Dict, List
 
 from langchain_core.messages import AIMessage, BaseMessage
 
+import json
 from .agents import (
     ACTION_DISPLAY_LABELS,
     STUDENT_LLM,
@@ -135,6 +136,41 @@ async def _generate_behavior_description(persona: Dict, action_plan: Dict, after
         return fallback
     except Exception:
         return fallback
+
+
+async def generate_agent_tags(persona: Dict, trigger_question: str) -> List[str]:
+    """Generate 3-5 short tags characterizing the agent's behavior style for the given question."""
+    persona_str = _format_persona_to_string_safe(persona)
+    prompt = (
+        "你是教育心理学家与PBL行为观察员。\n"
+        "任务：根据学生的画像（性格、认知、知识背景）和当前讨论的问题，生成 3-5 个极其简短的标签，概括该学生在此时此地的行为风格、认知特点或潜在局限。\n\n"
+        "要求：\n"
+        "1) 标签需为 1-3 个词的短语，严禁长句。\n"
+        "2) 必须包含局限性观察（如：过早闭环、逻辑跳跃、论据单一等）。\n"
+        "3) 风格具体：不要只说‘认真勤奋’，要说‘颗粒度细’、‘直觉驱动’、‘证据依赖’或‘权威顺从’。\n"
+        "4) 英文输出。\n"
+        "5) 返回格式必须是 JSON 字符串数组，如 [\"Tag1\", \"Tag2\", \"Tag3\"]。\n\n"
+        f"[画像]\n{persona_str}\n\n"
+        f"[当前讨论的问题]\n{trigger_question}\n\n"
+        "JSON 输出："
+    )
+
+    try:
+        result = await _ainvoke_with_log(SUM_LLM, prompt, "generate_agent_tags")
+        content = str(getattr(result, "content", "") or "").strip()
+        # Clean up possible markdown code blocks
+        if "```json" in content:
+            content = content.split("```json")[-1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[-1].split("```")[0].strip()
+
+        tags = json.loads(content)
+        if isinstance(tags, list):
+            return [str(t)[:20] for t in tags[:5]]
+        return ["Observant", "Knowledgeable"]
+    except Exception as e:
+        print(f"Error generating tags: {e}")
+        return ["Inquisitive", "Reflective"]
 
 
 async def generate_student_preview_response(agent_id: str, persona: Dict, trigger_question: str) -> Dict[str, str]:

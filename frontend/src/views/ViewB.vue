@@ -70,7 +70,21 @@
                   </div>
                 </section>
 
-                <div class="preview-title">Agent Preview</div>
+                <div class="preview-title-row">
+                  <div class="preview-title">Agent Preview</div>
+                  <button 
+                    class="preview-trigger-btn"
+                    :disabled="previewLoadingByAgent[agent.id]"
+                    @click="requestAgentPreview(agent)"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span>Preview</span>
+                  </button>
+                </div>
 
                 <div class="preview-bubble before">
                   <div class="bubble-tag">Before Adjustment</div>
@@ -78,11 +92,19 @@
                 </div>
 
                 <div class="preview-avatar-center">
-                  <img
-                    class="preview-avatar"
-                    :src="`/avatar/${agent.avatar || 'avatar1.png'}`"
-                    :alt="agent.name || 'Agent avatar'"
-                  />
+                  <div class="preview-avatar-stack">
+                    <img
+                      class="preview-avatar"
+                      :src="`/avatar/${agent.avatar || 'avatar1.png'}`"
+                      :alt="agent.name || 'Agent avatar'"
+                    />
+                    <!-- Inline Tags overlaying or below avatar -->
+                    <div v-if="agent.tags?.length" class="preview-tags-badge-container">
+                      <span v-for="(tag, tIdx) in agent.tags" :key="tIdx" class="preview-tag-badge">
+                        {{ tag }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="preview-bubble after">
@@ -132,15 +154,6 @@ import axios from 'axios';
 import { ElMessage } from 'element-plus';
 import AgentCard from '../components/AgentCard.vue';
 
-const {
-  personas,
-  fetchPersonas,
-  updateKnowledge,
-  addKnowledge,
-  deleteKnowledge,
-  isPaused
-} = inject('pblSocket', {});
-
 const props = defineProps({
   theoreticalKnowledge: {
     type: Array,
@@ -160,17 +173,6 @@ const props = defineProps({
   }
 });
 
-// Refs for individual cards to handle global events like "cancelling edit"
-const cardRefs = ref([]);
-const activeIndex = ref(0);
-const isGeneratingPersonaPrompt = ref(false);
-
-const interactionRoles = [
-  { name: 'Leader', value: 'leader', icon: 'leader.png' },
-  { name: 'Follower', value: 'follower', icon: 'follower.png' },
-  { name: 'Advocate', value: 'critical', icon: 'devil.png' }
-];
-
 const cardColors = ['#CEDCFB', '#FBCEDC', '#D2FBCE', '#FBE4CE', '#E5CEFB', '#CEFBE2'];
 
 const createDefaultAgent = (index = 0) => ({
@@ -181,7 +183,7 @@ const createDefaultAgent = (index = 0) => ({
   avatar: 'avatar1.png',
   cardColor: cardColors[index % cardColors.length],
   // Unclassified knowledge: prioritize using extracted PDF content
-  unclassifiedKnowledge: props.theoreticalKnowledge.length > 0 
+  unclassifiedKnowledge: (props.theoreticalKnowledge && props.theoreticalKnowledge.length > 0)
     ? [...props.theoreticalKnowledge] 
     : [], 
   // Classified knowledge corresponding to three levels
@@ -210,13 +212,35 @@ const createDefaultAgent = (index = 0) => ({
     role: 'leader'
   },
   plasticity: '',
+  tags: [],
   configChat: {
     messages: [],
     unresolvedFields: []
   }
 });
 
-const agents = ref([createDefaultAgent(0)]);
+const agents = inject('agentList', ref([createDefaultAgent(0)]));
+
+// Refs for individual cards to handle global events like "cancelling edit"
+const cardRefs = ref([]);
+const activeIndex = ref(0);
+const isGeneratingPersonaPrompt = ref(false);
+
+const interactionRoles = [
+  { name: 'Leader', value: 'leader', icon: 'leader.png' },
+  { name: 'Follower', value: 'follower', icon: 'follower.png' },
+  { name: 'Advocate', value: 'critical', icon: 'devil.png' }
+];
+
+const {
+  personas,
+  fetchPersonas,
+  updateKnowledge,
+  addKnowledge,
+  deleteKnowledge,
+  isPaused
+} = inject('pblSocket', {});
+
 const previewByAgent = ref({});
 const previewLoadingByAgent = ref({});
 const previewRequestVersionByAgent = ref({});
@@ -495,28 +519,39 @@ const requestAgentPreview = async (agent) => {
   };
 
   try {
-    const response = await axios.post('http://127.0.0.1:8000/api/agent-preview', {
-      agent_id: agent.name || agent.id,
-      persona: toPreviewPersona(agent),
-      trigger_question: firstQuestionText.value
-    }, {
-      signal: controller.signal
-    });
+    // Parallel call for preview and tags
+    const [previewRes, tagsRes] = await Promise.all([
+      axios.post('http://127.0.0.1:8000/api/agent-preview', {
+        agent_id: agent.name || agent.id,
+        persona: toPreviewPersona(agent),
+        trigger_question: firstQuestionText.value
+      }, { signal: controller.signal }),
+      
+      axios.post('http://127.0.0.1:8000/api/agent-tags', {
+        agent_id: agent.id,
+        persona: toPreviewPersona(agent),
+        trigger_question: firstQuestionText.value
+      }, { signal: controller.signal })
+    ]);
 
     if (previewRequestVersionByAgent.value[agent.id] !== currentVersion) return;
 
-    if (response?.data?.status === 'success') {
-      const afterText = String(response.data.after_text || '').trim();
-      const beforeText = previousAfterText || previousBeforeText || String(response.data.before_text || '').trim();
+    if (previewRes?.data?.status === 'success') {
+      const afterText = String(previewRes.data.after_text || '').trim();
+      const beforeText = previousAfterText || previousBeforeText || String(previewRes.data.before_text || '').trim();
       previewByAgent.value = {
         ...previewByAgent.value,
         [agent.id]: {
           before_text: beforeText,
           after_text: afterText,
-          action_display: response.data.action_display || '',
-          behavior_description: String(response.data.behavior_description || '').trim() || '该 Agent 的行为描述生成失败，请重试。'
+          action_display: previewRes.data.action_display || '',
+          behavior_description: String(previewRes.data.behavior_description || '').trim() || '该 Agent 的行为描述生成失败，请重试。'
         }
       };
+    }
+
+    if (tagsRes?.data?.status === 'success' && Array.isArray(tagsRes.data.tags)) {
+      agent.tags = tagsRes.data.tags;
     }
   } catch (error) {
     if (previewRequestVersionByAgent.value[agent.id] !== currentVersion) return;
@@ -657,7 +692,8 @@ const mapBackendPersonaToAgent = (persona, index = 0, backendKey = '') => {
       participation: persona?.social?.participation || 'medium',
       role: persona?.interaction_role || persona?.social?.role || 'leader'
     },
-    plasticity: persona?.learning_adaptivity || ''
+    plasticity: persona?.learning_adaptivity || '',
+    tags: Array.isArray(persona?.tags) ? persona.tags : []
   };
 };
 
@@ -722,9 +758,9 @@ watch(agents, () => {
 
     if (nextSignature !== prevSignature) {
       previewSignatureByAgent.value[aid] = nextSignature;
-      if (hasRealFirstQuestion.value) {
-        scheduleAgentPreviewRefresh(aid);
-      }
+      // if (hasRealFirstQuestion.value) {
+      //   scheduleAgentPreviewRefresh(aid);
+      // }
     }
   });
 
@@ -990,11 +1026,41 @@ const syncPersona = async () => {
             low: agent.classifiedKnowledge.layman
         },
         cognitive_orientation: agent.cognitiveOrientation || '',
-        learning_adaptivity: agent.plasticity || ''
+        learning_adaptivity: agent.plasticity || '',
+        tags: agent.tags || []
       };
     });
 
     ElMessage.info('Calling LLM to generate learning-style/personality prompt...');
+
+    // Auto-generate missing tags before saving
+    if (hasRealFirstQuestion.value) {
+      const untaggedAgents = agents.value.filter(a => !a.tags || a.tags.length === 0);
+      if (untaggedAgents.length > 0) {
+        ElMessage.info(`Generating tags for ${untaggedAgents.length} agents...`);
+        const updatedTags = await Promise.all(untaggedAgents.map(async (agent) => {
+          try {
+            const res = await axios.post('http://127.0.0.1:8000/api/agent-tags', {
+              agent_id: agent.id,
+              persona: toPreviewPersona(agent),
+              trigger_question: firstQuestionText.value
+            });
+            if (res.data?.status === 'success' && Array.isArray(res.data.tags)) {
+              agent.tags = res.data.tags;
+              // Update the payload after generating tags
+              const key = agent.name || `Student_Unknown`;
+              if (payload[key]) {
+                payload[key].tags = res.data.tags;
+              }
+              return true;
+            }
+          } catch (e) {
+            console.error(`Failed to auto-generate tags for ${agent.name}:`, e);
+          }
+          return false;
+        }));
+      }
+    }
 
     const response = await axios.post('http://127.0.0.1:8000/update_personas', payload);
     if (response.status === 200) {
@@ -1195,14 +1261,47 @@ const syncPersona = async () => {
   color: #991b1b;
 }
 
+.preview-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+
 .preview-title {
   font-size: 13px;
   font-weight: 700;
   color: #2f3a63;
-  text-align: center;
-  letter-spacing: 0.02em;
-  margin-top: 0;
-  flex-shrink: 0;
+  margin: 0;
+}
+
+.preview-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #5f77b2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preview-trigger-btn:hover:not(:disabled) {
+  background: #4a5e91;
+  transform: translateY(-1px);
+}
+
+.preview-trigger-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.preview-trigger-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .preview-avatar-center {
@@ -1210,6 +1309,33 @@ const syncPersona = async () => {
   align-items: center;
   justify-content: center;
   margin: 2px 0;
+}
+
+.preview-avatar-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.preview-tags-badge-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.preview-tag-badge {
+  background: #5f77b2;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
 }
 
 .preview-avatar {

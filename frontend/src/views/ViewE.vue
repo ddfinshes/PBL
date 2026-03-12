@@ -1,7 +1,7 @@
 <template>
   <div class="view-e-container h-full flex flex-col bg-[#ECECEC] rounded-xl border border-gray-300 overflow-hidden">
     <div class="view-e-header">
-      <h2 class="view-title">Learning Objectives & Knowledge Points</h2>
+      <h2 class="view-title">Global State Evaluation</h2>
     </div>
 
     <div class="flex-1 overflow-y-auto px-4 py-4 objective-scroll">
@@ -502,31 +502,42 @@ const normalizeText = (text) => {
     .toLowerCase();
 };
 
+const lastValidCoverage = ref(null);
+
 const activeCoveragePayload = computed(() => {
   const sceneIndex = activeQuestionInfo?.value?.sceneIndex;
   const questionIndex = activeQuestionInfo?.value?.questionIndex;
-  if (!Number.isFinite(sceneIndex) || !Number.isFinite(questionIndex)) return null;
+  if (!Number.isFinite(sceneIndex) || !Number.isFinite(questionIndex)) return lastValidCoverage.value;
 
   const key = `${sceneIndex}_${questionIndex}`;
   const byLeaf = knowledgeCoverageByQuestion?.value?.[key] || {};
   
   // 1. 优先尝试使用选中的节点或当前活跃消息的 ID
   const preferredLeafId = selectedNodeLeafId?.value || activeMessageId?.value;
+  let result = null;
   if (preferredLeafId && byLeaf[preferredLeafId]) {
-    return byLeaf[preferredLeafId];
+    result = byLeaf[preferredLeafId];
+  } else {
+    // 2. 如果当前活跃 ID 还没结果，或者正在由后端异步评估中，
+    // 我们从该场景的所有历史评估中找寻“最新”且“非空”的作为占位。
+    const candidates = Object.values(byLeaf || {})
+      .filter(Boolean)
+      .filter(c => Array.isArray(c.point_scores) && c.point_scores.length > 0);
+    
+    if (candidates.length) {
+      // 按时间戳降序排列，取最新的一个有效评估结果
+      candidates.sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0));
+      result = candidates[0] || null;
+    }
   }
 
-  // 2. 如果当前活跃 ID 还没结果，或者正在由后端异步评估中，
-  // 我们从该场景的所有历史评估中找寻“最新”且“非空”的作为占位。
-  const candidates = Object.values(byLeaf || {})
-    .filter(Boolean)
-    .filter(c => Array.isArray(c.point_scores) && c.point_scores.length > 0);
+  // 【新增】Stale-While-Revalidating 模式：如果新计算的结果为空，则保留上一个非空状态
+  if (result && Array.isArray(result.point_scores) && result.point_scores.length > 0) {
+    lastValidCoverage.value = result;
+    return result;
+  }
   
-  if (!candidates.length) return null;
-  
-  // 按时间戳降序排列，取最新的一个有效评估结果
-  candidates.sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0));
-  return candidates[0] || null;
+  return lastValidCoverage.value;
 });
 
 const knowledgePointScoreMap = computed(() => {

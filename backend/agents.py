@@ -17,13 +17,22 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 
 from .agent_settings import (
-    _extract_numeric_trait_scores,
+    _extract_numeric_trait_scores as _extract_numeric_trait_scores_orig,
     format_persona_to_string,
     generate_learning_personality_prompt as _generate_learning_personality_prompt,
     generate_learning_personality_sections as _generate_learning_personality_sections,
 )
 from .agent_config import KnowledgeStateService, ActionDistributionService
 from .config import DASHSCOPE_API_KEY, BASE_URL, LLM_MODEL_NAME, EXTRA_BODY, MODEL_KWARGS
+from .agent_config import (
+    is_silence_like_content as _is_silence_like_content,
+    extract_json_object as _extract_json_object,
+    find_recent_dominant_speaker as _find_recent_dominant_speaker,
+    get_last_agent_utterance as _get_last_agent_utterance,
+    build_recent_silence_context as _build_recent_silence_context,
+    extract_teacher_nominated_agent as _extract_teacher_nominated_agent,
+    has_high_knowledge_profile as _has_high_knowledge_profile,
+)
 
 # -------------------- 公共 LLM 实例 --------------------
 
@@ -44,24 +53,6 @@ ACTION_DISPLAY_LABELS = {
     "accumulation": "累积补充",
     "silence": "沉默",
 }
-
-
-def _is_silence_like_content(content: str) -> bool:
-    """Return True when content is a silence marker such as '...' or '...（沉默）'."""
-    text = str(content or "").strip()
-    if not text:
-        return False
-
-    # Normalize full-width punctuation and ellipsis variants.
-    text = text.replace("\u2026", "...").replace("。", ".")
-
-    # Accepted examples:
-    #   ...
-    #   ...(沉默)
-    #   ...（沉默）
-    #   ...(silence)
-    silence_pattern = r"^\.{3}\s*(?:[\(（]\s*(?:沉默|silence)\s*[\)）])?$"
-    return re.match(silence_pattern, text, flags=re.IGNORECASE) is not None
 
 
 def _build_llm(temperature: float = 0.7) -> ChatOpenAI:
@@ -125,14 +116,11 @@ def _build_knowledge_mastery_brief(agent_knowledge_state: Dict[str, Dict], top_k
 
 
 def _get_latest_internalized_note_for_agent(state: Dict, agent_id: str) -> str:
-    recent = _get_recent_private_memory(state, agent_id, window=8)
-    for item in reversed(recent):
-        if str(item.get("action", "")) == "internalize_message":
-            source = str(item.get("source_speaker", "") or "unknown")
-            note = str(item.get("internalized_note", "") or "").strip()
-            if note:
-                return f"来源={source}; 内化={note}"
-    return "暂无上一条可用内化信息。"
+    return KnowledgeStateService.get_latest_internalized_note(
+        state=state,
+        agent_id=agent_id,
+        private_memory=state.get("private_memory", {}),
+    )
 
 
 def _apply_knowledge_updates_from_internalization_payload(
@@ -140,70 +128,15 @@ def _apply_knowledge_updates_from_internalization_payload(
     agent_knowledge_state: Dict[str, Dict],
     payload: Dict,
     load_level: int,
+    trigger_objectives: List[str] = None,
 ) -> Dict[str, Dict]:
-    """Apply knowledge updates from internalization payload without extra LLM calls.
-
-    Rule:
-    - Keep domain levels unchanged.
-    - Only update mastered_points.
-    """
-    normalized = KnowledgeStateService._normalize_agent_state_schema(
-        agent_knowledge_state)
-    kb = dict(normalized.get("knowledge_background", {}) or {})
-    for level in ("high", "medium", "low"):
-        values = kb.get(level, [])
-        kb[level] = list(values) if isinstance(values, list) else []
-    mastered_points = list(normalized.get("mastered_points", []) or [])
-
-    # Only use cognitive load for throughput, and persona baseline for admissibility.
-    max_mastered_points = 2 if load_level <= 6 else (
-        1 if load_level <= 8 else 0)
-    mastered_used = 0
-    for point in (payload.get("mastered_points", []) if isinstance(payload, dict) else []):
-        if mastered_used >= max_mastered_points:
-            break
-
-        cleaned = str(point or "").strip()
-        if not cleaned:
-            continue
-
-        domain = KnowledgeStateService.extract_domain(cleaned)
-        initial_level = _normalize_knowledge_level(
-            KnowledgeStateService.persona_domain_level(persona, domain))
-        if initial_level == "low":
-            # Do not mark low-domain knowledge as mastered too early.
-            continue
-
-        mastered_points.append(cleaned)
-        mastered_used += 1
-
-    for level in ("high", "medium", "low"):
-        kb[level] = KnowledgeStateService._dedupe_keep_order(kb[level])
-    mastered_points = KnowledgeStateService._dedupe_keep_order(mastered_points)
-
-    return {
-        "knowledge_background": kb,
-        "mastered_points": mastered_points,
-    }
-
-
-def _find_recent_dominant_speaker(messages: List[BaseMessage], window: int = 6):
-    recent = messages[-window:] if messages else []
-    speaker_count: Dict[str, int] = {}
-    for message in recent:
-        speaker = getattr(message, "name", None)
-        if speaker:
-            speaker_count[speaker] = speaker_count.get(speaker, 0) + 1
-    if not speaker_count:
-        return None, 0
-    dominant = max(speaker_count.items(), key=lambda x: x[1])
-    return dominant[0], dominant[1]
-
-
-def _has_high_knowledge_profile(persona: Dict) -> bool:
-    kb = persona.get("knowledge_background", {}) or {}
-    high_terms = kb.get("high", []) if isinstance(kb, dict) else []
-    return isinstance(high_terms, list) and len(high_terms) > 0
+    return KnowledgeStateService.apply_knowledge_updates(
+        persona=persona,
+        agent_knowledge_state=agent_knowledge_state,
+        payload=payload,
+        load_level=load_level,
+        trigger_objectives=trigger_objectives,
+    )
 
 
 def _append_private_memory(
@@ -216,32 +149,16 @@ def _append_private_memory(
     source_speaker: str = "",
     internalized_note: str = "",
 ) -> Dict[str, List[Dict]]:
-    private_memory = dict(state.get("private_memory", {}) or {})
-    agent_memory = list(private_memory.get(agent_id, []) or [])
-    agent_state = ((state.get("knowledge_state", {})
-                   or {}).get(agent_id, {}) or {})
-    kb_snapshot = agent_state.get(
-        "knowledge_background", {}) if isinstance(agent_state, dict) else {}
-    knowledge_domains = {
-        domain: level
-        for level in ["high", "medium", "low"]
-        for domain in (kb_snapshot.get(level, []) if isinstance(kb_snapshot, dict) else [])
-    }
-    agent_memory.append(
-        {
-            "timestamp": int(time.time()),
-            "action": action_type,
-            "reason": reason,
-            "cognitive_load": load_level,
-            "self_efficacy": self_efficacy_level,
-            "topic": state.get("current_topic", ""),
-            "source_speaker": source_speaker,
-            "internalized_note": internalized_note,
-            "knowledge_domains": knowledge_domains,
-        }
+    return KnowledgeStateService.append_private_memory(
+        state=state,
+        agent_id=agent_id,
+        action_type=action_type,
+        reason=reason,
+        load_level=load_level,
+        self_efficacy_level=self_efficacy_level,
+        source_speaker=source_speaker,
+        internalized_note=internalized_note,
     )
-    private_memory[agent_id] = agent_memory[-20:]
-    return private_memory
 
 
 def _get_recent_private_memory(state: Dict, agent_id: str, window: int = 5) -> List[Dict]:
@@ -252,29 +169,12 @@ def _get_recent_private_memory(state: Dict, agent_id: str, window: int = 5) -> L
     return agent_memory[-window:]
 
 
-def _get_last_agent_utterance(messages: List[BaseMessage], agent_id: str) -> str:
-    for message in reversed(messages):
-        if getattr(message, "name", None) == agent_id:
-            return str(getattr(message, "content", "") or "").strip()
-    return ""
-
-
 def _build_private_memory_brief(state: Dict, agent_id: str, window: int = 5) -> List[Dict]:
-    recent = _get_recent_private_memory(state, agent_id, window=window)
-    brief: List[Dict] = []
-    for item in recent:
-        brief.append(
-            {
-                "action": item.get("action", ""),
-                "reason": item.get("reason", ""),
-                "cognitive_load": item.get("cognitive_load", 6),
-                "self_efficacy": item.get("self_efficacy", 6),
-                "topic": item.get("topic", ""),
-                "source_speaker": item.get("source_speaker", ""),
-                "internalized_note": item.get("internalized_note", ""),
-            }
-        )
-    return brief
+    return KnowledgeStateService.build_private_memory_brief(
+        private_memory=state.get("private_memory", {}),
+        agent_id=agent_id,
+        window=window,
+    )
 
 
 async def _internalize_message_for_agent(
@@ -311,19 +211,32 @@ async def _internalize_message_for_agent(
     initial_domain_levels = {
         d: KnowledgeStateService.persona_domain_level(persona, d) for d in domain_names
     }
+    cognitive_orientation = str(persona.get(
+        "cognitive_orientation", "point_based")).lower()
+    adaptivity = str(persona.get("learning_adaptivity", "medium")).lower()
+    learning_objectives = state.get("trigger_learning_objectives", [])
+    objective_text = "\n".join(
+        [f"- {obj}" for obj in learning_objectives]) if learning_objectives else "暂无明确目标"
+
     prompt = (
         "你是医学PBL中学生私有记忆的内化器。\n"
-        "任务：把一条新消息内化为符合人设和设定的可吸收短记忆，并同时给出本轮知识状态更新建议。\n"
+        "任务：把一条新消息内化为符合人设和设定的可吸收短记忆，并同时给出本轮知识状态更新建议。\n\n"
+        "【学生认知特征】\n"
+        f"- 认知方式：{cognitive_orientation}（点思维：仅关注孤立知识点；线思维：仅关注局部的、有因果联系的逻辑链；面思维：能够跨领域整合多头逻辑网络）\n"
+        f"- 学习可塑性：{adaptivity}（低：理解速度慢、即使正确也不一定能掌握；高：极强的迁移与构建能力）\n\n"
+        "【当前学习目标】\n"
+        f"{objective_text}\n\n"
         "严格输出JSON：\n"
         "{\n"
         "  \"internalized_note\": \"一句经过加工的可用记忆（<=40字）\",\n"
         "  \"mastered_points\": [\"已掌握的小知识点1\", \"已掌握的小知识点2\"]\n"
         "}\n\n"
         "约束：\n"
-        "- mastered_points 只保留已掌握的小知识点，不要输出 medium/low 或不确定点。\n"
-        "- 一定要结合学生的人设来进行内化。尤其是学习风格和推理模式\n"
+        "- mastered_points 应该来自【当前学习目标】中的相关医学内容，不要输出 medium/low 或不确定点。\n"
+        "- 学习内化必须受认知方式限制：点思维的学生不应输出包含多环推理的逻辑，面思维的学生应能提取跨学科的综合发现。\n"
+        "- 学习可塑性决定了内化的深度。低可塑性的学生内化后应更接近复述或简单归纳，高可塑性学生应体现整合与重塑。\n"
+        "- 一定要结合学生的人设来进行内化。尤其是学习风格和推理模式。\n"
         "- 不要更新总体学科分级；本轮只输出细粒度 mastered_points。\n"
-        "- 只依据认知负荷与初始设定做保守判断。\n"
         "- 信息不足时返回空字典。\n\n"
         f"[学生ID]\n{agent_id}\n\n"
         f"[学生人设]\n{format_persona_to_string(persona)}\n\n"
@@ -452,6 +365,7 @@ async def _parallel_internalize_for_all_agents(state: Dict, messages: List[BaseM
             agent_knowledge_state=knowledge_state_all.get(aid, {}) or {},
             payload=payload,
             load_level=int(cognitive_load_state.get(aid, 6) or 6),
+            trigger_objectives=state.get("trigger_learning_objectives", []),
         )
 
     return {
@@ -508,68 +422,12 @@ def _count_agent_turns(messages: List[BaseMessage], agent_ids: List[str]) -> Dic
     return counts
 
 
-def _compute_router_trait_weight(state: Dict, agent_id: str) -> float:
-    """Compute routing preference weight from persona traits.
-
-    Preferred profile receives higher weight:
-    - low neuroticism
-    - high agreeableness
-    - high deep learning style
-    - low strategic learning style
-    """
-    persona = student_personas.get(agent_id, {}) or {}
-    scores = _extract_numeric_trait_scores(persona)
-    learning = scores["learning"]
-    personality = scores["personality"]
-
-    # Base weight keeps every candidate selectable.
-    weight = 1.0
-
-    # 1..5 trait scale, centered on 3.
-    weight += 0.55 * max(0, learning["deep"] - 3)
-    weight += 0.45 * max(0, personality["agreeableness"] - 3)
-    weight += 0.55 * max(0, 3 - personality["neuroticism"])
-    weight += 0.35 * max(0, 3 - learning["strategic"])
-
-    self_efficacy_state: Dict[str, int] = state.get("self_efficacy", {}) or {}
-    se_level = self_efficacy_state.get(agent_id)
-    if se_level is None:
-        se_level = self_efficacy_init(persona)
-
-    # Mild preference for agents with higher self-efficacy (3/6/9 -> 0/0.15/0.30).
-    weight += 0.15 * max(0, (se_level - 3) / 3)
-    return max(0.05, weight)
-
-
 def _build_router_preference_summary(agent_ids: List[str], state: Dict) -> str:
-    """Return natural-language routing preference hints (no continuous scores)."""
-    ranking = sorted(
-        ((aid, _compute_router_trait_weight(state, aid)) for aid in agent_ids),
-        key=lambda item: item[1],
-        reverse=True,
+    return ActionDistributionService.build_router_preference_summary(
+        agent_ids=agent_ids,
+        personas=student_personas,
+        self_efficacy_state=state.get("self_efficacy", {}),
     )
-    if not ranking:
-        return "无可用学生偏好信息。"
-
-    total = sum(weight for _, weight in ranking)
-    if total <= 0:
-        total = float(len(ranking))
-        ranking = [(aid, 1.0) for aid, _ in ranking]
-
-    natural_lines: List[str] = []
-    for aid, weight in ranking:
-        share = weight / total
-        if share >= 0.40:
-            band = "极高优先：非常可能优先选择"
-        elif share >= 0.28:
-            band = "高优先：很可能优先选择"
-        elif share >= 0.18:
-            band = "中优先：可以考虑优先选择"
-        else:
-            band = "低优先：通常后置，除非公平性或上下文需要"
-        natural_lines.append(f"{aid} -> {band}")
-
-    return "；".join(natural_lines)
 
 
 def _build_router_turn_count_summary(agent_ids: List[str], turn_counts: Dict[str, int]) -> str:
@@ -596,20 +454,13 @@ def _deterministic_router_fallback(
     turn_counts: Dict[str, int],
     last_speaker: str,
 ) -> str:
-    """Deterministic fallback: fairness first, then trait weight, then stable id order."""
-    pool = [aid for aid in candidates if aid and aid !=
-            last_speaker] or list(candidates)
-    if not pool:
-        return ""
-
-    min_turn = min(turn_counts.get(aid, 0) for aid in pool)
-    least_spoken = [aid for aid in pool if turn_counts.get(aid, 0) == min_turn]
-
-    ranked = sorted(
-        least_spoken,
-        key=lambda aid: (-_compute_router_trait_weight(state, aid), aid),
+    return ActionDistributionService.deterministic_router_fallback(
+        candidates=candidates,
+        personas=student_personas,
+        self_efficacy_state=state.get("self_efficacy", {}),
+        turn_counts=turn_counts,
+        last_speaker=last_speaker,
     )
-    return ranked[0]
 
 
 async def _objectives_achieved_by_llm(
@@ -942,29 +793,9 @@ def _build_persona_silence_prompt(
             f"- 沉默冷却约束：你最近 3 轮已有 {recent_silence_count} 次沉默，本轮应优先给出一句有增量的信息，而不是继续沉默。"
         )
 
-    if not hits:
-        return "【人格化沉默引导】当前未命中强触发条件，优先正常发言并提供医学信息增量。"
 
-    return "\n".join(["【人格化沉默引导（按命中条件执行）】", *hits])
-
-
-def _extract_json_object(text: str) -> Dict:
-    """Best-effort JSON object extraction for LLM outputs."""
-    raw = str(text or "").strip()
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw)
-    except Exception:
-        pass
-
-    match = re.search(r"\{[\s\S]*\}", raw)
-    if not match:
-        return {}
-    try:
-        return json.loads(match.group(0))
-    except Exception:
-        return {}
+def _extract_numeric_trait_scores(persona: Dict) -> Dict[str, Dict[str, int]]:
+    return _extract_numeric_trait_scores_orig(persona)
 
 
 def _compute_dynamic_silence_prior(
@@ -1676,6 +1507,16 @@ def _student_node_fn(agent_id: str):
 
         degradation_instruction = "认知负荷中等。"
         interaction_bias = "优先简洁、可证据化表达。"
+
+        cognitive_orientation = str(persona_dict.get(
+            "cognitive_orientation", "point_based")).lower()
+        if cognitive_orientation == "point_based":
+            interaction_bias += " 认知习惯为点思维：关注孤立的医学事实，避免复杂的联立推理，倾向于针对具体数值或现象发言。"
+        elif cognitive_orientation == "line_based":
+            interaction_bias += " 认知习惯为线思维：能够建立并陈述单一的病理生理逻辑链或时间顺序链，但视野范围较局限。"
+        elif cognitive_orientation == "plane_based":
+            interaction_bias += " 认知习惯为面思维：善于跨领域关联，能够进行多因果、系统性的医学建模与比较分析。"
+
         if load_level >= 9:
             degradation_instruction = "认知负荷高，避免复杂并行推理，先给单步结论。"
             interaction_bias = "减少挑战，优先澄清或求助对齐。"
@@ -1900,7 +1741,7 @@ async def knowledge_eval_node(state: Dict) -> Dict:
     """评估当前讨论路径对 trigger question 的知识点覆盖程度。
     该节点位于 topic_manager 之后。
     """
-    from .knowledge import evaluate_progressive_coverage, build_discussion_content_from_leaf
+    from .knowledge import evaluate_progressive_coverage, build_discussion_content_from_leaf, get_historical_scores_from_leaf
     from . import pbl_info
     import json
     from pathlib import Path
@@ -1915,21 +1756,50 @@ async def knowledge_eval_node(state: Dict) -> Dict:
     if _is_silence_like_content(last_content):
         return {}
 
-    # 构建带父子关系的消息字典，用于 build_discussion_content_from_leaf
+    # 获取消息 ID 和父 ID (LangGraph 的消息通常带有 id 属性)
+    def _get_msg_id(m, idx):
+        # 兼容不同类型的消息对象
+        if hasattr(m, "id") and m.id:
+            return str(m.id)
+        if isinstance(m, dict) and m.get("id"):
+            return str(m["id"])
+        return f"msg_{idx}"
+
+    def _get_parent_id(m):
+        if hasattr(m, "parent_id") and m.parent_id:
+            return str(m.parent_id)
+        if isinstance(m, dict) and m.get("parent_id"):
+            return str(m["parent_id"])
+        return None
+
+    # 构建带父子关系的消息字典
     messages_map = {}
     for i, m in enumerate(messages):
-        m_id = str(getattr(m, "id", None) or f"msg_{i}")
-        p_id = str(getattr(m, "parent_id", None))
+        m_id = _get_msg_id(m, i)
+        p_id = _get_parent_id(m)
         if i > 0 and not p_id:
-            p_id = str(getattr(messages[i-1], "id", None) or f"msg_{i-1}")
+            p_id = _get_msg_id(messages[i-1], i-1)
+
+        # 尝试从消息的 additional_kwargs 中获取之前存储的 knowledge_coverage
+        knowledge_coverage = None
+        if hasattr(m, "additional_kwargs"):
+            knowledge_coverage = m.additional_kwargs.get("knowledge_coverage")
+        elif isinstance(m, dict):
+            knowledge_coverage = m.get("knowledge_coverage")
 
         messages_map[m_id] = {
-            "agent": getattr(m, "name", "unknown"),
-            "content": getattr(m, "content", ""),
-            "parent_id": p_id
+            "agent": getattr(m, "name", m.get("name") if isinstance(m, dict) else "unknown"),
+            "content": getattr(m, "content", m.get("content") if isinstance(m, dict) else ""),
+            "parent_id": p_id,
+            "knowledge_coverage": knowledge_coverage
         }
 
-    leaf_id = str(getattr(last_msg, "id", None) or f"msg_{len(messages)-1}")
+    leaf_id = _get_msg_id(last_msg, len(messages)-1)
+
+    # 获取历史分数和消息计数
+    historical_scores, message_count = get_historical_scores_from_leaf(
+        messages_map, leaf_id)
+
     discussion_content = build_discussion_content_from_leaf(
         messages_map, leaf_id)
 
@@ -1953,10 +1823,16 @@ async def knowledge_eval_node(state: Dict) -> Dict:
             case_data=case_data,
             scene_index=scene_index,
             question_index=question_index,
-            discussion_content=discussion_content
+            discussion_content=discussion_content,
+            historical_scores=historical_scores,
+            message_count=message_count
         )
 
         if eval_result.get("status") == "success":
+            # 将结果存入最后一条消息的 additional_kwargs 中，以便后续节点/轮次溯源
+            if hasattr(last_msg, "additional_kwargs"):
+                last_msg.additional_kwargs["knowledge_coverage"] = eval_result
+
             return {"knowledge_state": eval_result}  # 直接返回结果，让其在事件流中被捕获
 
     except Exception as e:

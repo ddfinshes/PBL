@@ -4,7 +4,7 @@
       <!-- Left Column: ViewA + ViewB (Collapsible) -->
       <div class="left-column" :class="{ collapsed: isLeftColumnCollapsed }">
         <!-- Expanded View -->
-        <div v-if="!isLeftColumnCollapsed" class="left-column-expanded">
+        <div v-show="!isLeftColumnCollapsed" class="left-column-expanded">
           <div style="display: flex; flex-direction: column; height: 100%; gap: 10px;">
             <div style="flex: 3; min-height: 0;">
               <ViewA 
@@ -26,10 +26,10 @@
         </div>
 
         <!-- Collapsed View: Agent List -->
-        <div v-else class="left-column-collapsed">
+        <div v-show="isLeftColumnCollapsed" class="left-column-collapsed">
           <div ref="agentListContainer" class="agent-list-container">
             <div 
-              v-for="agent in personas" 
+              v-for="agent in agents" 
               :key="agent.id"
               class="agent-mini-card"
               :style="{ borderColor: agent.cardColor || '#CEDCFB' }"
@@ -42,6 +42,15 @@
               />
               <div class="agent-mini-name" :style="{ backgroundColor: agent.cardColor || '#CEDCFB' }">
                 {{ agent.name }}
+              </div>
+              <div v-if="agent.tags?.length" class="agent-mini-tags">
+                <span 
+                  v-for="(tag, idx) in agent.tags" 
+                  :key="idx" 
+                  class="mini-tag-pill"
+                >
+                  {{ tag }}
+                </span>
               </div>
             </div>
           </div>
@@ -237,6 +246,9 @@ const imagesResult = ref(null);
 const activeContext = ref(null);
 const currentPdfFilename = ref(null);
 const isLeftColumnCollapsed = ref(false);
+const agents = ref([]);
+
+provide('agentList', agents);
 
 const handleDataReady = (payload) => {
   console.log('父组件收到数据:', payload);
@@ -329,7 +341,7 @@ body {
 }
 
 .left-column.collapsed {
-  flex: 0 0 100px;
+  flex: 0 0 130px;
 }
 
 .left-column-header {
@@ -458,24 +470,49 @@ body {
 }
 
 .agent-mini-avatar {
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .agent-mini-name {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: bold;
   color: #000000;
-  padding: 3px 4px;
+  padding: 3px 6px;
   border-radius: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 70px;
+  max-width: 90px;
   text-align: center;
   line-height: 1.2;
+}
+
+.agent-mini-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.mini-tag-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: rgba(128, 149, 202, 0.2);
+  color: #2c3e50;
+  border: 1px solid rgba(128, 149, 202, 0.4);
+  border-radius: 4px;
+  width: 100%;
+  max-width: 110px;
+  text-align: center;
+  word-wrap: break-word;
+  word-break: break-all;
+  line-height: 1.1;
 }
 
 .center-column {
@@ -503,7 +540,7 @@ body {
 }
 
 .right-top-row {
-  flex: 0.9;
+  flex: 1.8;
   min-height: 0;
 }
 

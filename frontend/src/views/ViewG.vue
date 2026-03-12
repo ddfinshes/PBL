@@ -1,7 +1,7 @@
 <template>
 	<div class="view-g-container h-full flex flex-col bg-[#ECECEC] rounded-xl border border-gray-300 overflow-hidden">
 		<div class="view-g-header">
-			<h2 class="view-title">Reflection</h2>
+			<h2 class="view-title">Student Knowledge State</h2>
 		</div>
 
 		<div class="flex-1 overflow-y-auto p-3 json-scroll">

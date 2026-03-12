@@ -1,4 +1,4 @@
-"""PBL backend agent settings and persona utilities.
+"""PBL backend agent 配置和人格画像预览
 
 This module isolates persona/profile configuration and prompt-generation helpers
 to keep agents.py focused on runtime orchestration.
@@ -161,10 +161,6 @@ async def generate_learning_personality_sections(persona: Dict, llm: Any) -> Dic
         "2) personality_prompt（80-170字）：基于大五描述社交与情绪机制，重点解释Neuroticism如何改变发言阈值与贡献意愿，"
         "并补充Conscientiousness与Openness如何增强或削弱对PBL价值的主观判断。"
         "必须逐一包含 openness/conscientiousness/extraversion/agreeableness/neuroticism 的原始分值与对应特质解释。\n"
-        "3) integrated_prompt（130-230字）：在PBL‘不确定+协作+持续修正’情境下，整合学习风格与人格机制，"
-        "写出内在冲突、可观察行为、发言策略与转变条件；需映射到一个或多个原型（焦虑高成就者/社交活跃但浅层贡献者/理想受益者/混合型）。\n"
-        "4) integrated_prompt 中必须保留原始分值摘要，格式如：LS(surface/deep/strategic)=x/x/x; BF(O/C/E/A/N)=x/x/x/x/x。\n"
-        "写作风格要求：角色指令风格，强调可执行行为，不要写成文献综述。\n"
         "只输出JSON。"
     )
 
@@ -178,7 +174,6 @@ async def generate_learning_personality_sections(persona: Dict, llm: Any) -> Dic
     learning_style_prompt = str(parsed.get(
         "learning_style_prompt", "")).strip()
     personality_prompt = str(parsed.get("personality_prompt", "")).strip()
-    integrated_prompt = str(parsed.get("integrated_prompt", "")).strip()
 
     if not learning_style_prompt or not personality_prompt:
         raise ValueError(
@@ -187,7 +182,6 @@ async def generate_learning_personality_sections(persona: Dict, llm: Any) -> Dic
     return {
         "learning_style_prompt": learning_style_prompt,
         "personality_prompt": personality_prompt,
-        "learning_personality_prompt": integrated_prompt,
     }
 
 

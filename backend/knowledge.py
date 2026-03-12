@@ -155,6 +155,56 @@ def sync_agent_setting_knowledge_points(case_data: Dict[str, Any], agent_setting
         logger.warning("同步 agent_setting.json 知识点失败: %s", e)
 
 
+def get_historical_scores_from_leaf(messages_map: Dict[str, Dict[str, Any]], leaf_id: str) -> Tuple[Dict[str, float], int]:
+    """
+    沿着 leaf_id 向上找最近的一个包含 knowledge_coverage 的父节点，
+    返回其 point_scores 映射和已有的消息轮数。
+    """
+    if not leaf_id or leaf_id not in messages_map:
+        return {}, 0
+
+    curr_id = leaf_id
+    historical_scores: Dict[str, float] = {}
+    message_count = 0
+    found_coverage = False
+    safety = 0
+
+    while curr_id and safety < 2000:
+        curr = messages_map.get(curr_id)
+        if not curr:
+            logger.warning(
+                "[get_historical_scores] Node %s not found in messages_map", curr_id)
+            break
+
+        # 统计消息轮数 (排除系统消息)
+        agent = str(curr.get("agent", "") or "").strip()
+        if agent not in {"case_introduction", "Start Discussion"}:
+            message_count += 1
+
+        # 检查当前节点是否有覆盖率记录
+        cov = curr.get("knowledge_coverage")
+        if isinstance(cov, dict) and "point_scores" in cov:
+            if not found_coverage:
+                logger.info(
+                    "[get_historical_scores] Found historical coverage at node: %s", curr_id)
+                found_coverage = True
+            for ps in cov.get("point_scores", []):
+                pid = ps.get("id")
+                score = ps.get("coverage_score", 0.0)
+                if pid:
+                    historical_scores[pid] = max(
+                        historical_scores.get(pid, 0.0), float(score))
+
+        # 显式获取 parent_id，防止死循环或逻辑跳出
+        next_id = curr.get("parent_id")
+        if not next_id or next_id == curr_id:
+            break
+        curr_id = next_id
+        safety += 1
+
+    return historical_scores, message_count
+
+
 def build_discussion_content_from_leaf(messages_map: Dict[str, Dict[str, Any]], leaf_id: str) -> str:
     if not leaf_id or leaf_id not in messages_map:
         return ""
@@ -219,6 +269,8 @@ async def evaluate_progressive_coverage(
         scene_index: int,
         question_index: int,
         discussion_content: str,
+        historical_scores: Optional[Dict[str, float]] = None,
+        message_count: int = 0
 ) -> Dict[str, Any]:
     knowledge_points, err = ensure_question_knowledge_points(
         case_data, scene_index, question_index)
@@ -248,38 +300,64 @@ async def evaluate_progressive_coverage(
             "covered_point_details": [],
         }
 
-    knowledge_points_str = "\n".join([
-        f"- id: {kp['id']}\n  point: {kp['point']}\n  explanation: {kp['explanation']}"
-        for kp in normalized_points
-    ])
+    # 处理历史分数
+    prev_scores = historical_scores or {}
 
-    prompt = f"""请分析以下讨论内容，判断每个知识点的覆盖深度分数。
+    # 打印调试日志，确保代码层面拿到了分数
+    logger.info("[coverage] Scene %d, Question %d. Message context count: %d. Previous scores: %s",
+                scene_index, question_index, message_count, prev_scores)
 
-【知识点列表】
+    # 动态调整宽松程度
+    strictness_level = "严格" if message_count < 3 else (
+        "适中" if message_count < 8 else "宽松")
+
+    kp_list_str = []
+    for kp in normalized_points:
+        pid = kp["id"]
+        # 显式转换确保数值正确注入
+        prev_s = float(prev_scores.get(pid, 0.0))
+        kp_list_str.append(f"""- 知识点ID: {pid}
+  知识点名称: {kp['point']}
+  知识点解释: {kp['explanation']}
+  【关键参照】该点历史最高得分 (previous_score): {prev_s}""")
+
+    knowledge_points_str = "\n\n".join(kp_list_str)
+
+    prompt = f"""你是医学PBL评估专家。请分析讨论内容并评分。
+
+【核心规则：严禁分数倒退】
+本次评估是增量的。每个知识点都有一个 `previous_score`。
+1. **你给出的 `coverage_score` 绝对不能小于该点的 `previous_score`。**
+2. 如果当前讨论没有提供比此前更深入的证据，**必须**直接返回该点的 `previous_score`。
+3. 即使学生后续表现变差，已达成的知识点得分也严禁下调。
+
+【评分标准】
+- 0.0: 未涉及
+- 0.3: 初步提及概念
+- 0.6: 解释机制或原理（有因果过程）
+- 1.0: 结合临床或推理应用
+
+【评估上下文】
+- 对话轮数: {message_count}
+- 评估模式: 【{strictness_level}】模式
+
+【待评估知识点列表】
 {knowledge_points_str}
 
 【讨论内容】
 {discussion_content}
 
-【任务】
-请逐个检查每个知识点，输出一个 coverage_score，分值只能是以下四档之一：
-- 0.0: 未涉及
-- 0.3: 初步提及概念（点到为止，无机制）
-- 0.6: 解释机制或原理（有一定因果/过程）
-- 1.0: 结合临床或推理应用（用于诊断、鉴别、治疗决策等）
-
-【输出格式】
-请以 JSON 格式输出：
+【输出要求】
+请仅返回 JSON：
 {{
   "point_scores": [
-	{{"id": "kp_1", "coverage_score": 0.6, "evidence": "讨论中提到了..."}}
+    {{
+      "id": "kp_1", 
+      "coverage_score": 0.6, 
+      "evidence": "..."
+    }}
   ]
 }}
-
-严格要求：
-1) 只能返回【知识点列表】中已有 id；
-2) coverage_score 只能是 0.0 / 0.3 / 0.6 / 1.0；
-3) 只输出 JSON。
 """
 
     score_by_id: Dict[str, float] = {}
@@ -292,8 +370,8 @@ async def evaluate_progressive_coverage(
             base_url=BASE_URL,
             temperature=0,
         )
-        logger.info("[coverage] Requesting LLM evaluation for question %d, scene %d. Discussion length: %d chars",
-                    question_index, scene_index, len(discussion_content))
+        logger.info("[coverage] Requesting LLM evaluation. Question %d, Scene %d. Msg count: %d. Strictness: %s",
+                    question_index, scene_index, message_count, strictness_level)
 
         response = await llm.ainvoke([HumanMessage(content=prompt)])
 
@@ -313,12 +391,26 @@ async def evaluate_progressive_coverage(
             cid = str(item.get("id", "") or "").strip()
             if cid not in valid_ids:
                 continue
-            score_by_id[cid] = _normalize_score(item.get("coverage_score", 0))
+
+            new_score = _normalize_score(item.get("coverage_score", 0))
+            old_score = prev_scores.get(cid, 0.0)
+
+            # 这里的单调性保护作为双重保险（Prompt 之外的代码约束）
+            final_score = max(new_score, old_score)
+
+            score_by_id[cid] = final_score
             evidence_by_id[cid] = str(item.get("evidence", "") or "").strip()
+
     except Exception as e:
         logger.warning("[coverage] LLM evaluation failed: %s", e)
+        # 失败时继承上一次的分数
+        for pid, s in prev_scores.items():
+            score_by_id[pid] = s
 
-    # 优先保持“LLM 作为评分器”的单一策略：解析失败时保持 0 分，等待后续轮次重评。
+    # 补偿那些在 LLM 返回中缺失但有历史分数的点
+    for pid, s in prev_scores.items():
+        if pid not in score_by_id:
+            score_by_id[pid] = s
 
     point_scores: List[Dict[str, Any]] = []
     covered_point_names: List[str] = []
