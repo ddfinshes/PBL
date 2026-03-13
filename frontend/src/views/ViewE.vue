@@ -160,6 +160,7 @@ const props = defineProps({
 });
 
 const {
+  sessionId,
   activeQuestionInfo,
   knowledgeCoverageByQuestion,
   selectedNodeLeafId,
@@ -379,56 +380,67 @@ const objectiveOverrides = ref({});
 const objectiveOverrideTouchedAt = ref({});
 
 const cycleOverride = async (idx) => {
-  if (!hasActiveQuestion.value) return;
+  console.log('[ViewE] cycleOverride clicked for index:', idx);
+  if (!hasActiveQuestion.value) {
+    console.warn('[ViewE] No active question, skipping override');
+    return;
+  }
   const key = getOverrideKey(idx);
   if (!key) return;
   
   // Get current state from row data to capture both Auto and Manual states
   const row = objectiveRows.value[idx];
-  if (!row) return;
+  if (!row) {
+    console.error('[ViewE] Row not found for index:', idx);
+    return;
+  }
 
   const currentManual = objectiveOverrides.value[key] ?? null;
   
   let next;
+  // 简化逻辑：只在 'achieved' 和 'in_progress' 之间切换
+  // 如果当前是 Auto，根据当前视觉状态切换
   if (currentManual === null) {
-    // If it's currently Auto, transition based on the VISUAL state
-    // If UI shows Achieved -> move to In Progress
-    // If UI shows anything else (Pending/In Discussion) -> move to Achieved
-    if (row.statusClass === 'achieved') {
-      next = 'in_progress';
-    } else {
-      next = 'achieved';
-    }
-  } else if (currentManual === 'in_progress') {
-    next = 'achieved';
+    next = (row.achieved) ? 'in_progress' : 'achieved';
   } else {
-    // currentManual === 'achieved'
-    next = 'in_progress';
+    next = (currentManual === 'achieved') ? 'in_progress' : 'achieved';
   }
+
+  console.log(`[ViewE] Transitioning override for ${key}: ${currentManual} -> ${next}`);
 
   // Immediate UI update
   objectiveOverrides.value = { ...objectiveOverrides.value, [key]: next };
   objectiveOverrideTouchedAt.value = { ...objectiveOverrideTouchedAt.value, [key]: Date.now() };
 
   try {
-    await axios.post('http://127.0.0.1:8000/api/override-objective', {
+    const sIdx = Number(activeQuestionInfo?.sceneIndex ?? 0);
+    const qIdx = Number(activeQuestionInfo?.questionIndex ?? 0);
+
+    const payload = {
       caseName: getCaseName(),
-      sceneIndex: activeQuestionInfo.value.sceneIndex,
-      questionIndex: activeQuestionInfo.value.questionIndex,
+      sceneIndex: sIdx,
+      questionIndex: qIdx,
       objectiveIndex: idx,
       override: next
-    });
-    console.debug(`[ViewE] cycleOverride success: idx=${idx} next=${next}`);
+      // 删除了后端不接受的 session_id，并确保索引为数字
+    };
+    console.log('[ViewE] Sending override payload to backend:', payload);
+    const resp = await axios.post('http://127.0.0.1:8000/api/override-objective', payload);
+    console.log('[ViewE] cycleOverride API response:', resp.data);
+
     // Sync back to caseData so the watcher round-trip stays correct
-    const scene = props.caseData?.scenes?.[activeQuestionInfo.value.sceneIndex];
-    const rows = scene?.trigger_question_learning_objectives;
-    const row = Array.isArray(rows) ? rows[activeQuestionInfo.value.questionIndex] : null;
-    if (row) {
-      if (!row.objective_overrides || typeof row.objective_overrides !== 'object') row.objective_overrides = {};
-      const objText = Array.isArray(row.learning_objectives) ? row.learning_objectives[idx] : null;
+    const scene = props.caseData?.scenes?.[sIdx];
+    const objRows = scene?.trigger_question_learning_objectives;
+    const targetRow = Array.isArray(objRows) ? objRows[qIdx] : null;
+
+    if (targetRow) {
+      if (!targetRow.objective_overrides || typeof targetRow.objective_overrides !== 'object') {
+        targetRow.objective_overrides = {};
+      }
+      const objText = Array.isArray(targetRow.learning_objectives) ? targetRow.learning_objectives[idx] : null;
       if (objText != null) {
-        if (next === null) delete row.objective_overrides[String(objText)];
-        else row.objective_overrides[String(objText)] = next;
+        if (next === null) delete targetRow.objective_overrides[String(objText)];
+        else targetRow.objective_overrides[String(objText)] = next;
       }
     }
 
@@ -438,32 +450,33 @@ const cycleOverride = async (idx) => {
       const allAchieved = allRows.every(r => r.achieved === true);
       if (allAchieved) {
         console.log('[ViewE] All objectives achieved by manual override');
-        // 触发讨论暂停，由教师决定是否结束
-        if (typeof togglePause === 'function') {
-          togglePause();
+        // 尝试调用 forceResume 触发后端路由（因为后端现在会在路由时检查状态）
+        if (typeof forceResume === 'function') {
+          console.log('[ViewE] Triggering forceResume to end discussion.');
+          forceResume();
         }
       }
     }
 
     // 如果标记为 'in_progress'，且讨论曾被自动结束，则恢复讨论（但要防止快速重复调用）
     if (next === 'in_progress') {
-      const qKey = `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`;
+      const sIdx = activeQuestionInfo?.sceneIndex;
+      const qIdx = activeQuestionInfo?.questionIndex;
+      const qKey = `${sIdx}_${qIdx}`;
       const endEntry = props.discussionEndMap?.[qKey];
       // 只在讨论因为达成目标而结束时才恢复，避免频繁的forceResume调用
       if (endEntry?.reason === 'learning_objectives_achieved') {
         console.log('[ViewE] Goal marked In Progress; queuing discussion resume...');
-        // 延迟调用forceResume，给用户时间完成多个按钮点击
-        setTimeout(() => {
-          if (typeof forceResume === 'function') {
-            forceResume();
-          }
-        }, 500);
+        // 确保使用注入的 forceResume
+        if (typeof forceResume === 'function') {
+          forceResume();
+        }
       }
     }
   } catch (err) {
     console.error('Failed to save objective override:', err);
     // Revert on failure
-    objectiveOverrides.value = { ...objectiveOverrides.value, [key]: current };
+    objectiveOverrides.value = { ...objectiveOverrides.value, [key]: currentManual };
     objectiveOverrideTouchedAt.value = { ...objectiveOverrideTouchedAt.value, [key]: Date.now() };
   }
 };

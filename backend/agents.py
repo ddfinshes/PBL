@@ -1898,6 +1898,43 @@ async def router_node(state: Dict) -> Dict:
     current_overrides = dict(
         getattr(pbl_info, "objective_overrides", {}).get(rt_key, {}) or {}
     )
+
+    # --- 【日志输出】检查后端从 pbl_info 获取到的实时覆盖数据 ---
+    print(f"DEBUG: [Router Node] CURRENT_PBL_INFO_MOD: {id(pbl_info)}")
+    print(
+        f"DEBUG: [Router Node] RT_KEY: {rt_key} (from active indices {getattr(pbl_info, 'active_scene_index', 0)}_{getattr(pbl_info, 'active_question_index', 0)})")
+    print(
+        f"DEBUG: [Router Node] CURRENT_OVERRIDES FROM FRONTEND/PBL_INFO: {current_overrides}")
+
+    # --- 【关键更新】在调用 LLM 前先检查手动覆盖状态 ---
+    any_forced_not_achieved = any(
+        v in (False, 'in_progress') for v in current_overrides.values())
+    all_overrides_positive = (
+        len(current_learning_objectives) > 0 and
+        len(current_overrides) == len(current_learning_objectives) and
+        all(current_overrides.get(str(obj or "").strip()) in (True, 'achieved')
+            for obj in current_learning_objectives if str(obj or "").strip())
+    )
+
+    if all_overrides_positive:
+        print(
+            "DEBUG: [Router Node] All objectives manually achieved, routing to END early.")
+        return {
+            "next_speaker": "END",
+            "end_reason": "learning_objectives_achieved_manual",
+            "achieved_all": True,
+            "trigger_question": current_trigger_question,
+            "objective_evaluations": [
+                {
+                    "objective": str(obj).strip(),
+                    "achieved": True,
+                    "status": "achieved",
+                    "evidence": "教师手动标注为完成。"
+                }
+                for obj in current_learning_objectives if str(obj).strip()
+            ]
+        }
+
     should_run_objective_eval = (
         total_messages > 0 and total_messages % OBJECTIVE_EVAL_INTERVAL == 0
     )
@@ -1919,22 +1956,12 @@ async def router_node(state: Dict) -> Dict:
                                   for r in rows)
         )
 
-        # 【修改】处理新的override值类型：'achieved', 'in_progress'（以及向后兼容的True/False）
-        any_forced_not_achieved = any(
-            v in (False, 'in_progress') for v in current_overrides.values())
-        # 【修复】all_overrides_positive：只有当所有objectives都有override且都是positive时才为True
-        all_overrides_positive = (
-            len(current_learning_objectives) > 0 and
-            len(current_overrides) == len(current_learning_objectives) and
-            all(current_overrides.get(str(obj or "").strip()) in (True, 'achieved')
-                for obj in current_learning_objectives if str(obj or "").strip())
-        )
         print(
             f"DEBUG: [Router Node] override check - any_forced_not_achieved={any_forced_not_achieved}, all_overrides_positive={all_overrides_positive}, override_count={len(current_overrides)}, objective_count={len(current_learning_objectives)}")
 
         # 偏置策略：
         # - 存在 false 覆盖 => 更谨慎，不允许 achieved_all
-        # - 全部覆盖为 true => 更宽松，允许 achieved_all
+        # - 全部覆盖为 true => 更宽松，允许 achieved_all (虽前面已处理，此处兜底)
         # - 否则沿用 LLM
         if any_forced_not_achieved:
             objective_eval_result["achieved_all"] = False
@@ -1949,14 +1976,21 @@ async def router_node(state: Dict) -> Dict:
             "achieved_all": bool(objective_eval_result.get("achieved_all", False)),
         }
     else:
+        # 非评估轮次，依然需要尊重 current_overrides 对 achieved_all 的影响
+        # 如果有任何手动 'in_progress'，则哪怕 state 记录是 True 也要改为 False
+        achieved_all_state = bool(state.get("achieved_all", False))
+        if any_forced_not_achieved:
+            achieved_all_state = False
+
         objective_eval_result = {
-            "achieved_all": bool(state.get("achieved_all", False)),
+            "achieved_all": achieved_all_state,
             "trigger_question": str(state.get("trigger_question", current_trigger_question) or current_trigger_question),
             "objective_evaluations": list(state.get("objective_evaluations", []) or []),
         }
         objective_update_payload = {}
 
-    if should_run_objective_eval and objective_eval_result.get("achieved_all", False):
+    # 【关键修复】即使 should_run_objective_eval 为 False（手动覆盖场景），只要 achieved_all 为 True 也要允许结束
+    if objective_eval_result.get("achieved_all", False):
         # 教师手动覆盖检查：如果任意目标被覆盖为"未达成"，强制不结束讨论
         teacher_overrides = current_overrides
         any_forced_not_achieved = any(
@@ -2037,6 +2071,18 @@ async def router_node(state: Dict) -> Dict:
 
     await asyncio.sleep(1)
     print(f"等待 {last_speaker} 发言")
+
+    # --- 【关键修复】在调用 HOST_LLM 前最后检查一次目标是否达成 ---
+    if objective_eval_result.get("achieved_all", False):
+        if not any_forced_not_achieved:
+            print(
+                "DEBUG: [Router Node] Final check: objectives achieved, routing to END before LLM call.")
+            return {
+                "next_speaker": "END",
+                "end_reason": "learning_objectives_achieved",
+                "achieved_all": True,
+                **objective_update_payload,
+            }
 
     try:
         print(

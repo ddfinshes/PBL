@@ -292,6 +292,25 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         console.log('[objective_update] map keys', Object.keys(objectiveEvaluationMap.value));
       }
 
+      if (data.type === 'objective_evaluation_update') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        const key = `${sceneIndex}_${questionIndex}`;
+        const incomingRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+        const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
+
+        objectiveEvaluationMap.value = {
+          ...objectiveEvaluationMap.value,
+          [key]: {
+            ...prev,
+            objectiveEvaluations: incomingRows,
+            achievedAll: Boolean(data.achieved_all),
+            updatedAt: Date.now()
+          }
+        };
+        console.log('[objective_evaluation_update] updated map', key);
+      }
+
       if (data.type === 'discussion_end') {
         const sceneIndex = Number(data.scene_index ?? -1);
         const questionIndex = Number(data.question_index ?? -1);

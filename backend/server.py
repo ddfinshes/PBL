@@ -1235,20 +1235,24 @@ async def api_override_objective(request: OverrideObjectiveRequest):
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(case_data, f, ensure_ascii=False, indent=2)
 
-        # 同步到运行时覆盖表，供 router_node 实时读取
+        # 获取 pbl_info 模块的全局单例进行更新
         from . import pbl_info as _pbl_info_mod
         rt_key = f"{scene_idx}_{question_idx}"
-        if not isinstance(_pbl_info_mod.objective_overrides.get(rt_key), dict):
-            _pbl_info_mod.objective_overrides[rt_key] = {}
+
+        # 确保 rt_key 在字典中存在
+        _pbl_info_mod.objective_overrides.setdefault(rt_key, {})
+
         if request.override is None:
             _pbl_info_mod.objective_overrides[rt_key].pop(obj_text, None)
         else:
             _pbl_info_mod.objective_overrides[rt_key][obj_text] = override_value
 
+        # 强制同步 pbl_info 中的变量，以防 router_node 引用异常
+        _pbl_info_mod.active_scene_index = scene_idx
+        _pbl_info_mod.active_question_index = question_idx
+
         print(
-            f"DEBUG: [Override API] Updated: rt_key={rt_key} obj_text={obj_text} to {override_value}")
-        print(
-            f"DEBUG: [Override API] Current overrides for {rt_key}: {_pbl_info_mod.objective_overrides[rt_key]}")
+            f"DEBUG: [Override API] UPDATED GLOBAL pbl_info.objective_overrides[{rt_key}]: {_pbl_info_mod.objective_overrides[rt_key]}")
 
         return {"status": "success", "override": override_value}
     except Exception as e:
