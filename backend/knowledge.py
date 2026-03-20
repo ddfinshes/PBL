@@ -130,6 +130,161 @@ def collect_case_question_knowledge_points(case_data: Dict[str, Any]) -> List[st
     return points
 
 
+# ---------------- 知识图谱构建与认知取向适配 ----------------
+
+def build_case_knowledge_graph(case_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    基于病例 JSON 构建**场景/触发问题级别**的知识图谱骨架。
+
+    - 节点：所有去重后的知识点（使用 normalize_knowledge_points 规范化）
+    - 边类型：
+        - sequential_same_question: 同一触发问题中相邻知识点之间的“线性”连接
+        - co_occurrence_same_question: 同一触发问题中任意两点的“共现”连接（更稠密）
+    """
+    scenes = case_data.get("scenes", []) or []
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges: List[Dict[str, Any]] = []
+
+    for scene_idx, scene in enumerate(scenes):
+        if not isinstance(scene, dict):
+            continue
+        questions = scene.get("trigger_questions", []) or []
+        for q_idx, _q in enumerate(questions):
+            kps, _err = ensure_question_knowledge_points(
+                case_data, scene_idx, q_idx
+            )
+            if not kps:
+                continue
+            norm_kps = normalize_knowledge_points(kps)
+            if not norm_kps:
+                continue
+
+            kp_ids: List[str] = []
+            for kp in norm_kps:
+                pid = kp["id"]
+                kp_ids.append(pid)
+                if pid not in nodes:
+                    nodes[pid] = {
+                        "id": pid,
+                        "point": kp["point"],
+                        "explanation": kp.get("explanation", ""),
+                        "scenes": [],
+                        "questions": [],
+                    }
+                # 记录该知识点出现过的场景/问题索引
+                if scene_idx not in nodes[pid]["scenes"]:
+                    nodes[pid]["scenes"].append(scene_idx)
+                q_key = f"{scene_idx}_{q_idx}"
+                if q_key not in nodes[pid]["questions"]:
+                    nodes[pid]["questions"].append(q_key)
+
+            # 为当前触发问题内的知识点建立“线性”和“共现”连接
+            # 线性连接：顺序相邻
+            for i in range(len(kp_ids) - 1):
+                src = kp_ids[i]
+                dst = kp_ids[i + 1]
+                edges.append(
+                    {
+                        "source": src,
+                        "target": dst,
+                        "relation": "sequential_same_question",
+                        "scene_index": scene_idx,
+                        "question_index": q_idx,
+                        "weight": 1.0,
+                    }
+                )
+
+            # 共现连接：同一问题下任意两点
+            for i in range(len(kp_ids)):
+                for j in range(i + 1, len(kp_ids)):
+                    src = kp_ids[i]
+                    dst = kp_ids[j]
+                    edges.append(
+                        {
+                            "source": src,
+                            "target": dst,
+                            "relation": "co_occurrence_same_question",
+                            "scene_index": scene_idx,
+                            "question_index": q_idx,
+                            "weight": 0.5,
+                        }
+                    )
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+def build_agent_knowledge_graph(
+    case_data: Dict[str, Any],
+    cognitive_orientation: str,
+) -> Dict[str, Any]:
+    """
+    基于病例的全局知识图谱骨架 + 学生的 cognitive_orientation
+    生成**个体化**知识图谱视图：
+
+    - point_based: 仅保留知识点节点，不保留任何边（完全离散）
+    - line_based: 仅保留 sequential_same_question 边（单条因果/时间线式）
+    - plane_based: 保留所有边（完整网状结构）
+    """
+    base_graph = build_case_knowledge_graph(case_data)
+    nodes = base_graph.get("nodes", {})
+    base_edges: List[Dict[str, Any]] = base_graph.get("edges", []) or []
+
+    orientation = str(cognitive_orientation or "point_based").lower()
+
+    if orientation == "point_based":
+        # 点思维：保留**极少量**局部连接，而不是完全离散。
+        # 规则：
+        # - 仅使用 sequential_same_question 边（最基础的“相邻”逻辑）
+        # - 每个节点最多保留 1 条出边和 1 条入边，形成非常稀疏的“线段碎片”
+        deg_out: Dict[str, int] = {}
+        deg_in: Dict[str, int] = {}
+        sparse_edges: List[Dict[str, Any]] = []
+        for e in base_edges:
+            if not isinstance(e, dict):
+                continue
+            if e.get("relation") != "sequential_same_question":
+                continue
+            src = str(e.get("source", "") or "")
+            dst = str(e.get("target", "") or "")
+            if not src or not dst:
+                continue
+            if src not in nodes or dst not in nodes:
+                continue
+            if deg_out.get(src, 0) >= 1:
+                continue
+            if deg_in.get(dst, 0) >= 1:
+                continue
+            sparse_edges.append(e)
+            deg_out[src] = deg_out.get(src, 0) + 1
+            deg_in[dst] = deg_in.get(dst, 0) + 1
+
+        return {
+            "nodes": nodes,
+            "edges": sparse_edges,
+        }
+
+    if orientation == "line_based":
+        # 只保留同一问题内部按顺序的“线性”边
+        line_edges = [
+            e
+            for e in base_edges
+            if e.get("relation") == "sequential_same_question"
+        ]
+        return {
+            "nodes": nodes,
+            "edges": line_edges,
+        }
+
+    # plane_based 以及其它未识别取向：默认采用最稠密网状结构
+    return {
+        "nodes": nodes,
+        "edges": base_edges,
+    }
+
+
 def sync_agent_setting_knowledge_points(case_data: Dict[str, Any], agent_setting_path: Path) -> None:
     if not agent_setting_path.exists():
         return

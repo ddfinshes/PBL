@@ -15,6 +15,12 @@ import random
 
 from .agent_settings import _extract_numeric_trait_scores
 
+# 知识图谱相关：基于病例 JSON + cognitive_orientation 构建图
+from . import pbl_info
+from .knowledge import build_agent_knowledge_graph
+from .case_resolver import resolve_case_json_path
+from pathlib import Path
+
 
 KNOWLEDGE_LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2}
 KNOWLEDGE_LEVELS = ["low", "medium", "high"]
@@ -47,6 +53,7 @@ class KnowledgeStateService:
 
     @staticmethod
     def apply_knowledge_updates(
+        agent_id: str,
         persona: Dict,
         agent_knowledge_state: Dict[str, Dict],
         payload: Dict,
@@ -66,7 +73,9 @@ class KnowledgeStateService:
         for level in ("high", "medium", "low"):
             values = kb.get(level, [])
             kb[level] = list(values) if isinstance(values, list) else []
-        mastered_points = list(normalized.get("mastered_points", []) or [])
+        before_mastered = list(normalized.get("mastered_points", []) or [])
+        mastered_points = list(before_mastered)
+        knowledge_graph = normalized.get("knowledge_graph")
 
         # 获取学生特性
         adaptivity = str(persona.get("learning_adaptivity", "medium")).lower()
@@ -76,6 +85,10 @@ class KnowledgeStateService:
         # 可塑性影响掌握门槛
         adaptivity_map = {"high": 1.0, "medium": 0.7, "low": 0.4}
         success_rate = adaptivity_map.get(adaptivity, 0.7)
+        # 对于 point_based 学生，适当提升一次性“吃下”新点的概率，
+        # 否则在低背景（initial_level=low）+ 中等可塑性时几乎不会记住任何点。
+        if orientation == "point_based":
+            success_rate = min(1.0, success_rate + 0.2)
 
         # 根据认知负荷决定本轮能处理的知识点上限
         max_mastered_points = 2 if load_level <= 6 else (
@@ -110,8 +123,9 @@ class KnowledgeStateService:
             initial_level = KnowledgeStateService.normalize_level(
                 KnowledgeStateService.persona_domain_level(persona, domain))
 
-            # 低相关领域知识不轻易标记为已掌握，除非可塑性高
-            if initial_level == "low" and adaptivity != "high":
+            # 低相关领域知识不轻易标记为已掌握，除非可塑性高；
+            # 但对 point_based 学生放宽限制，否则他们在“低背景”领域几乎永远无法积累新点。
+            if initial_level == "low" and adaptivity != "high" and orientation != "point_based":
                 continue
 
             mastered_points.append(cleaned)
@@ -122,10 +136,127 @@ class KnowledgeStateService:
         mastered_points = KnowledgeStateService._dedupe_keep_order(
             mastered_points)
 
-        return {
+        # ---- 可观测性：输出每轮知识状态变化 ----
+        try:
+            before_set = set(str(p or "").strip() for p in before_mastered if str(p or "").strip())
+            after_set = set(mastered_points)
+            added = [p for p in mastered_points if p not in before_set]
+            g_nodes = 0
+            g_edges = 0
+            graph_visual_lines: List[str] = []
+            if isinstance(knowledge_graph, dict):
+                nodes_obj = knowledge_graph.get("nodes", {})
+                edges_obj = knowledge_graph.get("edges", [])
+                g_nodes = len(nodes_obj) if isinstance(nodes_obj, dict) else 0
+                g_edges = len(edges_obj) if isinstance(edges_obj, list) else 0
+
+                # 构造一个小型“邻接视图”，帮助直观理解当前图谱结构
+                if isinstance(nodes_obj, dict) and isinstance(edges_obj, list):
+                    # 1) 列出新增掌握点对应的节点ID（精确用 point 匹配）
+                    added_ids: List[str] = []
+                    added_clean = [s for s in added if s]
+                    for nid, node in nodes_obj.items():
+                        try:
+                            if not isinstance(node, dict):
+                                continue
+                            pt = str(node.get("point", "") or "").strip()
+                            if pt and pt in added_clean:
+                                added_ids.append(str(nid))
+                        except Exception:
+                            continue
+                    added_ids = added_ids[:5]
+
+                    # 2) 为这些节点构造一小段“邻接列表” ASCII 视图
+                    if added_ids:
+                        graph_visual_lines.append("新增掌握点局部邻接视图：")
+                        for nid in added_ids:
+                            node = nodes_obj.get(nid, {})
+                            label = ""
+                            try:
+                                label = str(node.get("point", "") or "").strip()
+                            except Exception:
+                                pass
+                            neighbors: List[str] = []
+                            for e in edges_obj:
+                                if not isinstance(e, dict):
+                                    continue
+                                src = str(e.get("source", "") or "")
+                                dst = str(e.get("target", "") or "")
+                                rel = str(e.get("relation", "") or "")
+                                if src == nid:
+                                    tgt_label = ""
+                                    try:
+                                        tgt_label = str(
+                                            (nodes_obj.get(dst, {}) or {}).get("point", "") or ""
+                                        ).strip()
+                                    except Exception:
+                                        tgt_label = ""
+                                    neighbors.append(f"{nid} -[{rel}]-> {dst} ({tgt_label})")
+                                elif dst == nid:
+                                    src_label = ""
+                                    try:
+                                        src_label = str(
+                                            (nodes_obj.get(src, {}) or {}).get("point", "") or ""
+                                        ).strip()
+                                    except Exception:
+                                        src_label = ""
+                                    neighbors.append(f"{src} -[{rel}]-> {nid} ({src_label})")
+                            # 控制长度：每个点最多展示若干条边
+                            neighbors = neighbors[:6]
+                            graph_visual_lines.append(
+                                f"  [{nid}] {label or 'N/A'}:"
+                            )
+                            if neighbors:
+                                for line in neighbors:
+                                    graph_visual_lines.append(f"    {line}")
+                            else:
+                                graph_visual_lines.append("    (无直接邻接边)")
+
+                    # 若本轮没有新增掌握点，则给一个小的整体 preview
+                    if not added_ids and g_nodes > 0 and g_edges > 0:
+                        graph_visual_lines.append("图谱整体预览（前若干条边）：")
+                        for e in edges_obj[:8]:
+                            if not isinstance(e, dict):
+                                continue
+                            src = str(e.get("source", "") or "")
+                            dst = str(e.get("target", "") or "")
+                            rel = str(e.get("relation", "") or "")
+                            src_label = str(
+                                (nodes_obj.get(src, {}) or {}).get("point", "") or ""
+                            ).strip()
+                            dst_label = str(
+                                (nodes_obj.get(dst, {}) or {}).get("point", "") or ""
+                            ).strip()
+                            graph_visual_lines.append(
+                                f"  {src} ({src_label}) -[{rel}]-> {dst} ({dst_label})"
+                            )
+
+            graph_visual_block = "\n".join(graph_visual_lines) if graph_visual_lines else ""
+
+            logger.info(
+                "KNOWLEDGE_GRAPH_UPDATE agent=%s name=%s orientation=%s load=%s "
+                "added_mastered=%s total_mastered=%s graph_nodes=%s graph_edges=%s\n%s",
+                str(agent_id or "").strip() or "unknown",
+                str(persona.get("name", "") or "").strip() or "unknown",
+                str(persona.get("cognitive_orientation", "point_based") or "").strip(),
+                int(load_level),
+                added[:6],
+                len(mastered_points),
+                g_nodes,
+                g_edges,
+                graph_visual_block,
+            )
+        except Exception as e:
+            logger.warning("KNOWLEDGE_GRAPH_UPDATE log failed: %s", e)
+
+        # 保留/回写知识图谱（结构拓扑目前不在这里改变，只更新掌握点列表）
+        new_state: Dict[str, Any] = {
             "knowledge_background": kb,
             "mastered_points": mastered_points,
         }
+        if isinstance(knowledge_graph, dict):
+            new_state["knowledge_graph"] = knowledge_graph
+        return new_state
 
     @staticmethod
     def append_private_memory(
@@ -216,6 +347,7 @@ class KnowledgeStateService:
         }
         """
         state = dict(agent_state or {})
+        existing_graph = state.get("knowledge_graph")
 
         if "knowledge_background" in state and isinstance(state.get("knowledge_background"), dict):
             kb = state.get("knowledge_background", {}) or {}
@@ -228,10 +360,14 @@ class KnowledgeStateService:
             mastered = state.get("mastered_points", [])
             if not isinstance(mastered, list):
                 mastered = []
-            return {
+            result: Dict[str, Any] = {
                 "knowledge_background": normalized_kb,
                 "mastered_points": KnowledgeStateService._dedupe_keep_order(mastered),
             }
+            # 透传已有知识图谱（如果已存在）
+            if isinstance(existing_graph, dict):
+                result["knowledge_graph"] = existing_graph
+            return result
 
         # Backward compatibility: old shape {domains: {name:{level}}, details:{point:{level}}}
         domains = state.get("domains", {}) if isinstance(
@@ -252,10 +388,13 @@ class KnowledgeStateService:
             if KnowledgeStateService.normalize_level((meta or {}).get("level", "low")) == "high":
                 mastered_points.append(str(point or "").strip())
 
-        return {
+        result: Dict[str, Any] = {
             "knowledge_background": normalized_kb,
             "mastered_points": KnowledgeStateService._dedupe_keep_order(mastered_points),
         }
+        if isinstance(existing_graph, dict):
+            result["knowledge_graph"] = existing_graph
+        return result
 
     @staticmethod
     def normalize_level(level: str, default: str = "low") -> str:
@@ -341,7 +480,9 @@ class KnowledgeStateService:
 
     @staticmethod
     def init_agent_state_from_persona(persona: Dict, shared_domains: List[str]) -> Dict[str, Dict]:
-        """Initialize canonical state using persona knowledge_background + empty mastered_points."""
+        """Initialize canonical state using persona knowledge_background + empty mastered_points
+        并根据当前案例 + cognitive_orientation 构建该学生的知识图谱视图。
+        """
         knowledge_background = KnowledgeStateService._empty_knowledge_background()
         for domain in shared_domains:
             level = KnowledgeStateService.persona_domain_level(persona, domain)
@@ -349,10 +490,67 @@ class KnowledgeStateService:
         for level in KNOWLEDGE_LEVELS:
             knowledge_background[level] = KnowledgeStateService._dedupe_keep_order(
                 knowledge_background[level])
-        return {
+
+        # 尝试基于当前病例构建知识图谱（失败时安全降级为 None）
+        knowledge_graph = None
+        try:
+            case_name = getattr(pbl_info, "current_case_name", "") or ""
+            if case_name:
+                case_path: Optional[Path] = resolve_case_json_path(case_name)
+                if case_path and case_path.exists():
+                    with open(case_path, "r", encoding="utf-8") as f:
+                        case_data = json.load(f)
+                    orientation = str(
+                        persona.get("cognitive_orientation", "point_based")
+                    ).lower()
+                    knowledge_graph = build_agent_knowledge_graph(
+                        case_data=case_data,
+                        cognitive_orientation=orientation,
+                    )
+
+                    # 初始化可观测性：输出图谱规模 + 少量示例边
+                    try:
+                        nodes_obj = knowledge_graph.get("nodes", {}) if isinstance(knowledge_graph, dict) else {}
+                        edges_obj = knowledge_graph.get("edges", []) if isinstance(knowledge_graph, dict) else []
+                        node_count = len(nodes_obj) if isinstance(nodes_obj, dict) else 0
+                        edge_count = len(edges_obj) if isinstance(edges_obj, list) else 0
+                        edge_preview = []
+                        if isinstance(edges_obj, list):
+                            for e in edges_obj[:5]:
+                                if isinstance(e, dict):
+                                    edge_preview.append(
+                                        {
+                                            "source": e.get("source"),
+                                            "target": e.get("target"),
+                                            "relation": e.get("relation"),
+                                            "scene_index": e.get("scene_index"),
+                                            "question_index": e.get("question_index"),
+                                        }
+                                    )
+                        logger.info(
+                            "KNOWLEDGE_GRAPH_INIT name=%s orientation=%s case=%s graph_nodes=%s graph_edges=%s edge_preview=%s",
+                            str(persona.get("name", "") or "").strip() or "unknown",
+                            str(persona.get("cognitive_orientation", "point_based") or "").strip(),
+                            str(case_name),
+                            node_count,
+                            edge_count,
+                            edge_preview,
+                        )
+                    except Exception as e:
+                        logger.warning("KNOWLEDGE_GRAPH_INIT log failed: %s", e)
+        except Exception as e:
+            # 仅记录日志，不影响主流程
+            logging.getLogger(__name__).warning(
+                "Init agent knowledge_graph failed: %s", e
+            )
+
+        state: Dict[str, Any] = {
             "knowledge_background": knowledge_background,
             "mastered_points": [],
         }
+        if isinstance(knowledge_graph, dict):
+            state["knowledge_graph"] = knowledge_graph
+        return state
 
     @staticmethod
     def get_or_init_agent_state(
@@ -397,6 +595,14 @@ class KnowledgeStateService:
             "knowledge_background": kb,
             "mastered_points": KnowledgeStateService._dedupe_keep_order(agent_state.get("mastered_points", [])),
         }
+        # 透传已存在的知识图谱
+        existing_graph = state.get("knowledge_graph") if isinstance(
+            state, dict) else None
+        graph_in_agent = (agent_state or {}).get("knowledge_graph")
+        if isinstance(graph_in_agent, dict):
+            agent_state["knowledge_graph"] = graph_in_agent
+        elif isinstance(existing_graph, dict):
+            agent_state["knowledge_graph"] = existing_graph
         knowledge_state_all[agent_id] = agent_state
         return knowledge_state_all, agent_state
 

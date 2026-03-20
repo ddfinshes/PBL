@@ -129,8 +129,10 @@ def _apply_knowledge_updates_from_internalization_payload(
     payload: Dict,
     load_level: int,
     trigger_objectives: List[str] = None,
+    agent_id: str = "",
 ) -> Dict[str, Dict]:
     return KnowledgeStateService.apply_knowledge_updates(
+        agent_id=agent_id,
         persona=persona,
         agent_knowledge_state=agent_knowledge_state,
         payload=payload,
@@ -366,6 +368,7 @@ async def _parallel_internalize_for_all_agents(state: Dict, messages: List[BaseM
             payload=payload,
             load_level=int(cognitive_load_state.get(aid, 6) or 6),
             trigger_objectives=state.get("trigger_learning_objectives", []),
+            agent_id=aid,
         )
 
     return {
