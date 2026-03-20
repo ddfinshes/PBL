@@ -3,8 +3,11 @@
     <!-- Top: Scene Title (Always Visible) -->
     <div class="scene-header">
       <h2 class="view-title">Original Case</h2>
-      <div v-if="currentScene" class="scene-badges">
-        <span class="badge-index">Scene {{ currentIndex + 1 }} / {{ totalScenes }}</span>
+      <div class="scene-header-actions">
+        <div v-if="currentScene" class="scene-badges">
+          <span class="badge-index">Scene {{ currentIndex + 1 }} / {{ totalScenes }}</span>
+        </div>
+        <button type="button" class="import-history-btn">Import History Memory</button>
       </div>
     </div>
 
@@ -603,6 +606,32 @@ watch(currentIndex, (newIdx) => {
   align-items: center;
   gap: 12px;
 }
+
+.scene-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-history-btn {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.import-history-btn:hover {
+  cursor: pointer;
+}
+
+.import-history-btn:focus {
+  outline: none;
+}
+
 .badge-index {
   background: rgba(255, 255, 255, 0.9);
   color: #000000;
