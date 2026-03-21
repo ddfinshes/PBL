@@ -26,10 +26,12 @@ KNOWLEDGE_LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2}
 KNOWLEDGE_LEVELS = ["low", "medium", "high"]
 
 # Base prior weights for non-silence actions. Silence prior is computed dynamically.
+# Distribution: silence 5% (dynamic), nonsense 15%, learning-oriented 80% (accumulation 63%, seeking_help 10%, correction 7%)
 BASE_NON_SILENCE_PRIOR_WEIGHTS = {
     "accumulation": 0.63,
-    "seeking_help_alignment": 0.10,
+    "seeking_help_alignment": 0.1,
     "correction_challenge": 0.07,
+    "nonsense": 0.15,
 }
 
 
@@ -138,7 +140,8 @@ class KnowledgeStateService:
 
         # ---- 可观测性：输出每轮知识状态变化 ----
         try:
-            before_set = set(str(p or "").strip() for p in before_mastered if str(p or "").strip())
+            before_set = set(str(p or "").strip()
+                             for p in before_mastered if str(p or "").strip())
             after_set = set(mastered_points)
             added = [p for p in mastered_points if p not in before_set]
             g_nodes = 0
@@ -173,7 +176,8 @@ class KnowledgeStateService:
                             node = nodes_obj.get(nid, {})
                             label = ""
                             try:
-                                label = str(node.get("point", "") or "").strip()
+                                label = str(node.get("point", "")
+                                            or "").strip()
                             except Exception:
                                 pass
                             neighbors: List[str] = []
@@ -187,20 +191,24 @@ class KnowledgeStateService:
                                     tgt_label = ""
                                     try:
                                         tgt_label = str(
-                                            (nodes_obj.get(dst, {}) or {}).get("point", "") or ""
+                                            (nodes_obj.get(dst, {}) or {}).get(
+                                                "point", "") or ""
                                         ).strip()
                                     except Exception:
                                         tgt_label = ""
-                                    neighbors.append(f"{nid} -[{rel}]-> {dst} ({tgt_label})")
+                                    neighbors.append(
+                                        f"{nid} -[{rel}]-> {dst} ({tgt_label})")
                                 elif dst == nid:
                                     src_label = ""
                                     try:
                                         src_label = str(
-                                            (nodes_obj.get(src, {}) or {}).get("point", "") or ""
+                                            (nodes_obj.get(src, {}) or {}).get(
+                                                "point", "") or ""
                                         ).strip()
                                     except Exception:
                                         src_label = ""
-                                    neighbors.append(f"{src} -[{rel}]-> {nid} ({src_label})")
+                                    neighbors.append(
+                                        f"{src} -[{rel}]-> {nid} ({src_label})")
                             # 控制长度：每个点最多展示若干条边
                             neighbors = neighbors[:6]
                             graph_visual_lines.append(
@@ -222,23 +230,27 @@ class KnowledgeStateService:
                             dst = str(e.get("target", "") or "")
                             rel = str(e.get("relation", "") or "")
                             src_label = str(
-                                (nodes_obj.get(src, {}) or {}).get("point", "") or ""
+                                (nodes_obj.get(src, {}) or {}).get(
+                                    "point", "") or ""
                             ).strip()
                             dst_label = str(
-                                (nodes_obj.get(dst, {}) or {}).get("point", "") or ""
+                                (nodes_obj.get(dst, {}) or {}).get(
+                                    "point", "") or ""
                             ).strip()
                             graph_visual_lines.append(
                                 f"  {src} ({src_label}) -[{rel}]-> {dst} ({dst_label})"
                             )
 
-            graph_visual_block = "\n".join(graph_visual_lines) if graph_visual_lines else ""
+            graph_visual_block = "\n".join(
+                graph_visual_lines) if graph_visual_lines else ""
 
             logger.info(
                 "KNOWLEDGE_GRAPH_UPDATE agent=%s name=%s orientation=%s load=%s "
                 "added_mastered=%s total_mastered=%s graph_nodes=%s graph_edges=%s\n%s",
                 str(agent_id or "").strip() or "unknown",
                 str(persona.get("name", "") or "").strip() or "unknown",
-                str(persona.get("cognitive_orientation", "point_based") or "").strip(),
+                str(persona.get("cognitive_orientation",
+                    "point_based") or "").strip(),
                 int(load_level),
                 added[:6],
                 len(mastered_points),
@@ -510,10 +522,14 @@ class KnowledgeStateService:
 
                     # 初始化可观测性：输出图谱规模 + 少量示例边
                     try:
-                        nodes_obj = knowledge_graph.get("nodes", {}) if isinstance(knowledge_graph, dict) else {}
-                        edges_obj = knowledge_graph.get("edges", []) if isinstance(knowledge_graph, dict) else []
-                        node_count = len(nodes_obj) if isinstance(nodes_obj, dict) else 0
-                        edge_count = len(edges_obj) if isinstance(edges_obj, list) else 0
+                        nodes_obj = knowledge_graph.get("nodes", {}) if isinstance(
+                            knowledge_graph, dict) else {}
+                        edges_obj = knowledge_graph.get("edges", []) if isinstance(
+                            knowledge_graph, dict) else []
+                        node_count = len(nodes_obj) if isinstance(
+                            nodes_obj, dict) else 0
+                        edge_count = len(edges_obj) if isinstance(
+                            edges_obj, list) else 0
                         edge_preview = []
                         if isinstance(edges_obj, list):
                             for e in edges_obj[:5]:
@@ -529,15 +545,18 @@ class KnowledgeStateService:
                                     )
                         logger.info(
                             "KNOWLEDGE_GRAPH_INIT name=%s orientation=%s case=%s graph_nodes=%s graph_edges=%s edge_preview=%s",
-                            str(persona.get("name", "") or "").strip() or "unknown",
-                            str(persona.get("cognitive_orientation", "point_based") or "").strip(),
+                            str(persona.get("name", "")
+                                or "").strip() or "unknown",
+                            str(persona.get("cognitive_orientation",
+                                "point_based") or "").strip(),
                             str(case_name),
                             node_count,
                             edge_count,
                             edge_preview,
                         )
                     except Exception as e:
-                        logger.warning("KNOWLEDGE_GRAPH_INIT log failed: %s", e)
+                        logger.warning(
+                            "KNOWLEDGE_GRAPH_INIT log failed: %s", e)
         except Exception as e:
             # 仅记录日志，不影响主流程
             logging.getLogger(__name__).warning(
@@ -666,8 +685,11 @@ class ActionDistributionService:
     """Encapsulates distribution normalization and action-prior construction."""
 
     @staticmethod
-    def compute_router_trait_weight(agent_id: str, persona: Dict, self_efficacy_state: Dict) -> float:
-        """基于人格特质计算路由偏好权重，优先选择外向、宜人、深度学习型成员。"""
+    def compute_router_trait_weight(agent_id: str, persona: Dict, self_efficacy_state: Dict, cognitive_load_state: Dict = None) -> float:
+        """基于人格特质和认知状态计算路由偏好权重，优先选择外向、宜人、深度学习型、低认知负荷成员。"""
+        if cognitive_load_state is None:
+            cognitive_load_state = {}
+
         scores = _extract_numeric_trait_scores(persona)
         learning = scores["learning"]
         personality = scores["personality"]
@@ -678,19 +700,40 @@ class ActionDistributionService:
         weight += 0.55 * max(0, 3 - personality["neuroticism"])
         weight += 0.35 * max(0, 3 - learning["strategic"])
 
+        # 外向性权重：外向的学生(extraversion > 3)权重更高，内向的学生(extraversion < 3)权重更低
+        # 这确保性格内向的学生不会被过度频繁点名
+        weight += 0.70 * max(0, personality["extraversion"] - 3)
+
         # 自我效能感的微量调整
         se_level = self_efficacy_state.get(agent_id, 6)
         weight += 0.15 * max(0, (se_level - 3) / 3)
+
+        # 认知负荷对发言频率的影响：负荷越高越应该减少被选中的概率
+        # cognitive_load 为 3/6/9，高负荷（9）应压低权重，低负荷（3）应保持
+        cognitive_load = cognitive_load_state.get(agent_id, 6)
+        if cognitive_load >= 9:
+            weight *= 0.50  # 极高负荷：权重降低50%
+        elif cognitive_load >= 7:
+            weight *= 0.70  # 高负荷：权重降低30%
+
+        # 对内向学生应用衰减因子：extraversion <= 3 的学生权重降低30%
+        # 这反映了内向学生的自然参与意愿较低，需要尊重其性格特点
+        if personality["extraversion"] <= 3:
+            weight *= 0.70
+
         return max(0.05, weight)
 
     @staticmethod
-    def build_router_preference_summary(agent_ids: List[str], personas: Dict[str, Dict], self_efficacy_state: Dict) -> str:
+    def build_router_preference_summary(agent_ids: List[str], personas: Dict[str, Dict], self_efficacy_state: Dict, cognitive_load_state: Dict = None) -> str:
         """生成描述性路由偏好摘要，供 LLM 参考。"""
+        if cognitive_load_state is None:
+            cognitive_load_state = {}
+
         ranking = []
         for aid in agent_ids:
             persona = personas.get(aid, {})
             weight = ActionDistributionService.compute_router_trait_weight(
-                aid, persona, self_efficacy_state)
+                aid, persona, self_efficacy_state, cognitive_load_state)
             ranking.append((aid, weight))
 
         ranking.sort(key=lambda item: item[1], reverse=True)
@@ -722,15 +765,50 @@ class ActionDistributionService:
         candidates: List[str],
         personas: Dict[str, Dict],
         self_efficacy_state: Dict,
+        cognitive_load_state: Dict,
         turn_counts: Dict[str, int],
         last_speaker: str,
+        total_turns: int = 0,
+        agent_count: int = 0,
     ) -> str:
-        """启发式路由兜底逻辑：公平性第一（最少发言），人格权重第二，ID 稳定性第三。"""
+        """启发式路由兜底逻辑，根据讨论进度动态调整优先级：
+        - 早期（平均轮次<3）：优先权重和认知负荷，推进讨论质量
+        - 中期（轮次适中）：平衡发言频率
+        - 后期（轮次多）：优先照顾未发言或少发言学生
+        """
         pool = [aid for aid in candidates if aid and aid !=
                 last_speaker] or list(candidates)
         if not pool:
             return ""
 
+        # 计算讨论阶段
+        avg_turns = total_turns / agent_count if agent_count > 0 else 0
+        should_balance_turns = avg_turns >= 3
+        final_balance_phase = total_turns >= agent_count * 4 if agent_count > 0 else False
+
+        # 【早期】优先权重和认知负荷，不强行照顾未发言学生
+        if not should_balance_turns:
+            ranked = sorted(
+                pool,
+                key=lambda aid: (-ActionDistributionService.compute_router_trait_weight(
+                    aid, personas.get(aid, {}), self_efficacy_state, cognitive_load_state), aid),
+            )
+            return ranked[0]
+
+        # 【后期】优先照顾未发言学生
+        if final_balance_phase:
+            never_spoken = [
+                aid for aid in pool if turn_counts.get(aid, 0) == 0]
+            if never_spoken:
+                # 在未发言学生中根据权重排序
+                ranked = sorted(
+                    never_spoken,
+                    key=lambda aid: (-ActionDistributionService.compute_router_trait_weight(
+                        aid, personas.get(aid, {}), self_efficacy_state, cognitive_load_state), aid),
+                )
+                return ranked[0]
+
+        # 【中期或无未发言学生】选择发言最少的学生
         min_turn = min(turn_counts.get(aid, 0) for aid in pool)
         least_spoken = [
             aid for aid in pool if turn_counts.get(aid, 0) == min_turn]
@@ -738,7 +816,7 @@ class ActionDistributionService:
         ranked = sorted(
             least_spoken,
             key=lambda aid: (-ActionDistributionService.compute_router_trait_weight(
-                aid, personas.get(aid, {}), self_efficacy_state), aid),
+                aid, personas.get(aid, {}), self_efficacy_state, cognitive_load_state), aid),
         )
         return ranked[0]
 
@@ -810,74 +888,6 @@ class ActionDistributionService:
         if level_ratio["low"] >= 0.55:
             return "low"
         return "medium"
-
-    @staticmethod
-    def build_dynamic_non_silence_prior_weights(persona: Dict) -> Dict[str, float]:
-        weights = dict(BASE_NON_SILENCE_PRIOR_WEIGHTS)
-        scores = _extract_numeric_trait_scores(persona)
-        personality = scores["personality"]
-
-        agreeableness = int(personality.get("agreeableness", 3))
-        conscientiousness = int(personality.get("conscientiousness", 3))
-        extraversion = int(personality.get("extraversion", 3))
-        openness = int(personality.get("openness", 3))
-        spa_band = ActionDistributionService.estimate_spa_band(persona)
-
-        if agreeableness > 3:
-            weights["accumulation"] = max(weights["accumulation"], 0.78)
-        if conscientiousness > 3:
-            weights["accumulation"] *= 0.8
-
-        if extraversion > 3 and openness > 3:
-            weights["seeking_help_alignment"] = max(
-                weights["seeking_help_alignment"], 0.20)
-        elif extraversion > 3 or openness > 3:
-            weights["seeking_help_alignment"] = max(
-                weights["seeking_help_alignment"], 0.16)
-
-        if spa_band == "high":
-            weights["seeking_help_alignment"] = max(
-                weights["seeking_help_alignment"], 0.18)
-
-        if conscientiousness > 3:
-            weights["correction_challenge"] = max(
-                weights["correction_challenge"], 0.13)
-
-        if spa_band == "high":
-            weights["correction_challenge"] = max(
-                weights["correction_challenge"], 0.10)
-
-        if spa_band == "low":
-            weights["correction_challenge"] = min(
-                weights["correction_challenge"], 0.029)
-
-        if agreeableness > 3:
-            weights["correction_challenge"] = min(
-                weights["correction_challenge"], 0.012)
-
-        return {k: max(0.001, float(v)) for k, v in weights.items()}
-
-    @staticmethod
-    def build_action_prior_distribution(
-            silence_prior: float,
-            non_silence_weights: Dict[str, float],
-            action_options: List[str],
-    ) -> Dict[str, float]:
-        silence_prior = max(0.0, min(1.0, float(silence_prior)))
-        non_silence_mass = max(0.0, 1.0 - silence_prior)
-
-        non_silence_total = sum(max(0.0, v)
-                                for v in non_silence_weights.values())
-        if non_silence_total <= 0:
-            non_silence_total = 1.0
-
-        prior = {
-            "seeking_help_alignment": non_silence_mass * max(0.0, non_silence_weights["seeking_help_alignment"]) / non_silence_total,
-            "correction_challenge": non_silence_mass * max(0.0, non_silence_weights["correction_challenge"]) / non_silence_total,
-            "accumulation": non_silence_mass * max(0.0, non_silence_weights["accumulation"]) / non_silence_total,
-            "silence": silence_prior,
-        }
-        return ActionDistributionService.normalize_distribution(prior, action_options, fallback=prior)
 
 
 logger = logging.getLogger(__name__)

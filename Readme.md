@@ -89,5 +89,5 @@ PBL 的核心是引导学生从“临床表现”转向“病理机制”。
 To run the backend agent tests, navigate to the `PBL/` root directory and run:
 
 ```bash
-python -m unittest backend/test_agents.py
+python -m backend.offline_batch
 ```

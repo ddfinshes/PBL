@@ -37,13 +37,14 @@ from .agent_config import (
 # -------------------- 公共 LLM 实例 --------------------
 
 MES_INDEX = -3
-MAX_DISCUSSION_TURNS = 20
-OBJECTIVE_EVAL_INTERVAL = 3
+MAX_DISCUSSION_TURNS = 15
+OBJECTIVE_EVAL_INTERVAL = 1  # 每条消息后都评估动态水平，确保及时更新
 
 ACTION_OPTIONS = [
     "seeking_help_alignment",
     "correction_challenge",
     "accumulation",
+    "nonsense",
     "silence",
 ]
 
@@ -51,6 +52,7 @@ ACTION_DISPLAY_LABELS = {
     "seeking_help_alignment": "探索性提问",
     "correction_challenge": "纠错挑战",
     "accumulation": "累积补充",
+    "nonsense": "胡扯",
     "silence": "沉默",
 }
 
@@ -80,10 +82,6 @@ async def _ainvoke_with_log(llm: ChatOpenAI, prompt, purpose: str):
     result = await llm.ainvoke(prompt)
     logger.info("LLM_CALL_END purpose=%s", purpose)
     return result
-
-
-def _normalize_knowledge_level(level: str, default: str = "low") -> str:
-    return KnowledgeStateService.normalize_level(level, default)
 
 
 def _compute_knowledge_level_ratio(persona: Dict) -> Dict[str, float]:
@@ -379,21 +377,6 @@ async def _parallel_internalize_for_all_agents(state: Dict, messages: List[BaseM
     }
 
 
-def _build_recent_silence_context(messages: List[BaseMessage], window: int = 6) -> str:
-    recent = messages[-window:] if messages else []
-    silence_names: List[str] = []
-    for message in recent:
-        content = str(getattr(message, "content", "") or "").strip()
-        name = str(getattr(message, "name", "") or "").strip()
-        if content == "..." and name:
-            silence_names.append(name)
-
-    if not silence_names:
-        return "No recent peer silence."
-
-    return f"Recent peers who chose silence: {', '.join(silence_names)}"
-
-
 def _extract_teacher_nominated_agent(messages: List[BaseMessage], agent_ids: List[str]) -> str:
     if not messages or not agent_ids:
         return ""
@@ -430,6 +413,7 @@ def _build_router_preference_summary(agent_ids: List[str], state: Dict) -> str:
         agent_ids=agent_ids,
         personas=student_personas,
         self_efficacy_state=state.get("self_efficacy", {}),
+        cognitive_load_state=state.get("cognitive_load", {}),
     )
 
 
@@ -457,12 +441,17 @@ def _deterministic_router_fallback(
     turn_counts: Dict[str, int],
     last_speaker: str,
 ) -> str:
+    total_turns = sum(turn_counts.values())
+    agent_count = len(candidates)
     return ActionDistributionService.deterministic_router_fallback(
         candidates=candidates,
         personas=student_personas,
         self_efficacy_state=state.get("self_efficacy", {}),
+        cognitive_load_state=state.get("cognitive_load", {}),
         turn_counts=turn_counts,
         last_speaker=last_speaker,
+        total_turns=total_turns,
+        agent_count=agent_count,
     )
 
 
@@ -801,93 +790,87 @@ def _extract_numeric_trait_scores(persona: Dict) -> Dict[str, Dict[str, int]]:
     return _extract_numeric_trait_scores_orig(persona)
 
 
-def _compute_dynamic_silence_prior(
-    agent_id: str,
+def _compute_action_prior_distribution(
     persona: Dict,
     state: Dict,
     load_level: int,
     self_efficacy_level: int,
     messages: List[BaseMessage],
-    teacher_interrupt: bool,
-) -> float:
-    """Compute a stochastic silence prior from trigger conditions.
-
-    Higher trigger intensity -> higher prior, with a small random jitter.
-    """
-    if teacher_interrupt:
-        return 0.0
-
-    scores = _extract_numeric_trait_scores(persona)
-    learning = scores["learning"]
-    personality = scores["personality"]
-    level_ratio = _compute_knowledge_level_ratio(persona)
-    knowledge_gap_signal = level_ratio["low"] > 0.5
-
-    dominant_speaker, dominant_count = _find_recent_dominant_speaker(messages)
-    dominant_peer_suppression = False
-    if dominant_speaker and dominant_speaker != agent_id and dominant_count >= 2:
-        peer_persona = student_personas.get(dominant_speaker, {})
-        peer_scores = _extract_numeric_trait_scores(peer_persona)
-        dominant_peer_suppression = (
-            peer_scores["personality"]["extraversion"] > 3
-            and _has_high_knowledge_profile(peer_persona)
-            and personality["extraversion"] < 3
-        )
-
-    self_efficacy_state: Dict[str, int] = state.get("self_efficacy", {}) or {}
-    low_efficacy_peers = [
-        aid for aid, level in self_efficacy_state.items()
-        if aid != agent_id and isinstance(level, int) and level <= 3
-    ]
-
-    # Base silence rate and additive trigger effects.
-    silence_score = 0.05
-    if knowledge_gap_signal:
-        silence_score += 0.18
-    if personality["neuroticism"] > 3 and self_efficacy_level <= 6:
-        silence_score += 0.16
-    if load_level >= 9:
-        silence_score += 0.22
-    elif load_level >= 6:
-        silence_score += 0.06
-    if learning["deep"] > 3 and (knowledge_gap_signal or load_level >= 6):
-        silence_score += 0.08
-    if personality["conscientiousness"] > 3 and (knowledge_gap_signal or load_level >= 6):
-        silence_score += 0.06
-    if personality["agreeableness"] > 3 and low_efficacy_peers:
-        silence_score += 0.07
-    if learning["strategic"] > 3 and (dominant_peer_suppression or load_level >= 6):
-        silence_score += 0.07
-    if dominant_peer_suppression:
-        silence_score += 0.11
-
-    # Randomness: slight stochastic jitter around trigger-based baseline.
-    jitter = random.uniform(-0.04, 0.04)
-    silence_prior = silence_score + jitter
-    return max(0.0, min(0.80, silence_prior))
-
-
-def _build_dynamic_non_silence_prior_weights(persona: Dict) -> Dict[str, float]:
-    """Rule-based prior adjustment for non-silence actions.
-
-    Implements constraints requested by user:
-    - accumulation: boosted by high agreeableness; reduced by high conscientiousness
-    - seeking_help_alignment: boosted by high extraversion/openness and high SPA
-    - correction_challenge: boosted by high conscientiousness; suppressed by low SPA / very high agreeableness
-    """
-    return ActionDistributionService.build_dynamic_non_silence_prior_weights(persona)
-
-
-def _build_action_prior_distribution(
-    silence_prior: float,
-    non_silence_weights: Dict[str, float],
+    knowledge_status: Dict = None,
+    teacher_interrupt: bool = False,
 ) -> Dict[str, float]:
-    """Build four-action prior distribution that strictly sums to 1."""
-    return ActionDistributionService.build_action_prior_distribution(
-        silence_prior,
-        non_silence_weights,
-        ACTION_OPTIONS,
-    )
+    """
+    Compute unified action prior distribution (1-9 scale for load and self_efficacy).
+
+    Base distribution: 
+    - silence 5% (dynamic)
+    - nonsense 15% (fixed - off-topic rambling)
+    - accumulation 63% (fixed - learning-oriented)
+    - seeking_help 10% (fixed - learning-oriented)
+    - correction 7% (fixed - learning-oriented)
+
+    Dynamic adjustment: ONLY silence can vary based on state (capped).
+    After calculating silence, remaining probability is distributed proportionally 
+    to the base non-silence weights, then normalized.
+
+    Returns: {"silence": float, "nonsense": float, "accumulation": float, "seeking_help_alignment": float, "correction_challenge": float}
+    """
+
+    # === COMPUTE SILENCE PROBABILITY (DYNAMIC) ===
+    if teacher_interrupt:
+        silence_weight = 0.0
+    else:
+        silence_weight = 0.05  # Base silence rate (5%)
+
+        # Self-efficacy impact (continuous 1-9)
+        if self_efficacy_level <= 4:  # Low efficacy
+            silence_weight += 0.15  # Add to base
+        elif self_efficacy_level <= 6:  # Medium efficacy
+            silence_weight += 0.05  # Slight increase
+
+        # Cognitive load impact (continuous 1-9)
+        if load_level >= 8:  # High load
+            silence_weight += 0.10
+        elif load_level >= 6:  # Medium load
+            silence_weight += 0.02
+
+        # Knowledge gap signal
+        level_ratio = _compute_knowledge_level_ratio(persona)
+        if level_ratio.get("low", 0) > 0.5:
+            silence_weight += 0.08
+
+        # Cap silence at reasonable upper bound (around 35-40%)
+        silence_weight = max(0.0, min(0.40, silence_weight))
+
+    # === FIXED BASE DISTRIBUTION FOR NON-SILENCE ACTIONS ===
+    # These proportions are NOT adapted dynamically (evidence-based baseline)
+    base_non_silence_weights = {
+        "accumulation": 0.63,           # 63% of non-silence
+        "seeking_help_alignment": 0.10,  # 10% of non-silence
+        "correction_challenge": 0.07,   # 7% of non-silence
+        # 15% of non-silence (off-topic rambling)
+        "nonsense": 0.15,
+    }
+
+    # === BUILD FINAL DISTRIBUTION ===
+    # Calculate non-silence probability
+    non_silence_prob = 1.0 - silence_weight
+
+    # Distribute non-silence probability according to base weights
+    distribution = {
+        "silence": silence_weight,
+        "accumulation": base_non_silence_weights["accumulation"] * non_silence_prob,
+        "seeking_help_alignment": base_non_silence_weights["seeking_help_alignment"] * non_silence_prob,
+        "correction_challenge": base_non_silence_weights["correction_challenge"] * non_silence_prob,
+        "nonsense": base_non_silence_weights["nonsense"] * non_silence_prob,
+    }
+
+    # Ensure sum = 1 (floating point safety)
+    total = sum(distribution.values())
+    if total > 0 and abs(total - 1.0) > 0.001:
+        distribution = {k: v / total for k, v in distribution.items()}
+
+    return distribution
 
 
 def _format_persona_to_string_safe(persona: Dict) -> str:
@@ -949,21 +932,6 @@ async def _plan_agent_action(
     teacher_interrupt = last_message_name == "teacher" or bool(
         state.get("force_no_silence_once", False))
 
-    silence_prior = _compute_dynamic_silence_prior(
-        agent_id=agent_id,
-        persona=persona,
-        state=state,
-        load_level=load_level,
-        self_efficacy_level=self_efficacy_level,
-        messages=messages,
-        teacher_interrupt=teacher_interrupt,
-    )
-    non_silence_weights = _build_dynamic_non_silence_prior_weights(persona)
-    prior_probs = _build_action_prior_distribution(
-        silence_prior,
-        non_silence_weights,
-    )
-
     if preview_mode:
         kb = persona.get("knowledge_background", {}
                          ) if isinstance(persona, dict) else {}
@@ -996,6 +964,17 @@ async def _plan_agent_action(
         "low_count": mastery_counts["low"],
         "knowledge_brief": knowledge_brief,
     }
+
+    # Unified action prior distribution calculation
+    prior_probs: Dict[str, float] = _compute_action_prior_distribution(
+        persona=persona,
+        state=state,
+        load_level=load_level,
+        self_efficacy_level=self_efficacy_level,
+        messages=messages,
+        knowledge_status=knowledge_status,
+        teacher_interrupt=teacher_interrupt,
+    )
     last_message = messages[-1] if messages else None
     last_message_speaker = str(getattr(last_message, "name", "") or "unknown")
     last_message_content = str(
@@ -1010,6 +989,8 @@ async def _plan_agent_action(
     recent_silence_count = sum(
         1 for m in recent_slice if _is_silence_like_content(str(getattr(m, "content", "") or ""))
     )
+
+    # 基础讨论状态信息（不做硬编码判断，由 LLM 自己分析）
     discussion_state = {
         "teacher_interrupt": teacher_interrupt,
         "last_message_speaker": last_message_speaker,
@@ -1017,23 +998,53 @@ async def _plan_agent_action(
         "recent_silence_count": recent_silence_count,
     }
 
-    persona_text_for_plan = _format_persona_to_string_safe(persona)
+    persona_text_for_plan = format_persona_to_string(persona) if not preview_mode else (
+        f"姓名:{persona.get('name', 'Student')}\n"
+        f"学习风格(1-5): surface={persona.get('learning_style', {}).get('surface', 3)}\n"
+        f"人格(1-5): neuroticism={persona.get('personality', {}).get('neuroticism', 3)}"
+    )
 
     planner_prompt = (
-        "你是医学PBL讨论中的行动规划器。\n"
-        "你只负责规划动作，不负责生成最终发言。\n"
-        "请进行动态决策：先看当前讨论态势，再看学生人格与学习风格，最后才参考先验分布。\n"
-        f"可选动作: {', '.join(ACTION_OPTIONS)}\n"
-        "注意：若老师刚介入，禁止选择 silence。\n"
-        "行动先验分布（已按当前沉默触发强度动态计算）如下，它仅用于弱指导，不可覆盖动态判断：\n"
+        "你是医学PBL讨论中的行动规划器。只负责规划动作，不负责生成发言。\n"
+        "【可选动作】\n"
+        "accumulation：补充医学信息/案例/证据\n"
+        "seeking_help_alignment：询问/澄清/寻求共识\n"
+        "correction_challenge：指出错误/质疑/反驳\n"
+        "silence：保持沉默\n\n"
+        "non-sense：与讨论无关的发言\n\n"
+        "【决策框架】\n"
+        "1. 理解学生人格倾向（3分为基准值）\n"
+        "- neuroticism高：倾向沉默，并且避免风险性发言\n"
+        "- agreeableness高：倾向避免冲突、喜欢附和别人\n"
+        "- extraversion高：倾向发言，不沉默\n\n"
+        "2. 检查动态状态（1-9连续值）\n"
+        f"- self_efficacy: {self_efficacy_level} (≤4低信心，≥7高信心)\n"
+        f"- cognitive_load: {load_level} (≤3低负荷，≥8高负荷)\n\n"
+        "3. 参考行动先验分布（基于性格、知识、状态综合计算）\n"
         f"{json.dumps(prior_probs, ensure_ascii=False)}\n"
-        "决策优先级（必须遵守）：\n"
-        "1. 讨论态势优先：是否有冲突、重复、卡顿、需要澄清或推进。\n"
-        "2. 人格与学习风格次之：外向/宜人/神经质/深层学习/策略学习等决定表达方式。\n"
-        "3. 先验分布最后：仅在前两者不能区分时作为轻微偏好。\n"
+        f"知识：掌握高={knowledge_status.get('high_ratio', 0):.0%}, 低={knowledge_status.get('low_ratio', 0):.0%}\n\n"
+        "4. 分析讨论内容逻辑与冲突\n\n"
+        "输出格式：{\"action\": \"...\", \"reason\": \"...\", \"action_description\": \"...\", \"reply_focus\": \"...\"}\n\n"
+        f"[人设]\n{persona_text_for_plan}\n\n"
+        f"[状态]\n{json.dumps(discussion_state, ensure_ascii=False)}\n\n"
+        f"[知识]\n{json.dumps(knowledge_status, ensure_ascii=False)}\n\n"
+        f"[对话]\n{recent_dialogue}"
+        "这些权重已经综合了所有这些因素，不需要你再次思考它们——直接遵循权重分布就是在遵循你的真实倾向。\n\n"
+        "第四步：分析最近对话内容\n"
+        "最后，根据最近对话是否有逻辑漏洞、观点冲突或证据不足，在权重的指引下做出微调。\n\n"
+        "【决策原则】\n"
+        "1. 你的行动选择应该自然反映你的性格和当前状态（已编码在先验分布中）\n"
+        "2. 然后根据最近对话的具体内容灵活微调\n"
+        "3. 不要机械地遵循规则，而是让性格驱动你的选择\n\n"
+        "【重要提醒】\n"
+        "1. 禁止老师介入时选择 silence\n"
+        "2. 权重分布 + 讨论内容 + 学生人设= 你的完整决策基础\n"
+        "   不要过度理性计算，而是让这两个信号自然驱动你的选择\n"
+        "3. 沉默权重特别高的情况（自动由权重计算）：self_efficacy 过低、或cognitive_load 过高\n"
+        "   这些情况下，即使有话想说，你也会自然倾向于沉默\n"
         "严格输出JSON：\n"
         "{\n"
-        "  \"action\": \"seeking_help_alignment|correction_challenge|accumulation|silence\",\n"
+        "  \"action\": \"seeking_help_alignment|correction_challenge|accumulatio|silence|non-sense\",\n"
         "  \"action_description\": \"一句动作执行说明（<=30字）\",\n"
         "  \"reason\": \"一句话原因（必须同时包含1个‘人格/学习风格’依据和1个‘讨论态势’依据）\",\n"
         "  \"reply_focus\": \"一句话回复重点\"\n"
@@ -1041,14 +1052,11 @@ async def _plan_agent_action(
         f"[老师刚介入]\n{teacher_interrupt}\n\n"
         f"[学生人设]\n{persona_text_for_plan}\n\n"
         f"[人格与学习风格关键量表]\n{json.dumps(trait_scores, ensure_ascii=False)}\n\n"
-        f"[当前讨论态势摘要]\n{json.dumps(discussion_state, ensure_ascii=False)}\n\n"
+        f"[讨论基础状态]\n{json.dumps(discussion_state, ensure_ascii=False)}\n\n"
         f"[当前知识水平]\n{json.dumps(knowledge_status, ensure_ascii=False)}\n\n"
-        f"[上一条消息]\n{last_message_speaker}: {last_message_content or '无'}\n\n"
-        f"[你最近私有记忆]\n{json.dumps(memory_brief, ensure_ascii=False)}\n\n"
+        f"[你最近私有记忆,包含了最近的对话内容]\n{json.dumps(memory_brief, ensure_ascii=False)}\n\n"
         f"[你上一次发言]\n{self_last_utterance or '无'}\n\n"
         f"[沉默机制提示]\n{silence_hint}\n\n"
-        f"[沉默触发引导]\n{silence_prompt}\n\n"
-        f"[最近对话]\n{recent_dialogue or '无'}"
     )
 
     try:
@@ -1166,73 +1174,25 @@ student_nodes: Dict[str, Callable] = {}
 
 
 def init_cognitive_load(persona: Dict) -> int:
-    """Initialize cognitive load normalized to 3/6/9."""
-    # Default to medium load
-    return 6
-
-
-def describe_cognitive_load_level(level: int) -> str:
-    """将 3/6/9 映射为自然语言描述。"""
-    if level >= 9:
-        return "高"
-    if level >= 6:
-        return "中"
-    return "低"
-
-
-# 自我效能感（初始化）
+    """Initialize cognitive load as continuous 1-9 scale."""
+    return 1  # Start at low
 
 
 def self_efficacy_init(persona: Dict) -> int:
-    """基于人格初始设置自我效能（3/6/9）。"""
-    self_efficacy_init_score = {
-        "high_agreeableness_low_neuroticism": 9,
-        "high_conscientiousness_high_openness": 6,
-        "high_neuroticism": 3,
-    }
-    personality = persona.get(
-        "personality", 6)  # 默认中等水平
-
+    """Initialize self-efficacy as continuous 1-9 scale based on personality."""
+    personality = persona.get("personality", {})
     if isinstance(personality, dict):
         try:
-            conscientiousness = int(personality.get("conscientiousness", 3))
+            conscientiousness = int(personality.get("conscientiousness", 5))
+            neuroticism = int(personality.get("neuroticism", 5))
+            if conscientiousness > 5 and neuroticism < 5:
+                return 8  # High confidence
+            if neuroticism > 5:
+                return 3  # Low confidence
+            return 5
         except (TypeError, ValueError):
-            conscientiousness = 3
-        try:
-            neuroticism = int(personality.get("neuroticism", 3))
-        except (TypeError, ValueError):
-            neuroticism = 3
-        if conscientiousness > 3 and neuroticism < 3:
-            return 9
-        if neuroticism > 3:
-            return 3
-        return 6
-
-    return self_efficacy_init_score.get(personality, 6)
-
-
-def describe_self_efficacy_level(level: int) -> str:
-    if level >= 9:
-        return "高"
-    if level >= 6:
-        return "中"
-    return "低"
-
-
-def _normalize_level_369(value: int) -> int:
-    if value >= 8:
-        return 9
-    if value >= 5:
-        return 6
-    return 3
-
-
-def _extract_level_369_from_text(text: str, default_level: int) -> int:
-    raw = str(text or "").strip()
-    m = re.search(r"\b(3|6|9)\b", raw)
-    if m:
-        return int(m.group(1))
-    return _normalize_level_369(default_level)
+            return 5
+    return 5
 
 
 async def _llm_update_self_efficacy_level(
@@ -1241,30 +1201,28 @@ async def _llm_update_self_efficacy_level(
     recent_dialogue: str,
     memory_brief: List[Dict],
 ) -> int:
-    prev_level = _normalize_level_369(prev_level)
-    prev_label = describe_self_efficacy_level(prev_level)
+    """Update self_efficacy as a continuous 1-9 value."""
     prompt = (
         "你是一名医学 PBL 学生自我效能评估专家。\n"
-        f"学生 '{agent_id}' 当前自我效能水平为：{prev_label}（在 3-6-9 量表中对应 {prev_level}）。\n"
+        f"学生 '{agent_id}' 当前自我效能水平为：{prev_level}（在 1-9 量表中）。\n"
         "请仅依据下面的近期对话与私有记忆，判断该学生自我效能应如何变化。\n\n"
-        "以下情况提高自我效能：\n"
-        "- 老师明确表扬该生的问题或观点（如最喜欢的问题、观点优秀）；\n"
-        "- 同伴明确采纳或直接沿用该生先前观点。\n"
-        "以下情况降低自我效能：\n"
-        "- 该生连续多轮表达听不懂同伴的深层推理；\n"
-        "- 该生观点被老师或多名同伴直接且强烈否定。\n"
-        "若正负信号较弱或相互抵消，则保持不变。\n\n"
-        "输出规则：\n"
-        "- 先在 {{低, 中, 高}} 中判断新水平；\n"
-        "- 再严格映射到 {{3, 6, 9}}；\n"
-        "- 只输出一个整数：3 或 6 或 9，不要解释。\n"
-        "输出内容必须只包含数字。\n\n"
+        "【判断标准】\n"
+        "- 提升信号：老师表扬、同伴采纳、成功challenge、知识被认可 → 增加1-3\n"
+        "- 降低信号：被多次质疑、被批评纠正、观点被反对、多轮沉默 → 减少1-3\n"
+        "- 一次challenge不构成显著影响，但连续多次会显著降低\n"
+        "- 被老师challenge比被同伴challenge影响更大\n\n"
+        "输出：只输出修改后的数字 1-9，不要解释。\n\n"
         f"[近期对话]\n{recent_dialogue or '无'}\n\n"
         f"[近期私有记忆]\n{json.dumps(memory_brief, ensure_ascii=False)}"
     )
     try:
         result = await _ainvoke_with_log(SUM_LLM, prompt, f"self_efficacy_update:{agent_id}")
-        return _extract_level_369_from_text(str(result.content or ""), prev_level)
+        text = str(result.content or "").strip()
+        m = re.search(r"\d+", text)
+        if m:
+            new_level = int(m.group(0))
+            return max(1, min(9, new_level))
+        return prev_level
     except Exception as e:
         print(f"ERROR: self efficacy update failed for {agent_id}: {e}")
         return prev_level
@@ -1276,30 +1234,27 @@ async def _llm_update_cognitive_load_level(
     recent_dialogue: str,
     memory_brief: List[Dict],
 ) -> int:
-    prev_level = _normalize_level_369(prev_level)
-    prev_label = describe_cognitive_load_level(prev_level)
+    """Update cognitive_load as a continuous 1-9 value."""
     prompt = (
         "你是一名医学 PBL 学生认知负荷评估专家。\n"
-        f"学生 '{agent_id}' 当前认知负荷水平为：{prev_label}（在 3-6-9 量表中对应 {prev_level}）。\n"
+        f"学生 '{agent_id}' 当前认知负荷水平为：{prev_level}（在 1-9 量表中）。\n"
         "请仅依据下面的近期对话与私有记忆，判断该学生认知负荷应如何变化。\n\n"
-        "以下情况提高认知负荷：\n"
-        "- 学生连续出现理解断裂、频繁求助但仍无法整合信息；\n"
-        "- 对话中出现高强度冲突且学生表现出明显混乱或退缩。\n"
-        "以下情况降低认知负荷：\n"
-        "- 学生能稳定整合证据并形成清晰、可执行的下一步判断；\n"
-        "- 学生在近期回合中表达出明确理解并能推进讨论。\n"
-        "若正负信号较弱或相互抵消，则保持不变。\n\n"
-        "输出规则：\n"
-        "- 先在 {{低, 中, 高}} 中判断新水平；\n"
-        "- 再严格映射到 {{3, 6, 9}}；\n"
-        "- 只输出一个整数：3 或 6 或 9，不要解释。\n"
-        "输出内容必须只包含数字。\n\n"
+        "【判断标准】\n"
+        "- 提高：学生表现出理解困难、频繁求助无效、高强度冲突混乱 → 增加1-3\n"
+        "- 降低：学生能稳定整合信息、形成清晰判断、成功推进讨论 → 减少1-3\n"
+        "- 若正负信号相互抵消 → 保持不变\n\n"
+        "输出：只输出修改后的数字 1-9，不要解释。\n\n"
         f"[近期对话]\n{recent_dialogue or '无'}\n\n"
         f"[近期私有记忆]\n{json.dumps(memory_brief, ensure_ascii=False)}"
     )
     try:
         result = await _ainvoke_with_log(SUM_LLM, prompt, f"cognitive_load_update:{agent_id}")
-        return _extract_level_369_from_text(str(result.content or ""), prev_level)
+        text = str(result.content or "").strip()
+        m = re.search(r"\d+", text)
+        if m:
+            new_level = int(m.group(0))
+            return max(1, min(9, new_level))
+        return prev_level
     except Exception as e:
         print(f"ERROR: cognitive load update failed for {agent_id}: {e}")
         return prev_level
@@ -1318,15 +1273,17 @@ async def _update_dynamic_levels_from_private_memory(
     self_efficacy_state: Dict[str, int] = dict(
         state.get("self_efficacy", {}) or {})
 
-    total_messages = int(state.get("total_messages", 0) or 0)
-    should_run_dynamic_eval = (
-        total_messages > 0 and total_messages % OBJECTIVE_EVAL_INTERVAL == 0
-    )
+    # Initialize if not present
+    if agent_id not in cognitive_load_state:
+        cognitive_load_state[agent_id] = init_cognitive_load(persona)
+    if agent_id not in self_efficacy_state:
+        self_efficacy_state[agent_id] = self_efficacy_init(persona)
 
-    current_load = _normalize_level_369(
-        int(cognitive_load_state.get(agent_id, init_cognitive_load(persona))))
-    current_se = _normalize_level_369(
-        int(self_efficacy_state.get(agent_id, self_efficacy_init(persona))))
+    current_load = max(1, min(9, int(cognitive_load_state.get(agent_id, 5))))
+    current_se = max(1, min(9, int(self_efficacy_state.get(agent_id, 5))))
+
+    total_messages = int(state.get("total_messages", 0) or 0)
+    should_run_dynamic_eval = total_messages > 0 and total_messages % OBJECTIVE_EVAL_INTERVAL == 0
 
     if not should_run_dynamic_eval:
         cognitive_load_state[agent_id] = current_load
@@ -1353,13 +1310,12 @@ async def _update_dynamic_levels_from_private_memory(
         memory_brief=memory_brief,
     )
 
-    new_load = _normalize_level_369(new_load)
-    new_se = _normalize_level_369(new_se)
+    new_load = max(1, min(9, new_load))
+    new_se = max(1, min(9, new_se))
 
     cognitive_load_state[agent_id] = new_load
     self_efficacy_state[agent_id] = new_se
 
-    # Keep the newest memory item aligned with the latest internal state snapshot.
     if recent_memory:
         recent_memory[-1]["cognitive_load"] = new_load
         recent_memory[-1]["self_efficacy"] = new_se
@@ -1501,7 +1457,9 @@ def _student_node_fn(agent_id: str):
             "(3) 累积/补充：学生在不挑战他人的情况下，互相重复或确认彼此的论点即：简单支持、证据叠加）。"
         )
 
-        load_label = describe_cognitive_load_level(load_level)
+        # load_label: Simple mapping for 1-9 continuous scale
+        load_label = "低" if load_level <= 3 else (
+            "高" if load_level >= 8 else "中")
         teacher_response_constraint = ""
         last_message_name = str(
             getattr(messages[-1], "name", "") or "").lower() if messages else ""
@@ -1632,7 +1590,7 @@ def register_student_agent(agent_id: str, persona: dict):
 
 
 async def teacher_handler_node(state: Dict) -> Dict:
-    """当老师插话后，让系统回复老师并重置标志。"""
+    """当老师插话后，让系统回复老师、重置标志，然后重新执行并行预处理来更新所有状态。"""
     messages: List[BaseMessage] = state["messages"]
     print(f"messages: {messages}")
 
@@ -1651,6 +1609,7 @@ async def teacher_handler_node(state: Dict) -> Dict:
         "is_teacher_interrupted": False,
         "force_no_silence_once": True,
         "teacher_nominated_agent": nominated_agent,
+        "next_speaker": "message_prepare_parallel",  # 老师干预后，重新执行并行预处理更新状态
     }
 
 
@@ -1843,6 +1802,134 @@ async def knowledge_eval_node(state: Dict) -> Dict:
 
     return {}
 
+# --------- 并行消息预处理节点（同时调用话题检测、知识评估、目标评估）---------
+
+
+async def message_prepare_parallel_node(state: Dict) -> Dict:
+    """
+    并行处理新消息：同时调用已有的节点函数进行话题检测、知识评估、目标评估、私有记忆更新。
+    等待所有 LLM 调用完成后再返回。
+
+    如果讨论被暂停或停止，则执行单次更新后返回暂停/停止状态。
+    """
+    print(
+        "DEBUG: [Message Prepare Parallel] started - launching parallel LLM calls...")
+
+    # === 检查讨论状态 ===
+    if not state.get("discussion_active", True):
+        print(
+            "DEBUG: [Message Prepare Parallel] Discussion not active, skipping parallel processing")
+        return {"next_speaker": "END", "end_reason": "discussion_inactive"}
+
+    messages: List[BaseMessage] = state["messages"]
+    if not messages:
+        print("DEBUG: [Message Prepare Parallel] No messages, skipping")
+        return {}
+
+    # === Task 1: Topic Detection（直接调用已有的节点）===
+    async def run_topic_detection():
+        try:
+            result = await topic_manager_node(state)
+            print(f"DEBUG: [Parallel] Topic detection completed")
+            return result
+        except Exception as e:
+            print(f"ERROR: [Parallel] Topic detection failed: {e}")
+            return {}
+
+    # === Task 2: Knowledge Coverage Evaluation（直接调用已有的节点）===
+    async def run_knowledge_evaluation():
+        try:
+            result = await knowledge_eval_node(state)
+            print(f"DEBUG: [Parallel] Knowledge evaluation completed")
+            return result
+        except Exception as e:
+            print(f"ERROR: [Parallel] Knowledge evaluation failed: {e}")
+            return {}
+
+    # === Task 3: Learning Objectives Evaluation（直接调用已有的函数）===
+    async def run_objectives_evaluation():
+        try:
+            current_trigger_question = str(
+                getattr(pbl_info, "current_trigger_question", "") or ""
+            ).strip()
+            current_learning_objectives = list(
+                getattr(pbl_info, "current_learning_objectives", []) or []
+            )
+            rt_key = f"{getattr(pbl_info, 'active_scene_index', 0)}_{getattr(pbl_info, 'active_question_index', 0)}"
+            current_overrides = dict(
+                getattr(pbl_info, "objective_overrides",
+                        {}).get(rt_key, {}) or {}
+            )
+
+            if not current_learning_objectives or len(messages) < 3:
+                return {
+                    "achieved_all": False,
+                    "objective_evaluations": [],
+                }
+
+            result = await _objectives_achieved_by_llm(
+                messages=messages,
+                trigger_question=current_trigger_question,
+                learning_objectives=current_learning_objectives,
+                teacher_overrides=current_overrides,
+            )
+
+            print(f"DEBUG: [Parallel] Objectives evaluation completed")
+            return {
+                "achieved_all": result.get("achieved_all", False),
+                "objective_evaluations": result.get("objective_evaluations", []),
+            }
+        except Exception as e:
+            print(f"ERROR: [Parallel] Objectives evaluation failed: {e}")
+            return {"achieved_all": False, "objective_evaluations": []}
+
+    # === Task 4: Parallel Internalization & State Updates（直接调用已有的函数）===
+    async def run_internalization():
+        try:
+            result = await _parallel_internalize_for_all_agents(state, messages)
+            print(f"DEBUG: [Parallel] Internalization completed")
+            return result
+        except Exception as e:
+            print(f"ERROR: [Parallel] Internalization failed: {e}")
+            return {}
+
+    # === 并行执行所有任务 ===
+    print("DEBUG: [Message Prepare Parallel] Launching 4 parallel tasks...")
+    results = await asyncio.gather(
+        run_topic_detection(),
+        run_knowledge_evaluation(),
+        run_objectives_evaluation(),
+        run_internalization(),
+        return_exceptions=True
+    )
+
+    # 处理任何异常
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            print(
+                f"ERROR: [Parallel] Task {i} failed with exception: {result}")
+            results[i] = {}
+
+    # === 合并结果 ===
+    merged_result = {}
+    for result in results:
+        if isinstance(result, dict):
+            merged_result.update(result)
+
+    # === 检查讨论暂停状态 ===
+    if state.get("discussion_paused", False):
+        print(
+            "DEBUG: [Message Prepare Parallel] Discussion paused, returning pause_wait")
+        merged_result["next_speaker"] = "pause_wait"
+        return merged_result
+
+    # 只添加路由指令，其他字段完全由并行任务决定
+    merged_result["next_speaker"] = "router"
+
+    print(
+        "DEBUG: [Message Prepare Parallel] All parallel tasks completed, routing to router")
+    return merged_result
+
 # --------- 动态路由器节点 ---------
 
 
@@ -2024,7 +2111,7 @@ async def router_node(state: Dict) -> Dict:
         se_level = self_efficacy_state.get(aid)
         if se_level is None:
             se_level = self_efficacy_init(persona)
-        se_label = describe_self_efficacy_level(se_level)
+        se_label = ("低" if se_level <= 4 else ("高" if se_level >= 7 else "中"))
         se_descriptions.append(f"{aid}: {se_label} ({se_level})")
     se_summary_str = "; ".join(se_descriptions)
 
@@ -2033,6 +2120,9 @@ async def router_node(state: Dict) -> Dict:
         aid for aid in agent_ids if turn_counts.get(aid, 0) == 0]
 
     options_str = ", ".join(agent_ids)
+    total_turns = sum(turn_counts.values())
+    agent_count = len(agent_ids)
+
     trait_pref_summary = _build_router_preference_summary(agent_ids, state)
     turn_count_summary = _build_router_turn_count_summary(
         agent_ids, turn_counts)
@@ -2040,33 +2130,35 @@ async def router_node(state: Dict) -> Dict:
     print(
         "DEBUG: [Router Node] evaluating next speaker without stage constraints")
 
-    decision_principle = (
-        "你的决策原则：判断讨论是否仍在产生新的医学信息增量。\n"
-        "如果最近几轮主要是重复、改写，且没有新的关键线索，请选择 END。"
-    )
+    # 计算讨论阶段指标
+    avg_turns_per_agent = total_turns / agent_count if agent_count > 0 else 0
 
     router_prompt_str = (
-        f"你是医学 PBL 讨论主持人。请基于当前对话内容并遵循以下规则，选择下一位发言者：\n\n"
+        f"你是医学 PBL 讨论主持人。请基于学生的性格特征，选择下一位发言者：\n\n"
         f"**可选项**：{options_str}, END（表示讨论已自然结束）\n"
-        f"**上一位发言者**：{last_speaker}。下一位不能与其相同。\n"
-        f"**学生当前自我效能水平（3-6-9）**：{se_summary_str}\n\n"
-        f"**每位学生当前发言次数**：{turn_count_summary}\n\n"
-        f"**尚未发言学生**：{', '.join(never_spoken_agents) if never_spoken_agents else '无'}\n\n"
-        f"**关键人格特征（用于路由）**：{personality_summary}\n\n"
-        f"**学生特征偏好**：{trait_pref_summary}\n\n"
-        f"{decision_principle}"
+        f"**上一位发言者**：{last_speaker}。下一位不能与其相同。\n\n"
 
-        f"[选择下一位学生时]\n"
-        f"- 必须显式考虑每位学生的发言次数，优先补足发言少者；\n"
-        f"- 优先选择尚未充分发言者，或与上一位认知风格差异较大的学生；\n"
-        f"- 在其他条件相近时，优先选择情绪更稳定（低神经质）、合作性更高（高宜人性）、深层学习倾向更强且策略型倾向较低的学生；\n"
-        f"- 将自我效能作为加权因素：高自我效能学生可略微更常被选中；极低自我效能学生应减少频率，除非其参与对达成学习目标确有必要；\n"
-        f"- 若存在尚未发言学生，请在不破坏讨论质量的前提下给予适度机会（不是强制每轮都选）；\n"
-        f"- 避免简单轮转；\n"
-        f"- 目标是推动信息增量，而不是延长对话。\n\n"
+        f"**讨论进度**: 当前已进行 {total_turns} 轮讨论\n"
+        f"**每位学生当前发言次数**：{turn_count_summary}\n"
+        f"**尚未发言学生**：{', '.join(never_spoken_agents) if never_spoken_agents else '无'}\n\n"
+
+        f"【选择规则 - 仅根据性格特征决策】\n"
+        f"1. **性格优先**：严格按照下面的【学生特征偏好排序】选择，这个排序充分反映了每位学生的性格特征、学习风格和当前的情绪状态。\n"
+        f"2. **简单平衡**：只有当讨论轮数 > 8 时，才考虑还没有发言过的学生，给他们优先机会。\n"
+        f"3. **不需要考虑其他因素**：不用管讨论的平衡多少，也不用管认知负荷的具体值，性格排序已经编码了所有这些。\n\n"
+
+        f"**学生特征偏好排序（按性格驱动的优先级，从高到低）**：{trait_pref_summary}\n"
+        f"这个排序基于每位学生的性格特征、自我风格和当前情绪状态综合计算，直接反映了发言的自然倾向。\n\n"
+
+        f"**学生性格维度详情**：{personality_summary}\n\n"
+
+        f"【终止条件】\n"
+        f"如果最近几轮讨论主要是重复、改写，请选择 END。\n\n"
 
         f"只输出一个选项名称（学生 ID 或 END），不要解释。"
     )
+
+    # 移除分阶段逻辑，直接让LLM根据信息自行调整
     prompt = ChatPromptTemplate.from_messages([
         ("system", router_prompt_str),
         MessagesPlaceholder(variable_name="messages"),

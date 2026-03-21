@@ -21,7 +21,6 @@ from .agents import (
     _format_persona_to_string_safe,
     _is_silence_like_content,
     _plan_agent_action,
-    describe_cognitive_load_level,
     init_cognitive_load,
     self_efficacy_init,
 )
@@ -211,7 +210,7 @@ async def generate_student_preview_response(agent_id: str, persona: Dict, trigge
 
     load_level = int(plan.get("load_level", init_cognitive_load(
         safe_persona)) or init_cognitive_load(safe_persona))
-    load_label = describe_cognitive_load_level(load_level)
+    load_label = "低" if load_level <= 3 else ("高" if load_level >= 8 else "中")
 
     active_contribution_behavior_rule = (
         "你需遵循动作规划并保持既有互动风格，动作包括："

@@ -20,6 +20,8 @@ class GraphState(TypedDict):
         discussion_stage: PBL 讨论的当前阶段。
         next_speaker: 预定下一个发言的 Agent。
         is_teacher_interrupted: 标志位，指示老师是否已介入。
+        discussion_active: 讨论是否激活（False=彻底停止）。
+        discussion_paused: 讨论是否暂停（True=暂停，等待恢复）。
         current_topic: 当前讨论的主题。
     """
     messages: Annotated[List[BaseMessage], operator.add]
@@ -27,6 +29,7 @@ class GraphState(TypedDict):
     next_speaker: str
     is_teacher_interrupted: bool
     discussion_active: bool
+    discussion_paused: bool
     current_topic: str
     # 新增：累积消息计数器，每返回 {"total_messages": 1} 即自增
     total_messages: Annotated[int, operator.add]
@@ -51,22 +54,22 @@ def build_graph(agent_ids: List[str]):
     # 1. 动态添加所有学生节点
     for agent_id in agent_ids:
         wf.add_node(agent_id, agents.student_nodes[agent_id])
-        # 每位学生发言后进入 topic_manager 进行主题识别
-        wf.add_edge(agent_id, "topic_manager")
+        # 每位学生发言后进入并行预处理节点进行多任务并发分析
+        wf.add_edge(agent_id, "message_prepare_parallel")
 
     # 2. 添加固定的辅助节点
     wf.add_node("teacher_handler", agents.teacher_handler_node)
-    wf.add_node("topic_manager", agents.topic_manager_node)
-    wf.add_node("knowledge_evaluator", agents.knowledge_eval_node)
-    wf.add_node("summarizer", agents.summarizer_node)
+    # 【新节点 - 并行预处理，同时执行话题检测、知识评估、目标评估、私有记忆更新】
+    wf.add_node("message_prepare_parallel",
+                agents.message_prepare_parallel_node)
     wf.add_node("router", agents.router_node)
 
     # 3. 设置边关系
     wf.add_edge("teacher_handler", "router")
-    # 【优化】线性流水线：识别主题 -> 评估知识覆盖 -> 记忆内化 -> 路由
-    wf.add_edge("topic_manager", "knowledge_evaluator")
-    wf.add_edge("knowledge_evaluator", "summarizer")
-    wf.add_edge("summarizer", "router")
+    # 【新流程】：
+    # - 学生发言 → message_prepare_parallel（4个LLM并发）→ router
+    # - 老师处理 → router
+    wf.add_edge("message_prepare_parallel", "router")
 
     # 4. 设置入口点
     wf.set_entry_point("router")
@@ -79,6 +82,7 @@ def build_graph(agent_ids: List[str]):
     dynamic_mapping = {agent_id: agent_id for agent_id in agent_ids}
     static_mapping = {
         "teacher_handler": "teacher_handler",
+        "pause_wait": END,  # 讨论暂停，等待恢复
         "END": END,
     }
     wf.add_conditional_edges(
