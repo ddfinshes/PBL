@@ -230,15 +230,17 @@ def create_evaluation_user():
             # 更新用户信息，保留其他字段
             existing_data.update({
                 'username': username,
-                'updated_at': datetime.now().isoformat()
+                'last_login': datetime.now().isoformat()
             })
 
             with open(user_file, 'w', encoding='utf-8') as f:
                 json.dump(existing_data, f, ensure_ascii=False, indent=2)
 
             return jsonify({
-                'message': '用户文件已存在，信息已更新',
+                'message': '用户已存在，欢迎回来',
                 'username': username,
+                'is_existing_user': True,
+                'current_case_index': existing_data.get('current_case_index', 0),
                 'user_file': f'{evaluators_dir}/{username}.json'
             })
 
@@ -246,6 +248,7 @@ def create_evaluation_user():
         user_data = {
             'username': username,
             'created_at': datetime.now().isoformat(),
+            'last_login': datetime.now().isoformat(),
             'evaluations': [],
             'current_case_index': 0,
             'total_cases_completed': 0
@@ -278,11 +281,27 @@ def init_evaluation_user():
             print(f"[init-user] 错误：用户名为空")
             return jsonify({'status': 'error', 'message': '用户名不能为空'}), 400
 
+        # 从用户JSON文件中读取现有的 current_case_index
+        evaluators_dir = config.EVALUATORS_DIR
+        user_file = os.path.join(evaluators_dir, f'{username}.json')
+        saved_case_index = 0
+        if os.path.exists(user_file):
+            try:
+                with open(user_file, 'r', encoding='utf-8') as f:
+                    user_data = json.load(f)
+                    saved_case_index = user_data.get('current_case_index', 0)
+                    print(
+                        f"[init-user] 从用户文件加载 saved_case_index: {saved_case_index}")
+            except Exception as e:
+                print(f"[init-user] 读取用户文件失败: {e}")
+
         user_state = get_user_state(username)
         user_state['user_dir'] = get_user_dir(username)
         user_state['user_id'] = user_id
 
-        next_case_index = get_next_case_index(username)
+        # 使用保存的索引，如果没有则使用 get_next_case_index 返回的
+        next_case_index = saved_case_index if saved_case_index < len(
+            case_files) else get_next_case_index(username)
 
         # 设置用户状态
         user_state['current_case_index'] = next_case_index
@@ -316,13 +335,16 @@ def init_evaluation_user():
 
 @app.route('/api/evaluation/navigate', methods=['POST'])
 def navigate_case():
-    """处理案例导航（上一个/下一个）"""
+    """处理案例导航（上一个/下一个/直接跳转）"""
     try:
         data = request.json
-        direction = data.get('direction', 'next')  # 'next' 或 'previous'
+        # 'next', 'previous' 或 'jump'
+        direction = data.get('direction', 'next')
+        new_index = data.get('new_index')
         username = data.get('username', '')
 
-        print(f"收到导航请求 - 用户: {username}, 方向: {direction}")
+        print(
+            f"收到导航请求 - 用户: {username}, 方向: {direction}, new_index: {new_index}")
 
         if not username:
             return jsonify({
@@ -342,8 +364,15 @@ def navigate_case():
                 'message': '没有可用的案例'
             }), 404
 
-        # 根据方向计算新的索引
-        if direction == 'next':
+        # 根据方向或索引计算新的索引
+        if direction == 'jump' and new_index is not None:
+            new_index = int(new_index)
+            if new_index < 0 or new_index >= total_cases:
+                return jsonify({
+                    'status': 'error',
+                    'message': '索引超出范围'
+                }), 400
+        elif direction == 'next':
             if current_index >= total_cases - 1:
                 return jsonify({
                     'status': 'error',
@@ -360,11 +389,29 @@ def navigate_case():
         else:
             return jsonify({
                 'status': 'error',
-                'message': '无效的导航方向'
+                'message': '无效的导航方向或缺失索引'
             }), 400
 
         # 更新用户状态
         user_state['current_case_index'] = new_index
+
+        # 持久化当前进度到用户JSON文件
+        evaluators_dir = config.EVALUATORS_DIR
+        user_file = os.path.join(evaluators_dir, f'{username}.json')
+        if os.path.exists(user_file):
+            try:
+                with open(user_file, 'r', encoding='utf-8') as f:
+                    user_data = json.load(f)
+
+                user_data['current_case_index'] = new_index
+                user_data['updated_at'] = datetime.now().isoformat()
+
+                with open(user_file, 'w', encoding='utf-8') as f:
+                    json.dump(user_data, f, ensure_ascii=False, indent=2)
+                print(
+                    f"[navigate] 已更新用户 {username} 的 current_case_index 为 {new_index}")
+            except Exception as e:
+                print(f"[navigate] 更新用户文件失败: {e}")
 
         # 加载新案例数据
         new_case_data = load_evaluation_case(new_index, username)
@@ -467,6 +514,39 @@ def get_current_evaluation_case():
         return jsonify({
             'status': 'error',
             'message': f'获取案例信息失败: {str(e)}'
+        }), 500
+
+
+@app.route('/api/evaluation/available-cases', methods=['GET'])
+def get_available_cases():
+    """获取所有可用的案例列表"""
+    try:
+        username = request.args.get('username', '')
+
+        # 确保案例文件已初始化
+        if not case_files:
+            initialize_case_files()
+
+        # 从case文件名中提取case编号 (case1, case2, ...转为 1, 2, ...)
+        case_numbers = []
+        for case_file in case_files:
+            if case_file.startswith('case'):
+                try:
+                    case_num = int(case_file.replace('case', ''))
+                    case_numbers.append(case_num)
+                except ValueError:
+                    pass
+
+        return jsonify({
+            'status': 'success',
+            'cases': sorted(case_numbers),
+            'total': len(case_numbers)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'获取案例列表失败: {str(e)}'
         }), 500
 
 
@@ -617,29 +697,45 @@ def submit_evaluation():
 
 @app.route('/api/evaluation/feedback', methods=['POST'])
 def save_feedback():
-    """保存用户反馈"""
+    """保存用户反馈，支持按evaluator_id或agent_name保存"""
     try:
         data = request.get_json()
         print(f"收到反馈保存请求，数据: {data}")
 
         username = data.get('username')
         case_id = data.get('case_id')
-        evaluator_id = data.get('evaluator_id')
+        evaluator_id = data.get('evaluator_id')  # 向后兼容
+        agent_name = data.get('agent_name')      # 新参数：agent名称
         feedback = data.get('feedback', '')
 
-        if not username or not case_id or not evaluator_id:
+        # 确定使用的标识符：优先使用agent_name，其次使用evaluator_id
+        identifier = agent_name or evaluator_id
+
+        if not username or not case_id or not identifier:
             return jsonify({'error': '缺少必要参数'}), 400
 
         # 确保evaluators目录存在
         evaluators_dir = config.EVALUATORS_DIR
+        os.makedirs(evaluators_dir, exist_ok=True)
         user_file = os.path.join(evaluators_dir, f'{username}.json')
 
+        # 如果用户文件不存在，则创建一个新的
         if not os.path.exists(user_file):
-            return jsonify({'error': '用户不存在'}), 404
-
-        # 读取用户文件
-        with open(user_file, 'r', encoding='utf-8') as f:
-            user_data = json.load(f)
+            print(f"创建新的用户文件: {user_file}")
+            user_data = {
+                'username': username,
+                'created_at': datetime.now().isoformat(),
+                'evaluations': [],
+                'current_case_index': 0,
+                'total_cases_completed': 0,
+                'updated_at': datetime.now().isoformat(),
+                'evaluation_results': {},
+                'feedback': {}
+            }
+        else:
+            # 读取现有用户文件
+            with open(user_file, 'r', encoding='utf-8') as f:
+                user_data = json.load(f)
 
         # 初始化feedback结构
         if 'feedback' not in user_data:
@@ -650,10 +746,12 @@ def save_feedback():
             user_data['feedback'][case_key] = {}
 
         # 保存反馈
-        user_data['feedback'][case_key][evaluator_id] = feedback
+        user_data['feedback'][case_key][identifier] = feedback
         user_data['updated_at'] = datetime.now().isoformat()
 
-        print(f"准备保存反馈数据: {user_data['feedback']}")
+        identifier_type = 'agent' if agent_name else 'evaluator'
+        print(
+            f"准备保存反馈数据 ({identifier_type}:{identifier}): {user_data['feedback']}")
 
         # 保存更新后的用户文件
         with open(user_file, 'w', encoding='utf-8') as f:
@@ -857,28 +955,44 @@ def get_evaluation_dimensions():
 
 @app.route('/api/evaluation/save-dimension-score', methods=['POST'])
 def save_dimension_score():
-    """实时保存单个维度的评分"""
+    """实时保存单个维度的评分，支持按evaluator_id或agent_name保存"""
     try:
         data = request.get_json()
         username = data.get('username')
         case_id = data.get('case_id')
-        evaluator_id = data.get('evaluator_id')
+        evaluator_id = data.get('evaluator_id')  # 向后兼容
+        agent_name = data.get('agent_name')      # 新参数：agent名称
         dimension_key = data.get('dimension_key')
         score = data.get('score')
 
-        if not all([username, case_id, evaluator_id, dimension_key, score is not None]):
+        # 确定使用的标识符：优先使用agent_name，其次使用evaluator_id
+        identifier = agent_name or evaluator_id
+
+        if not all([username, case_id, identifier, dimension_key, score is not None]):
             return jsonify({'error': '缺少必要参数'}), 400
 
         # 确保evaluators目录存在
         evaluators_dir = config.EVALUATORS_DIR
+        os.makedirs(evaluators_dir, exist_ok=True)
         user_file = os.path.join(evaluators_dir, f'{username}.json')
 
+        # 如果用户文件不存在，则创建一个新的
         if not os.path.exists(user_file):
-            return jsonify({'error': '用户不存在'}), 404
-
-        # 读取用户文件
-        with open(user_file, 'r', encoding='utf-8') as f:
-            user_data = json.load(f)
+            print(f"创建新的用户文件: {user_file}")
+            user_data = {
+                'username': username,
+                'created_at': datetime.now().isoformat(),
+                'evaluations': [],
+                'current_case_index': 0,
+                'total_cases_completed': 0,
+                'updated_at': datetime.now().isoformat(),
+                'evaluation_results': {},
+                'feedback': {}
+            }
+        else:
+            # 读取现有用户文件
+            with open(user_file, 'r', encoding='utf-8') as f:
+                user_data = json.load(f)
 
         # 初始化数据结构
         if 'evaluation_results' not in user_data:
@@ -887,20 +1001,21 @@ def save_dimension_score():
         if case_id not in user_data['evaluation_results']:
             user_data['evaluation_results'][case_id] = {}
 
-        if evaluator_id not in user_data['evaluation_results'][case_id]:
-            user_data['evaluation_results'][case_id][evaluator_id] = {
+        if identifier not in user_data['evaluation_results'][case_id]:
+            user_data['evaluation_results'][case_id][identifier] = {
                 'dimensions': {}}
 
         # 保存评分
-        user_data['evaluation_results'][case_id][evaluator_id]['dimensions'][dimension_key] = score
+        user_data['evaluation_results'][case_id][identifier]['dimensions'][dimension_key] = score
         user_data['updated_at'] = datetime.now().isoformat()
 
         # 保存更新后的用户文件
         with open(user_file, 'w', encoding='utf-8') as f:
             json.dump(user_data, f, ensure_ascii=False, indent=2)
 
+        identifier_type = 'agent' if agent_name else 'evaluator'
         print(
-            f"用户 {username} 的评分已保存: {case_id} - {evaluator_id} - {dimension_key} = {score}")
+            f"用户 {username} 的评分已保存: {case_id} - {identifier_type}:{identifier} - {dimension_key} = {score}")
 
         return jsonify({
             'status': 'success',
@@ -1378,6 +1493,54 @@ def get_case_evaluators(case_id):
         import traceback
         print(f"[get_case_evaluators] 获取评估者列表时出错: {str(e)}")
         print(f"[get_case_evaluators] 错误详情: {traceback.format_exc()}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/evaluation/case-agents', methods=['GET'])
+def get_case_agents_v2():
+    """获取指定 case 中的 agent 配置"""
+    try:
+        case_id = request.args.get('case_id', 1, type=int)
+        print(f"[get_case_agents] 收到请求，Case ID: {case_id}")
+
+        # 确保 case 文件已初始化
+        if not case_files:
+            initialize_case_files()
+
+        # 查找对应的文件夹名称（例如输入 8，找到 'case8'）
+        case_folder_name = f'case{case_id}'
+
+        # 加载 case 文件
+        case_file_path = os.path.join(
+            config.CONVERSATIONS_DIR, case_folder_name, f"{case_folder_name}.json")
+
+        if not os.path.exists(case_file_path):
+            return jsonify({
+                'status': 'error',
+                'message': f'Case file not found at {case_file_path}'
+            }), 404
+
+        with open(case_file_path, "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        # 提取 agent/学生信息
+        agents = {}
+        for key, value in case_data.items():
+            if isinstance(value, dict) and 'name' in value:
+                agents[key] = value
+
+        print(f"[get_case_agents] 成功加载 {len(agents)} 个 agents")
+        return jsonify({
+            'status': 'success',
+            'case_id': case_id,
+            'agents': agents,
+            'agent_count': len(agents)
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"[get_case_agents] Error: {str(e)}")
+        print(f"[get_case_agents] Traceback: {traceback.format_exc()}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

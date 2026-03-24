@@ -1,9 +1,25 @@
 <template>
   <div class="section-c-container">
+    <!-- Agent导航栏 -->
+    <div class="agent-navbar">
+      <div class="agent-nav-label">选择被评估对象：</div>
+      <div class="agent-nav-buttons">
+        <button 
+          v-for="(agent, agentName) in agents"
+          :key="agentName"
+          :class="['agent-nav-btn', { 'active': currentAgent === agentName }]"
+          @click="selectAgent(agentName)"
+          :title="`切换到 ${agent.name}`"
+        >
+          {{ agent.name }}
+        </button>
+      </div>
+    </div>
+
     <div class="header-section">
       <div class="title-instruction-row">
         <div class="title-progress-container">
-          <h3>Evaluation Dimensions</h3>
+          <h3>评估维度</h3>
           <div class="progress-indicator">
             <span class="progress-text">{{ getScoringProgress() }}</span>
           </div>
@@ -12,7 +28,7 @@
         <!-- 醒目的提示框 -->
         <div class="instruction-box">
           <div class="instruction-icon">⭐</div>
-          <div class="instruction-text">4. Complete the scoring for each dimension</div>
+          <div class="instruction-text">4. 完成每个维度的评分</div>
         </div>
       </div>
       
@@ -23,7 +39,7 @@
         title="添加反馈意见"
       >
         <span class="feedback-arrow">➤</span>
-        <span class="feedback-text">Feedback (Optional)</span>
+        <span class="feedback-text">反馈案例（可选）</span>
       </button>
     </div>
     
@@ -31,7 +47,7 @@
     <div v-if="showFeedbackModal" class="feedback-modal-overlay" @click="closeFeedbackModal">
       <div class="feedback-modal" @click.stop>
         <div class="feedback-modal-header">
-          <h4>Feedback</h4>
+          <h4>反馈</h4>
           <button class="close-btn" @click="closeFeedbackModal">×</button>
         </div>
         <div class="feedback-modal-content">
@@ -43,8 +59,8 @@
           ></textarea>
         </div>
         <div class="feedback-modal-footer">
-          <button class="save-btn" @click="saveFeedback">Save</button>
-          <button class="cancel-btn" @click="closeFeedbackModal">Cancel</button>
+          <button class="save-btn" @click="saveFeedback">保存</button>
+          <button class="cancel-btn" @click="closeFeedbackModal">取消</button>
         </div>
       </div>
     </div>
@@ -52,7 +68,7 @@
     <div class="evaluation-content">
       <!-- 调试信息 -->
       <div v-if="evaluationDimensions.length === 0" style="color: red; padding: 20px; text-align: center;">
-        Loading...)
+        加载中...)
       </div>
       
       <div class="dimensions-list">
@@ -132,9 +148,13 @@ export default {
     selectedEvaluator: {
       type: Object,
       default: null
+    },
+    currentAgentName: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['scoring-status-changed'],
+  emits: ['scoring-status-changed', 'agent-selected'],
   setup(props, { emit }) {
     // 评估维度数组
     const evaluationDimensions = ref([])
@@ -142,9 +162,66 @@ export default {
     // 添加响应式变量来触发重新渲染
     const scoreUpdateTrigger = ref(0)
 
+    // Agent相关变量
+    const agents = ref({})
+    const currentAgent = ref(props.currentAgentName)
+
     // 反馈相关变量
     const showFeedbackModal = ref(false)
     const feedbackText = ref('')
+
+    // 监听 props.currentAgentName 变化，保持同步
+    watch(() => props.currentAgentName, (newVal) => {
+      if (newVal && newVal !== currentAgent.value) {
+        currentAgent.value = newVal;
+        scoreUpdateTrigger.value++;
+      }
+    });
+
+    // 加载case中的所有agents
+    const loadAgents = async () => {
+      if (!props.currentCaseId) {
+        console.log('loadAgents: 缺少caseId')
+        return
+      }
+      
+      try {
+        const response = await fetch(`/api/evaluation/case-agents?case_id=${props.currentCaseId}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.status === 'success' && data.agents) {
+            agents.value = data.agents
+            console.log('成功加载agents:', data.agents)
+            
+            // 优先使用 props 传下来的 agent，其次是第一个
+            const agentNames = Object.keys(agents.value)
+            if (agentNames.length > 0) {
+              if (!props.currentAgentName || !agents.value[props.currentAgentName]) {
+                currentAgent.value = agentNames[0]
+                emit('agent-selected', currentAgent.value)
+              } else {
+                currentAgent.value = props.currentAgentName
+              }
+              console.log('SectionC: 当前选中 agent:', currentAgent.value)
+            } else {
+              currentAgent.value = ''
+            }
+          }
+        } else {
+          console.error('加载agents失败:', response.statusText)
+        }
+      } catch (error) {
+        console.error('加载agents出错:', error)
+      }
+    }
+
+    // 选择agent
+    const selectAgent = (agentName) => {
+      currentAgent.value = agentName
+      scoreUpdateTrigger.value++
+      console.log('SectionC: 切换到agent:', agentName)
+      emit('agent-selected', agentName)
+    }
 
     // 获取anchors描述
     const getAnchorDescription = (dimension, score) => {
@@ -159,28 +236,26 @@ export default {
       // 添加对scoreUpdateTrigger的依赖，确保响应式更新
       scoreUpdateTrigger.value
       
-      if (!props.username || !props.currentCaseId || !props.selectedEvaluator) {
+      if (!props.username || !props.currentCaseId || !currentAgent.value) {
         console.log('getDimensionScore: 缺少必要参数', {
           username: props.username,
           currentCaseId: props.currentCaseId,
-          selectedEvaluator: props.selectedEvaluator
+          currentAgent: currentAgent.value
         })
         return 0
       }
       
       const caseKey = `case${props.currentCaseId}`
-      const evaluatorKey = props.selectedEvaluator.evaluator.id
+      const agentName = currentAgent.value
       
-      // 优先从localStorage缓存读取（因为已经同步了后端数据）
+      // 优先从localStorage缓存读取
       const storageKey = `evaluation_scores_${props.username}`
       const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
       
       // 检查数据结构
       const caseScores = scores[caseKey] || {}
-      const evaluatorScores = caseScores[evaluatorKey] || {}
-      const dimensions = evaluatorScores.dimensions || {}
-      
-
+      const agentScores = caseScores[agentName] || {}
+      const dimensions = agentScores.dimensions || {}
       
       const score = dimensions[dimensionKey] || 0
       
@@ -189,15 +264,15 @@ export default {
 
     // 设置维度评分
     const setDimensionScore = async (dimensionKey, score) => {
-      console.log('setDimensionScore 被调用:', { dimensionKey, score })
+      console.log('setDimensionScore 被调用:', { dimensionKey, score, agentName: currentAgent.value })
       
-      if (!props.username || !props.currentCaseId || !props.selectedEvaluator) {
+      if (!props.username || !props.currentCaseId || !currentAgent.value) {
         console.log('setDimensionScore: 缺少必要参数')
         return
       }
       
       const caseKey = `case${props.currentCaseId}`
-      const evaluatorKey = props.selectedEvaluator.evaluator.id
+      const agentName = currentAgent.value
       
       try {
         // 实时保存到后端
@@ -209,14 +284,14 @@ export default {
           body: JSON.stringify({
             username: props.username,
             case_id: caseKey,
-            evaluator_id: evaluatorKey,
+            agent_name: agentName,
             dimension_key: dimensionKey,
             score: score
           })
         })
         
         if (response.ok) {
-          console.log(`评分已保存到后端: ${caseKey} - ${evaluatorKey} - ${dimensionKey} = ${score}`)
+          console.log(`评分已保存到后端: ${caseKey} - ${agentName} - ${dimensionKey} = ${score}`)
         } else {
           console.error('保存评分到后端失败:', response.statusText)
         }
@@ -224,16 +299,16 @@ export default {
         console.error('保存评分到后端出错:', error)
       }
       
-      // 同时保存到localStorage作为缓存，保持与后端数据结构一致
+      // 同时保存到localStorage作为缓存
       const storageKey = `evaluation_scores_${props.username}`
       const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
       
-      // 初始化数据结构，保持与后端一致
+      // 初始化数据结构
       if (!scores[caseKey]) scores[caseKey] = {}
-      if (!scores[caseKey][evaluatorKey]) scores[caseKey][evaluatorKey] = { dimensions: {} }
+      if (!scores[caseKey][agentName]) scores[caseKey][agentName] = { dimensions: {} }
       
       // 设置评分到dimensions对象中
-      scores[caseKey][evaluatorKey].dimensions[dimensionKey] = score
+      scores[caseKey][agentName].dimensions[dimensionKey] = score
       
       // 保存到localStorage
       localStorage.setItem(storageKey, JSON.stringify(scores))
@@ -243,7 +318,7 @@ export default {
       // 触发响应式更新
       scoreUpdateTrigger.value++
       
-      // 检查当前案例是否所有评估者的所有维度都已评分，并通知父组件
+      // 检查当前案例是否所有agent的所有维度都已评分，并通知父组件
       const allScored = await checkAllDimensionsScored()
       // 使用emit通知父组件评分状态变化
       if (typeof emit === 'function') {
@@ -342,35 +417,25 @@ export default {
       localStorage.removeItem(`evaluation_dimensions_${username}`)
     }
 
-    // 检查当前案例的所有评估者是否所有维度都已评分（不为0分，但排除AI感知维度）
+    // 检查当前案例的所有agent是否所有维度都已评分
     const checkAllDimensionsScored = async () => {
       if (!props.username || !props.currentCaseId) return false
       
       try {
-        // 首先获取当前案例的所有评估者列表
-        const response = await fetch(`/api/evaluation/case/${props.currentCaseId}/evaluators`)
-        const data = await response.json()
-        
-        if (data.status !== 'success' || !data.evaluators || data.evaluators.length === 0) {
-          return false
-        }
-        
-        const expectedEvaluators = data.evaluators.map(evaluator => evaluator.id)
-        
         const storageKey = `evaluation_scores_${props.username}`
         const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
         
         const caseKey = `case${props.currentCaseId}`
         const caseScores = scores[caseKey] || {}
         
-        // 检查每个评估者的所有维度是否都有评分且不为0
-        for (const evaluatorKey of expectedEvaluators) {
-          const evaluatorScores = caseScores[evaluatorKey] || {}
+        // 检查每个agent的所有维度是否都有评分且不为0
+        for (const agentName of Object.keys(agents.value)) {
+          const agentScores = caseScores[agentName] || {}
           
-          // 检查该评估者的所有维度
+          // 检查该agent的所有维度
           for (const dimension of evaluationDimensions.value) {
             const dimensionKey = `${dimension.category}-${dimension.dimension}`
-            const score = evaluatorScores[dimensionKey] || 0
+            const score = agentScores.dimensions?.[dimensionKey] || 0
             if (score === 0) {
               return false
             }
@@ -386,15 +451,15 @@ export default {
 
     // 加载反馈意见
     const loadFeedback = () => {
-      if (!props.username || !props.currentCaseId || !props.selectedEvaluator) return
+      if (!props.username || !props.currentCaseId || !currentAgent.value) return
       
       const storageKey = `evaluation_feedback_${props.username}`
       const feedbacks = JSON.parse(localStorage.getItem(storageKey) || '{}')
       
       const caseKey = `case${props.currentCaseId}`
-      const evaluatorKey = props.selectedEvaluator.evaluator.id
+      const agentName = currentAgent.value
       
-      const feedback = feedbacks[caseKey]?.[evaluatorKey] || ''
+      const feedback = feedbacks[caseKey]?.[agentName] || ''
       feedbackText.value = feedback
     }
 
@@ -406,10 +471,10 @@ export default {
 
     // 实时保存反馈到localStorage
     const saveFeedbackToLocalStorage = () => {
-      if (!props.username || !props.currentCaseId || !props.selectedEvaluator) return
+      if (!props.username || !props.currentCaseId || !currentAgent.value) return
       
       const caseKey = `case${props.currentCaseId}`
-      const evaluatorKey = props.selectedEvaluator.evaluator.id
+      const agentName = currentAgent.value
       
       const storageKey = `evaluation_feedback_${props.username}`
       const feedbacks = JSON.parse(localStorage.getItem(storageKey) || '{}')
@@ -418,24 +483,24 @@ export default {
       if (!feedbacks[caseKey]) feedbacks[caseKey] = {}
       
       // 保存反馈，即使为空也保存
-      feedbacks[caseKey][evaluatorKey] = feedbackText.value
+      feedbacks[caseKey][agentName] = feedbackText.value
       
       // 保存到localStorage
       localStorage.setItem(storageKey, JSON.stringify(feedbacks))
       
       console.log('反馈已实时保存到localStorage:', {
         case: caseKey,
-        evaluator: evaluatorKey,
+        agent: agentName,
         feedback: feedbackText.value
       })
     }
 
     // 保存反馈意见
     const saveFeedback = async () => {
-      if (!props.username || !props.currentCaseId || !props.selectedEvaluator) return
+      if (!props.username || !props.currentCaseId || !currentAgent.value) return
       
       const caseKey = `case${props.currentCaseId}`
-      const evaluatorKey = props.selectedEvaluator.evaluator.id
+      const agentName = currentAgent.value
       
       // 先保存到localStorage
       saveFeedbackToLocalStorage()
@@ -450,7 +515,7 @@ export default {
           body: JSON.stringify({
             username: props.username,
             case_id: props.currentCaseId,
-            evaluator_id: evaluatorKey,
+            agent_name: agentName,
             feedback: feedbackText.value
           })
         })
@@ -458,7 +523,7 @@ export default {
         if (response.ok) {
           console.log('反馈已保存到后端:', {
             case: caseKey,
-            evaluator: evaluatorKey,
+            agent: agentName,
             feedback: feedbackText.value
           })
         } else {
@@ -477,21 +542,21 @@ export default {
       // 不重置feedbackText，保持用户输入的内容
     }
 
-    // 监听所有相关props变化
-    watch([() => props.username, () => props.currentCaseId, () => props.selectedEvaluator], async () => {
+    // 监听相关props变化
+    watch([() => props.username, () => props.currentCaseId], async () => {
       console.log('SectionC props变化:', {
         username: props.username,
-        currentCaseId: props.currentCaseId,
-        selectedEvaluator: props.selectedEvaluator?.evaluator?.id
+        currentCaseId: props.currentCaseId
       })
       
-      // 当用户、案例或评估者改变时，加载对应的维度数据并触发重新渲染
-      if (props.username) {
+      // 当用户、案例改变时，重新加载agents
+      if (props.username && props.currentCaseId) {
+        await loadAgents() // 等待agents加载完成，这样currentAgent就被设置了
         // 首先从后端加载用户评分数据
         await loadUserScoresFromBackend()
         // 然后加载维度数据
         await loadDimensionsFromLocalStorage()
-        loadFeedback() // 加载对应的反馈
+        loadFeedback() // 加载对应的反馈（此时currentAgent已设置）
         
         // 延迟触发重新渲染，确保数据已加载
         setTimeout(() => {
@@ -514,15 +579,17 @@ export default {
       }
     })
 
-    // 组件挂载时加载维度数据
+    // 组件挂载时加载维度数据和agents
     onMounted(async () => {
-      console.log('SectionC 组件挂载，用户名:', props.username)
-      if (props.username) {
+      console.log('SectionC 组件挂载，用户名:', props.username, '当前caseId:', props.currentCaseId)
+      if (props.username && props.currentCaseId) {
+        // 加载agents - 等待完成，这样currentAgent就被设置了
+        await loadAgents()
         // 首先从后端加载用户评分数据
         await loadUserScoresFromBackend()
         // 然后加载维度数据
         await loadDimensionsFromLocalStorage()
-        loadFeedback() // 加载反馈
+        loadFeedback() // 加载反馈（此时currentAgent已设置）
         
         // 延迟触发重新渲染，确保数据已加载
         setTimeout(() => {
@@ -536,20 +603,20 @@ export default {
       // 添加对scoreUpdateTrigger的依赖，确保响应式更新
       scoreUpdateTrigger.value
       
-      if (!props.username || !props.currentCaseId || !props.selectedEvaluator) {
+      if (!props.username || !props.currentCaseId || !currentAgent.value) {
         return '0/0'
       }
       
       const caseKey = `case${props.currentCaseId}`
-      const evaluatorKey = props.selectedEvaluator.evaluator.id
+      const agentName = currentAgent.value
       
       // 从localStorage获取评分数据
       const storageKey = `evaluation_scores_${props.username}`
       const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
       
       const caseScores = scores[caseKey] || {}
-      const evaluatorScores = caseScores[evaluatorKey] || {}
-      const dimensions = evaluatorScores.dimensions || {}
+      const agentScores = caseScores[agentName] || {}
+      const dimensions = agentScores.dimensions || {}
       
       // 计算已评分的维度数量（包含所有维度）
       let scoredCount = 0
@@ -570,6 +637,10 @@ export default {
     return {
       evaluationDimensions,
       scoreUpdateTrigger,
+      agents,
+      currentAgent,
+      selectAgent,
+      loadAgents,
       getAnchorDescription,
       getDimensionScore,
       setDimensionScore,
@@ -601,6 +672,59 @@ export default {
   min-height: 0;
   padding: 16px;
   background-color: #f0f9eb; /* 柔和的绿色背景 */
+}
+
+/* Agent导航栏样式 */
+.agent-navbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.agent-nav-label {
+  color: white;
+  font-weight: 600;
+  font-size: clamp(12px, 1.2vw, 14px);
+  white-space: nowrap;
+}
+
+.agent-nav-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.agent-nav-btn {
+  padding: 6px 12px;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  font-size: clamp(11px, 1.1vw, 13px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.agent-nav-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.agent-nav-btn.active {
+  background-color: white;
+  color: #667eea;
+  border-color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .header-section {

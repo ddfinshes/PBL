@@ -1,7 +1,13 @@
 <template>
   <div class="root-container">
+    <!-- 登录界面 -->
+    <LoginPage 
+      v-if="!isLoggedIn" 
+      @start-evaluation="handleLogin" 
+    />
+
     <!-- 评估界面 -->
-    <div v-if="isLoggedIn && !showThankYou" class="grid-container evaluation-version">
+    <div v-else-if="!showThankYou" class="grid-container evaluation-version">
       <A 
         ref="sectionA"
         class="a-container" 
@@ -10,6 +16,7 @@
         :navigationDirection="navigationDirection"
         @evaluator-selected="handleEvaluatorSelected"
         @available-evaluators-changed="handleAvailableEvaluatorsChanged"
+        @case-changed="handleCaseChanged"
       />
       <B 
         ref="sectionB"
@@ -18,6 +25,7 @@
         :currentCaseId="currentCaseId"
         :selectedEvaluator="selectedEvaluator" 
         :key="caseKey"
+        :currentAgentName="currentAgentName"
         @back-to-analysis="handleBackToAnalysis"
       />
       <C 
@@ -25,32 +33,27 @@
         :username="username"
         :currentCaseId="currentCaseId"
         :selectedEvaluator="selectedEvaluator"
+        :currentAgentName="currentAgentName"
         @dimension-deleted="handleDimensionDeleted"
         @scoring-status-changed="handleScoringStatusChanged"
         @score-updated="handleScoreUpdated"
+        @agent-selected="handleAgentSelected"
       />
       <D 
         class="d-container" 
         :selectedEvaluator="selectedEvaluator"
         :username="username"
         :currentCaseId="currentCaseId"
-      />
-      <E 
-        ref="sectionE"
-        class="e-container" 
-        :username="username" 
-        @case-changed="handleCaseChanged"
-        @show-thank-you="showThankYouPage"
-        :availableEvaluatorsCount="availableEvaluatorsCount"
-        :selectedEvaluator="selectedEvaluator"
+        :currentAgentName="currentAgentName"
       />
     </div>
-    
-    <!-- 感谢页面 -->
-    <ThankYouPage 
-      v-else-if="showThankYou"
-      @return-to-evaluation="returnToEvaluation"
-    />
+
+    <!-- 感谢界面 -->
+    <div v-if="showThankYou && isLoggedIn" class="thank-you-container">
+      <h2>感谢您的参与！</h2>
+      <p>您的评估结果已成功保存。</p>
+      <button @click="logout" class="logout-btn">退出并重新登录</button>
+    </div>
   </div>
 </template>
 
@@ -59,11 +62,10 @@ import A from "./SectionA.vue";
 import B from "./SectionB.vue";
 import C from "./SectionC.vue";
 import D from "./SectionD.vue";
-import E from "./SectionE.vue";
-import ThankYouPage from "./ThankYouPage.vue";
+import LoginPage from "./LoginPage.vue";
 
 export default {
-  components: { A, B, C, D, E, ThankYouPage },
+  components: { A, B, C, D, LoginPage },
   data() {
     return {
       isLoggedIn: false,
@@ -71,6 +73,7 @@ export default {
       caseKey: 0,
       currentCaseId: 1,
       selectedEvaluator: null,
+      currentAgentName: '',
       // 感谢页面显示状态
       showThankYou: false,
       // 导航方向
@@ -83,92 +86,34 @@ export default {
     // 移除计算属性，改为使用data属性
   },
   mounted() {
-    // Check if username is passed from analysis (mixed mode)
-    const savedUsername = localStorage.getItem('analysis_username');
-    if (savedUsername) {
-      // Mixed mode: use analysis username
-      this.username = savedUsername;
-      this.initializeEvaluation(savedUsername);
-      this.isLoggedIn = true;
-      // Get current case info and refresh component state
-      this.getCurrentCaseInfo().then(async () => {
-        this.$nextTick(async () => {
-          if (this.$refs.sectionA) {
-            this.$refs.sectionA.checkCaseSortingStatus();
-          }
-          if (this.$refs.sectionB) {
-            this.$refs.sectionB.fetchCaseInfo();
-          }
-          if (this.$refs.sectionE) {
-            this.$refs.sectionE.getAnswer(true);
-          }
-        });
-      });
-    } else {
-      // Standalone mode: use timestamp as username
-      const timestamp = Date.now().toString();
-      this.username = timestamp;
-      this.initializeEvaluation(timestamp);
-      this.isLoggedIn = true;
-      // Get current case info and refresh component state
-      this.getCurrentCaseInfo().then(async () => {
-        this.$nextTick(async () => {
-          if (this.$refs.sectionA) {
-            this.$refs.sectionA.checkCaseSortingStatus();
-          }
-          if (this.$refs.sectionB) {
-            this.$refs.sectionB.fetchCaseInfo();
-          }
-          if (this.$refs.sectionE) {
-            this.$refs.sectionE.getAnswer(true);
-          }
-        });
-      });
+    // Check for saved username in evaluation mode or mixed mode
+    const savedEvalUsername = localStorage.getItem('evaluation_username');
+    const savedAnalysisUsername = localStorage.getItem('analysis_username');
+    
+    if (savedEvalUsername) {
+      this.handleLogin({ username: savedEvalUsername });
+    } else if (savedAnalysisUsername) {
+      this.handleLogin({ username: savedAnalysisUsername });
     }
   },
   methods: {
-    async initializeEvaluation(username) {
-      try {
-        // Create user
-        const createResponse = await fetch('/api/evaluation/create-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username })
-        });
-        
-        if (!createResponse.ok) {
-          console.error('Failed to create user:', createResponse.statusText);
-        }
-        
-        // Initialize user
-        const initResponse = await fetch('/api/evaluation/init-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username })
-        });
-        
-        if (!initResponse.ok) {
-          console.error('Failed to initialize user:', initResponse.statusText);
-          return;
-        }
-        
-        const initData = await initResponse.json();
-        console.log('User initialization successful:', initData);
-      } catch (error) {
-        console.error('User initialization failed:', error);
-      }
+    logout() {
+      localStorage.removeItem('evaluation_username');
+      localStorage.removeItem('evaluation_user_info');
+      this.isLoggedIn = false;
+      this.username = '';
+      this.showThankYou = false;
     },
 
-    async handleStartEvaluation(userInfo) {
+    async handleLogin(userInfo) {
+      if (!userInfo || !userInfo.username) return;
+      
       try {
         // Reset all state
         this.selectedEvaluator = null;
         this.navigationDirection = null;
         this.caseKey = 0;
+        this.showThankYou = false;
         
         // Call backend API to create and initialize user
         const createResponse = await fetch('/api/evaluation/create-user', {
@@ -206,8 +151,19 @@ export default {
         this.username = userInfo.username;
         this.isLoggedIn = true;
         
-        // Get user's actual current case info
-        await this.getCurrentCaseInfo();
+        // Update case ID from backend
+        if (initData.next_case_index !== undefined) {
+          if (initData.debug_info && initData.debug_info.case_files) {
+            const caseName = initData.debug_info.case_files[initData.next_case_index];
+            if (caseName && caseName.startsWith('case')) {
+              this.currentCaseId = parseInt(caseName.replace('case', ''));
+            } else {
+              this.currentCaseId = initData.next_case_index + 1;
+            }
+          } else {
+            this.currentCaseId = initData.next_case_index + 1;
+          }
+        }
         
         // Force refresh component state
         this.$nextTick(async () => {
@@ -217,10 +173,6 @@ export default {
           if (this.$refs.sectionB) {
             this.$refs.sectionB.fetchCaseInfo();
           }
-          if (this.$refs.sectionE) {
-            this.$refs.sectionE.getAnswer(true);
-          }
-          // Initialization complete
         });
       } catch (error) {
         console.error('User initialization failed:', error);
@@ -256,7 +208,7 @@ export default {
       // 通知SectionA检查新case的排序状态
       this.$nextTick(() => {
         if (this.$refs.sectionA) {
-          this.$refs.sectionA.checkCaseSortingStatus();
+          this.$refs.sectionA.loadEvaluators();
         }
       });
     },
@@ -292,6 +244,11 @@ export default {
       // 检查当前案例状态
     },
     
+    handleAgentSelected(agentName) {
+      console.log('App.vue: Agent 被选择:', agentName);
+      this.currentAgentName = agentName;
+    },
+    
     // 处理维度删除
     handleDimensionDeleted(dimensionId) {
       console.log(`维度 ${dimensionId} 被删除`);
@@ -301,29 +258,16 @@ export default {
     handleScoringStatusChanged(statusData) {
       // 处理来自SectionC的评分状态变化
       console.log('App.vue 收到评分状态变化:', statusData);
-      // 将事件传递给SectionE
-      if (this.$refs.sectionE) {
-        this.$refs.sectionE.handleScoringStatusChanged(statusData);
-      }
     },
 
     async handleScoreUpdated() {
-      // 当评分更新时，通知SectionE重新检查评分状态
+      // 当评分更新时重新检查评分状态
       console.log('App.vue 收到评分更新事件');
-      if (this.$refs.sectionE) {
-        this.$refs.sectionE.handleScoreUpdated();
-      }
     },
 
     // 监听SectionA中availableEvaluators的变化
     handleAvailableEvaluatorsChanged(count) {
       this.availableEvaluatorsCount = count;
-      // 强制更新SectionE组件
-      this.$nextTick(() => {
-        if (this.$refs.sectionE) {
-          this.$refs.sectionE.$forceUpdate();
-        }
-      });
     },
 
 
@@ -434,9 +378,6 @@ export default {
           if (this.$refs.sectionB) {
             this.$refs.sectionB.fetchCaseInfo();
           }
-          if (this.$refs.sectionE) {
-            this.$refs.sectionE.getAnswer(true);
-          }
         });
         
         console.log('已返回评估界面，重新加载案例数据');
@@ -460,8 +401,8 @@ export default {
 
 .grid-container.evaluation-version {
   display: grid;
-  grid-template-columns: 1fr 1.9fr 2fr;
-  grid-template-rows: 2fr 1fr 1fr 3.5fr;
+  grid-template-columns: 0.8fr 1.1fr 1.1fr 1.2fr;
+  grid-template-rows: 1fr;
   gap: clamp(1px, 0.2vw, 4px);
   width: 100%;
   height: 100%;
@@ -494,12 +435,12 @@ export default {
 
 .evaluation-version .a-container {
   grid-column: 1;
-  grid-row: 1 / span 4;
+  grid-row: 1;
 }
 
 .evaluation-version .b-container {
   grid-column: 2;
-  grid-row: 1 / span 3;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -507,18 +448,37 @@ export default {
 }
 
 .evaluation-version .c-container {
-  grid-column: 2;
-  grid-row: 4;
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .evaluation-version .d-container {
-  grid-column: 3;
-  grid-row: 1 / span 1;
+  grid-column: 4;
+  grid-row: 1;
 }
 
-.evaluation-version .e-container {
-  grid-column: 3;
-  grid-row: 2 / span 3;
+.thank-you-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  text-align: center;
+  gap: 20px;
+}
+
+.logout-btn {
+  padding: 10px 20px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.logout-btn:hover {
+  background-color: #d32f2f;
 }
 
 /* 响应式断点 */
@@ -584,11 +544,6 @@ export default {
   .evaluation-version .d-container {
     grid-column: 1;
     grid-row: 4;
-  }
-  
-  .evaluation-version .e-container {
-    grid-column: 1;
-    grid-row: 5;
   }
 }
 </style>

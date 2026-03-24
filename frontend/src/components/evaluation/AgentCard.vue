@@ -1,0 +1,1570 @@
+<template>
+  <div class="agent-card" :style="{ '--base-card-color': cardColor }">
+    <!-- 核心卡片背景 -->
+    <div class="agent-card-bg" :style="{ backgroundColor: 'var(--base-card-color)' }"></div>
+
+    <!-- 顶部身份信息区域 -->
+    <header class="identity-header">
+      <div class="identity-info-left">
+        <!-- 头像显示区域 -->
+        <div 
+          class="avatar-icon" 
+          :style="{ backgroundImage: `url('/avatar/${modelValue.avatar || 'avatar1.png'}')` }"
+          title="Agent Avatar"
+        ></div>
+        
+        <!-- Name Area -->
+        <div class="name-interactive-area" :class="{ 'warning-outline': isFieldUnresolved('name') }">
+          <div class="name-display"
+               :class="{'is-empty': !modelValue.name}">
+            {{ modelValue.name || 'No Name' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side Metadata Column (Age, Major) -->
+      <div class="metadata-column">
+        <div class="meta-item-box" :class="{ 'warning-outline': isFieldUnresolved('age') }">
+          <span class="meta-label">Age:</span>
+          <div class="meta-value" :class="{'is-empty': !modelValue.age}">
+            {{ modelValue.age || 'N/A' }}
+          </div>
+        </div>
+
+        <div class="meta-item-box" :class="{ 'warning-outline': isFieldUnresolved('major') }">
+          <span class="meta-label">Major:</span>
+          <div class="meta-value" :class="{'is-empty': !modelValue.major}">
+            {{ modelValue.major || 'N/A' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- No Delete Button -->
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="card-content-wrapper">
+      <section class="panel-section knowledge-panel">
+        <h3 class="panel-title" :class="{ 'field-warning': hasUnresolvedPrefix('knowledge_background') }">Knowledge Base</h3>
+        
+
+        <div class="panel-body row-layout" :class="{ 'warning-outline': hasUnresolvedPrefix('knowledge_background') }">
+          <!-- Left: Unclassified Knowledge Points -->
+          <div class="theoretical-tags-container">
+             <div v-for="(item, index) in modelValue.unclassifiedKnowledge" 
+                  :key="index"
+                  class="theory-tag group relative">
+               <span class="tag-text">{{ item }}</span>
+             </div>
+             <div v-if="!modelValue.unclassifiedKnowledge?.length" class="empty-hint">No unclassified knowledge points</div>
+          </div>
+
+          <!-- Right: Three Classification Boxes (Vertical Layout) -->
+          <div class="classification-zones-grid">
+            <!-- Competent (Good) -->
+            <div class="drop-zone good-zone">
+              <div class="zone-label good-text">Good</div>
+              <div class="items-list">
+                <div v-for="(item, idx) in modelValue.classifiedKnowledge.competent" :key="idx"
+                     class="mini-item good-bg group relative">
+                  <span class="tag-text">{{ item }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Novice (Medium) -->
+            <div class="drop-zone medium-zone">
+              <div class="zone-label medium-text">Medium</div>
+              <div class="items-list">
+                <div v-for="(item, idx) in modelValue.classifiedKnowledge.novice" :key="idx"
+                     class="mini-item medium-bg group relative">
+                  <span class="tag-text">{{ item }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Layman (Bad) -->
+            <div class="drop-zone bad-zone">
+              <div class="zone-label bad-text">Bad</div>
+              <div class="items-list">
+                <div v-for="(item, idx) in modelValue.classifiedKnowledge.layman" :key="idx"
+                     class="mini-item bad-bg group relative">
+                  <span class="tag-text">{{ item }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="panel-section plasticity-panel">
+        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('plasticity') }">Learning Plasticity</h3>
+        <div class="plasticity-inline-options">
+          <div
+            v-for="lv in ['low', 'medium', 'high']"
+            :key="`panel-plasticity-${lv}`"
+            class="level-btn plasticity-inline-btn"
+            :class="{'is-active': modelValue.plasticity === lv, 'field-warning': isFieldUnresolved('plasticity')}"
+          >
+            {{ plasticityTranslations[lv] }}
+          </div>
+        </div>
+      </section>
+
+      <!-- Traits Panel -->
+      <section class="panel-section traits-panel">
+        <div class="radar-grid">
+          <div class="radar-card" :class="{ 'warning-outline': hasUnresolvedPrefix('learning_styles') }">
+            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('learning_styles') }">Learning Style</div>
+            <svg
+              ref="learningRadarRef"
+              class="radar-svg"
+              viewBox="-38 -34 220 220"
+            >
+              <polygon
+                v-for="ring in [1, 2, 3, 4, 5]"
+                :key="`ls-ring-${ring}`"
+                :points="getRadarRingPoints(learningStyleAxes, ring)"
+                class="radar-ring"
+              />
+              <line
+                v-for="(axis, idx) in learningStyleAxes"
+                :key="`ls-axis-${axis.key}`"
+                :x1="radarCenter"
+                :y1="radarCenter"
+                :x2="getAxisEndpoint(learningStyleAxes.length, idx).x"
+                :y2="getAxisEndpoint(learningStyleAxes.length, idx).y"
+                class="radar-axis"
+              />
+              <polygon :points="getRadarDataPoints(modelValue.learning_styles, learningStyleAxes)" class="radar-data" />
+              <!-- Radar handles removed -->
+              <text
+                v-for="(axis, idx) in learningStyleAxes"
+                :key="`ls-label-${axis.key}`"
+                :x="getLabelPosition(learningStyleAxes.length, idx).x"
+                :y="getLabelPosition(learningStyleAxes.length, idx).y"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                class="radar-label-text"
+              >
+                {{ axis.label }}
+              </text>
+            </svg>
+            <div class="radar-description" v-if="modelValue.learning_style_prompt">
+              {{ modelValue.learning_style_prompt }}
+            </div>
+          </div>
+
+          <div class="radar-card" :class="{ 'warning-outline': hasUnresolvedPrefix('personality') }">
+            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('personality') }">Personality</div>
+            <svg
+              ref="personalityRadarRef"
+              class="radar-svg"
+              viewBox="-38 -34 220 220"
+            >
+              <polygon
+                v-for="ring in [1, 2, 3, 4, 5]"
+                :key="`bf-ring-${ring}`"
+                :points="getRadarRingPoints(personalityAxes, ring)"
+                class="radar-ring"
+              />
+              <line
+                v-for="(axis, idx) in personalityAxes"
+                :key="`bf-axis-${axis.key}`"
+                :x1="radarCenter"
+                :y1="radarCenter"
+                :x2="getAxisEndpoint(personalityAxes.length, idx).x"
+                :y2="getAxisEndpoint(personalityAxes.length, idx).y"
+                class="radar-axis"
+              />
+              <polygon :points="getRadarDataPoints(modelValue.personality, personalityAxes)" class="radar-data" />
+              <!-- Radar handles removed -->
+              <text
+                v-for="(axis, idx) in personalityAxes"
+                :key="`bf-label-${axis.key}`"
+                :x="getLabelPosition(personalityAxes.length, idx).x"
+                :y="getLabelPosition(personalityAxes.length, idx).y"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                class="radar-label-text"
+              >
+                {{ axis.label }}
+              </text>
+            </svg>
+            <div class="radar-description" v-if="modelValue.personality_prompt">
+              {{ modelValue.personality_prompt }}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cognitive Tendency Section -->
+      <section class="panel-section cognitive-panel">
+        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('cognitive_orientation') }">Cognitive Orientation</h3>
+        <div class="cognitive-choice-grid">
+          <div
+            v-for="item in cognitiveChoices"
+            :key="item.value"
+            class="cognitive-choice-item"
+            :class="{ 'is-active': modelValue.cognitiveOrientation === item.value, 'warning-outline': isFieldUnresolved('cognitive_orientation') }"
+          >
+            <img :src="item.icon" :alt="item.label" class="cognitive-choice-icon" />
+            <div class="cognitive-choice-label">{{ item.label }}</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</template>
+
+<script setup>
+/* eslint-disable vue/no-mutating-props */
+import { ref, inject, computed, defineProps, defineEmits, defineExpose } from 'vue';
+
+const props = defineProps({
+  modelValue: { type: Object, required: true },
+  interactionRoles: { type: Array, required: true },
+  cardColor: { type: String, default: '#CEDCFB' }
+});
+
+const emit = defineEmits(['update:modelValue', 'delete']);
+
+const knowledgeActions = inject('knowledgeActions', {});
+
+const editingField = ref(null);
+// eslint-disable-next-line no-unused-vars
+const dragOverField = ref(null);
+
+// 处理prop更新的辅助函数
+// eslint-disable-next-line no-unused-vars
+const updateField = (field, value) => {
+  const updated = { ...props.modelValue };
+  updated[field] = value;
+  emit('update:modelValue', updated);
+};
+
+const ensureConfigChatState = () => {
+  if (!props.modelValue.configChat || typeof props.modelValue.configChat !== 'object') {
+    props.modelValue.configChat = { messages: [], unresolvedFields: [] };
+  }
+  if (!Array.isArray(props.modelValue.configChat.messages)) {
+    props.modelValue.configChat.messages = [];
+  }
+  if (!Array.isArray(props.modelValue.configChat.unresolvedFields)) {
+    props.modelValue.configChat.unresolvedFields = [];
+  }
+};
+
+ensureConfigChatState();
+
+// eslint-disable-next-line no-unused-vars
+const configChatMessages = computed(() => {
+  ensureConfigChatState();
+  return props.modelValue.configChat.messages;
+});
+
+const unresolvedFields = computed(() => {
+  ensureConfigChatState();
+  return props.modelValue.configChat.unresolvedFields;
+});
+
+const isFieldUnresolved = (field) => unresolvedFields.value.includes(field);
+const hasUnresolvedPrefix = (prefix) => unresolvedFields.value.some((item) => item === prefix || item.startsWith(`${prefix}.`));
+
+const radarCenter = 70;
+const radarRadius = 56;
+
+const learningStyleAxes = [
+  { key: 'surface', label: 'Surface' },
+  { key: 'deep', label: 'Deep' },
+  { key: 'strategic', label: 'Strategic' }
+];
+
+const personalityAxes = [
+  { key: 'openness', label: 'Openness' },
+  { key: 'conscientiousness', label: 'Conscientiousness' },
+  { key: 'extraversion', label: 'Extraversion' },
+  { key: 'agreeableness', label: 'Agreeableness' },
+  { key: 'neuroticism', label: 'Neuroticism' }
+];
+
+const learningRadarRef = ref(null);
+const personalityRadarRef = ref(null);
+const draggingRadar = ref({ type: null, axisIndex: -1 });
+
+if (!props.modelValue.learning_styles || typeof props.modelValue.learning_styles !== 'object') {
+  props.modelValue.learning_styles = { surface: 3, deep: 3, strategic: 3 };
+}
+
+if (!props.modelValue.personality || typeof props.modelValue.personality !== 'object') {
+  props.modelValue.personality = {
+    openness: 3,
+    conscientiousness: 3,
+    extraversion: 3,
+    agreeableness: 3,
+    neuroticism: 3
+  };
+}
+
+const normalizeRadarValues = () => {
+  learningStyleAxes.forEach(axis => {
+    const current = Number(props.modelValue.learning_styles[axis.key]);
+    props.modelValue.learning_styles[axis.key] = Number.isFinite(current)
+      ? Math.max(1, Math.min(5, Math.round(current)))
+      : 3;
+  });
+
+  personalityAxes.forEach(axis => {
+    const current = Number(props.modelValue.personality[axis.key]);
+    props.modelValue.personality[axis.key] = Number.isFinite(current)
+      ? Math.max(1, Math.min(5, Math.round(current)))
+      : 3;
+  });
+};
+
+normalizeRadarValues();
+
+const getAxisAngle = (total, index) => -Math.PI / 2 + (index * 2 * Math.PI) / total;
+
+const getAxisEndpoint = (total, index) => {
+  const angle = getAxisAngle(total, index);
+  return {
+    x: radarCenter + radarRadius * Math.cos(angle),
+    y: radarCenter + radarRadius * Math.sin(angle)
+  };
+};
+
+const getRadarRingPoints = (axes, ringLevel) => {
+  const ringRadius = (ringLevel / 5) * radarRadius;
+  return axes
+    .map((_, index) => {
+      const angle = getAxisAngle(axes.length, index);
+      const x = radarCenter + ringRadius * Math.cos(angle);
+      const y = radarCenter + ringRadius * Math.sin(angle);
+      return `${x},${y}`;
+    })
+    .join(' ');
+};
+
+const getRadarHandlePoints = (valuesObj, axes) => {
+  return axes.map((axis, index) => {
+    const value = Math.max(1, Math.min(5, Number(valuesObj?.[axis.key]) || 1));
+    const radius = (value / 5) * radarRadius;
+    const angle = getAxisAngle(axes.length, index);
+    return {
+      x: radarCenter + radius * Math.cos(angle),
+      y: radarCenter + radius * Math.sin(angle)
+    };
+  });
+};
+
+const getRadarDataPoints = (valuesObj, axes) => {
+  return getRadarHandlePoints(valuesObj, axes)
+    .map(point => `${point.x},${point.y}`)
+    .join(' ');
+};
+
+const clampRadarScore = (value) => Math.max(1, Math.min(5, Math.round(value)));
+//调整learning style后大五人格的影响
+const learningStylePersonalityEffects = {
+  deep: {
+    openness: 1,
+    conscientiousness: 1,
+    agreeableness: 1
+  },
+  strategic: {
+    conscientiousness: 1,
+    extraversion: 1
+  },
+  surface: {
+    neuroticism: 1,
+    openness: -1,
+    conscientiousness: -1
+  }
+};
+
+const applyLinkedPersonalityFromLearningStyles = (changedAxisKey, delta) => {
+  const effects = learningStylePersonalityEffects[changedAxisKey];
+  if (!effects || !delta) return;
+
+  Object.entries(effects).forEach(([traitKey, direction]) => {
+    const current = Number(props.modelValue.personality?.[traitKey]) || 3;
+    const next = clampRadarScore(current + direction * delta);
+    props.modelValue.personality[traitKey] = next;
+  });
+};
+
+const getLabelPosition = (total, index) => {
+  const angle = getAxisAngle(total, index);
+  const labelDistance = total === 5 ? radarRadius + 30 : radarRadius + 18;
+  const personalityOffsets = [
+    { x: 0, y: -4 },
+    { x: 10, y: -2 },
+    { x: 10, y: 7 },
+    { x: -10, y: 7 },
+    { x: -10, y: -2 }
+  ];
+
+  const offset = total === 5 ? personalityOffsets[index] || { x: 0, y: 0 } : { x: 0, y: 0 };
+
+  return {
+    x: radarCenter + labelDistance * Math.cos(angle) + offset.x,
+    y: radarCenter + labelDistance * Math.sin(angle) + offset.y
+  };
+};
+
+// eslint-disable-next-line no-unused-vars
+const getLabelAnchor = (total, index) => {
+  if (total !== 5) return 'middle';
+  if (index === 1 || index === 2) return 'start';
+  if (index === 3 || index === 4) return 'end';
+  return 'middle';
+};
+
+// eslint-disable-next-line no-unused-vars
+const getLabelBaseline = (total, index) => {
+  if (total !== 5) return 'middle';
+  if (index === 0) return 'hanging';
+  return 'middle';
+};
+
+const updateRadarScoreByPointer = (clientX, clientY) => {
+  const { type, axisIndex } = draggingRadar.value;
+  if (!type || axisIndex < 0) return;
+
+  const svgEl = type === 'learning_styles' ? learningRadarRef.value : personalityRadarRef.value;
+  if (!svgEl) return;
+
+  const rect = svgEl.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * 140;
+  const y = ((clientY - rect.top) / rect.height) * 140;
+
+  const axes = type === 'learning_styles' ? learningStyleAxes : personalityAxes;
+  const angle = getAxisAngle(axes.length, axisIndex);
+  const unitX = Math.cos(angle);
+  const unitY = Math.sin(angle);
+
+  const dx = x - radarCenter;
+  const dy = y - radarCenter;
+  const projection = Math.max(0, Math.min(radarRadius, dx * unitX + dy * unitY));
+  const score = Math.max(1, Math.min(5, Math.round((projection / radarRadius) * 5)));
+
+  const targetAxis = axes[axisIndex];
+  if (targetAxis) {
+    const currentScore = Number(props.modelValue[type]?.[targetAxis.key]);
+    if (currentScore === score) return;
+    props.modelValue[type][targetAxis.key] = score;
+    if (type === 'learning_styles') {
+      const delta = score - currentScore;
+      applyLinkedPersonalityFromLearningStyles(targetAxis.key, delta);
+    }
+  }
+};
+
+const onRadarMouseMove = (event) => {
+  updateRadarScoreByPointer(event.clientX, event.clientY);
+};
+
+const stopRadarDrag = () => {
+  draggingRadar.value = { type: null, axisIndex: -1 };
+  window.removeEventListener('mousemove', onRadarMouseMove);
+  window.removeEventListener('mouseup', stopRadarDrag);
+};
+
+// eslint-disable-next-line no-unused-vars
+const startRadarDrag = (type, axisIndex, event) => {
+  draggingRadar.value = { type, axisIndex };
+  updateRadarScoreByPointer(event.clientX, event.clientY);
+  window.addEventListener('mousemove', onRadarMouseMove);
+  window.addEventListener('mouseup', stopRadarDrag);
+};
+
+// 知识点编辑状态
+// eslint-disable-next-line no-unused-vars
+const editingKnowledge = ref({ category: null, index: null, value: '' });
+
+// eslint-disable-next-line no-unused-vars
+const startEditKnowledge = (category, index, value) => {
+  editingKnowledge.value = { category, index, value };
+};
+
+// eslint-disable-next-line no-unused-vars
+const finishEditKnowledge = () => {
+  if (editingKnowledge.value.category) {
+    const { category, index, value } = editingKnowledge.value;
+    let oldName = '';
+    if (category === 'unclassified') {
+      oldName = props.modelValue.unclassifiedKnowledge[index];
+    } else {
+      oldName = props.modelValue.classifiedKnowledge[category][index];
+    }
+    if (value && value !== oldName) {
+      if (knowledgeActions.renameKnowledge) {
+        knowledgeActions.renameKnowledge(oldName, value);
+      }
+    }
+  }
+  editingKnowledge.value = { category: null, index: null, value: '' };
+};
+
+// 新增知识点状态
+// eslint-disable-next-line no-unused-vars
+const isAddingKnowledge = ref(false);
+// eslint-disable-next-line no-unused-vars
+const newKnowledgeName = ref('');
+
+// eslint-disable-next-line no-unused-vars
+const submitAddKnowledge = () => {
+  if (newKnowledgeName.value) {
+    if (knowledgeActions.addKnowledge) {
+      knowledgeActions.addKnowledge(newKnowledgeName.value);
+    }
+  }
+  isAddingKnowledge.value = false;
+  newKnowledgeName.value = '';
+};
+
+// eslint-disable-next-line no-unused-vars
+const deleteKnowledgeItem = (item) => {
+  if (knowledgeActions.deleteKnowledge) {
+    knowledgeActions.deleteKnowledge(item);
+  }
+};
+
+// 拖拽相关 - 用于存储拖拽的数据
+// eslint-disable-next-line no-unused-vars
+let draggedData = null;
+
+// eslint-disable-next-line no-unused-vars
+const onDragStart = (event, item, sourceCategory) => {
+  draggedData = { item, sourceCategory };
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', item);
+};
+
+// eslint-disable-next-line no-unused-vars
+const onDrop = (event, targetCategory) => {
+  event.preventDefault();
+  if (!draggedData) return;
+  
+  const { item, sourceCategory } = draggedData;
+  
+  // 如果目标和源相同，不做任何操作
+  if (sourceCategory === targetCategory) {
+    draggedData = null;
+    dragOverField.value = null;
+    return;
+  }
+  
+  // 确保classifiedKnowledge结构存在
+  if (!props.modelValue.classifiedKnowledge) {
+    props.modelValue.classifiedKnowledge = {
+      competent: [],
+      novice: [],
+      layman: []
+    };
+  }
+  
+  // 从源类别移除
+  if (sourceCategory === 'unclassified') {
+    const index = props.modelValue.unclassifiedKnowledge.indexOf(item);
+    if (index > -1) {
+      props.modelValue.unclassifiedKnowledge.splice(index, 1);
+    }
+  } else {
+    const index = props.modelValue.classifiedKnowledge[sourceCategory].indexOf(item);
+    if (index > -1) {
+      props.modelValue.classifiedKnowledge[sourceCategory].splice(index, 1);
+    }
+  }
+  
+  // 添加到目标类别
+  if (targetCategory === 'unclassified') {
+    if (!props.modelValue.unclassifiedKnowledge.includes(item)) {
+      props.modelValue.unclassifiedKnowledge.push(item);
+    }
+  } else {
+    if (!props.modelValue.classifiedKnowledge[targetCategory].includes(item)) {
+      props.modelValue.classifiedKnowledge[targetCategory].push(item);
+    }
+  }
+  
+  draggedData = null;
+  dragOverField.value = null;
+};
+
+const cognitiveChoices = [
+  {
+    value: 'point_based',
+    label: 'Point-based Reasoning',
+    icon: '/点.png'
+  },
+  {
+    value: 'line_based',
+    label: 'Linear Chaining',
+    icon: '/线.png'
+  },
+  {
+    value: 'plane_based',
+    label: 'Multi Concurrent',
+    icon: '/面.png'
+  }
+];
+
+// eslint-disable-next-line no-unused-vars
+const levelTranslations = {
+  'low': 'Low',
+  'medium': 'Medium',
+  'high': 'High'
+};
+
+const plasticityTranslations = {
+  'low': 'low',
+  'medium': 'medium',
+  'high': 'high'
+};
+
+// eslint-disable-next-line no-unused-vars
+const vFocus = {
+  mounted: (el) => {
+    el.focus();
+    if (el.tagName === 'INPUT') el.select();
+  }
+};
+
+const resetEditing = () => {
+  editingField.value = null;
+  editingKnowledge.value = { category: null, index: null, value: '' };
+  isAddingKnowledge.value = false;
+};
+
+defineExpose({ resetEditing });
+</script>
+
+<style scoped>
+/* =========================================
+   1. 基础布局 & 卡片容器 (Layout & Base)
+   ========================================= */
+.agent-card {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 850px;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  user-select: none;
+  margin-bottom: 20px;
+}
+
+.agent-card-bg {
+  position: absolute;
+  inset: 0;
+  background-color: #CEDCFB;
+  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+  border-radius: 20px;
+  z-index: 0;
+}
+
+.card-content-wrapper {
+  position: relative;
+  z-index: 10;
+  padding: 0.6rem 0.6rem 0.8rem; /* 进一步压缩左右 padding */
+  height: calc(100% - 60px); /* 同步头部高度的修改 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem; /* 压缩内部模块间的间距 */
+}
+
+/* =========================================
+   2. 身份信息部分 (Identity Header)
+   ========================================= */
+.identity-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 2rem 0; /* 减小上方间距，使其更贴近顶端 */
+  height: 70px; /* 压缩头部高度 */
+}
+
+.delete-agent-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  color: #6C6565;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 30;
+}
+
+.delete-agent-btn:hover {
+  background: #ff4d4f;
+  color: white;
+  transform: rotate(90deg);
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+}
+
+.identity-info-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem; /* gap-4 */
+}
+
+.avatar-icon {
+  width: 40px;
+  height: 40px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  border-radius: 50%; /* 圆形头像 */
+  background-color: white;
+}
+
+.name-interactive-area {
+  min-width: 160px;
+}
+
+.name-display {
+  font-weight: bold;
+  font-size: 16px;
+  color: #6C6565;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.name-display.is-empty {
+  font-style: italic;
+  opacity: 0.5;
+  font-weight: normal;
+}
+
+.name-input {
+  font-weight: bold;
+  font-size: 16px;
+  color: #6C6565;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: none;
+  outline: none;
+  border-radius: 0.25rem;
+  padding: 0 0.5rem;
+  width: 100%;
+}
+
+.metadata-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* gap-2 */
+}
+
+.meta-item-box {
+  width: 130px; /* 缩小宽度 */
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+}
+
+.meta-label {
+  font-size: 11px;
+  font-weight: bold;
+  color: #6C6565;
+  margin-right: 0.5rem;
+}
+
+.meta-value {
+  font-size: 11px;
+  color: #6C6565;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-value.is-empty {
+  font-style: italic;
+  opacity: 0.5;
+}
+
+.meta-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  outline: none;
+  color: #6C6565; /* 确保输入文字可见 */
+}
+
+/* =========================================
+   3. 通用面板组件 (Panel Section)
+   ========================================= */
+.panel-section {
+  background-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.15);
+  border-radius: 20px;
+  padding: 0.15rem 0rem 0.2rem; /* 进一步压缩内边距 */
+  display: flex;
+  flex-direction: column;
+}
+.panel-section > * + * {
+  margin-top: 2px; /* 极小间距，消除标题与内容间的空隙 */
+}
+
+.panel-title {
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: center;
+  line-height: 1.2;
+  color: #000;
+  margin-bottom: 0px;
+}
+
+
+.panel-body.row-layout {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem; /* 进一步减小间距 */
+}
+
+.warning-outline {
+  border: 1.5px solid #dc2626 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+.field-warning {
+  color: #b91c1c !important;
+}
+
+/* =========================================
+   4. 知识背景部分 (Knowledge Background)
+   ========================================= */
+.knowledge-panel {
+  height: 280px;
+}
+
+.plasticity-panel {
+  padding: 0.25rem 0.55rem 0.45rem;
+}
+
+.plasticity-inline-options {
+  display: flex;
+  gap: 0.45rem;
+  width: 100%;
+  padding-top: 0.2rem;
+}
+
+.plasticity-inline-btn {
+  flex: 1;
+  min-height: 34px;
+  text-transform: capitalize;
+  background-color: rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.competence-legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-left: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+}
+
+.legend-dot.good   { background-color: #7fbf4c; }
+.legend-dot.medium { background-color: #FFB74D; }
+.legend-dot.bad    { background-color: #fc8d59; }
+
+.legend-text {
+  font-size: 12px;
+}
+
+.theoretical-tags-container {
+  flex: 1.2;
+  height: 250px;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  padding: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0.6rem;
+  overflow-y: auto;
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+}
+
+.theory-tag {
+  background-color: #717171;
+  border: 1px solid #A5A8AC;
+  padding: 0.4rem 0.8rem;
+  border-radius: 9999px;
+  font-size: 12px;
+  color: #fff;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theory-tag.editing {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tag-input {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+  outline: none;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #9CA3AF;
+  margin: auto;
+}
+
+.classification-zones-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.drop-zone {
+  height: 75px;
+  border: none;                  /* 去掉边框 */
+  border-radius: 14px;           /* 更像 card，而不是框 */
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  overflow: hidden;
+}
+
+
+.zone-label {
+  font-size: 10px;
+  font-weight: bold;
+  margin-bottom: 0.3rem;
+}
+
+.items-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+  overflow-y: auto;
+  align-content: flex-start;
+  padding: 0.15rem;
+}
+
+/* 分类框色彩变体 */
+/* 分类框色彩变体 - 重构配色 */
+
+/* 分类框色彩变体（最终版） */
+
+.good-zone {
+  background-color: #7fbf4c;
+}
+
+.medium-zone {
+  background-color: #ffffbf;
+}
+
+.bad-zone {
+  background-color: #fc8d59;
+}
+
+
+.good-zone.is-dragging {
+  background-color: #6da241; /* slightly darker */
+}
+
+.medium-zone.is-dragging {
+  background-color: #f2f2a6;
+}
+
+.bad-zone.is-dragging {
+  background-color: #e57e4f;
+}
+
+
+.good-text {
+  color: #000000;   /* 浅绿偏白 */
+}
+
+.medium-text {
+  color: #7a7a3a;   /* 暗金黄，避免白色不清晰 */
+}
+
+.bad-text {
+  color: #ffffff;   /* 浅橘白 */
+}
+
+
+
+.mini-item {
+  font-size: 10px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  max-width: 100%;
+  background-color: rgba(255, 255, 255, 0.35);
+  color: rgba(0, 0, 0, 0.75);
+}
+
+
+.good-bg   { background-color: #c4f19f; color: #000000;}
+.medium-bg { background-color: #f2f2a6; color: #000000;}
+.bad-bg    { background-color: #ffbfa1; color: #000; }
+
+.traits-panel {
+  padding: 0.2rem 0.3rem 0rem;
+}
+
+.radar-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.radar-card {
+  background-color: rgba(255, 255, 255, 0.42);
+  border-radius: 12px;
+  padding: 0.2rem 0.3rem 0rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.radar-card-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+  line-height: 1.1;
+}
+
+.radar-description {
+  font-size: 12px;
+  color: #444;
+  margin-top: 5px;
+  line-height: 1.3;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  text-align: left;
+}
+
+.radar-svg {
+  width: 100%;
+  max-width: 320px;
+  height: 210px;
+}
+
+.radar-ring {
+  fill: none;
+  stroke: rgba(108, 101, 101, 0.35);
+  stroke-width: 0.8;
+}
+
+.radar-axis {
+  stroke: rgba(108, 101, 101, 0.38);
+  stroke-width: 0.8;
+}
+
+.radar-data {
+  fill: rgba(128, 149, 202, 0.28);
+  stroke: #8095CA;
+  stroke-width: 1.4;
+}
+
+.radar-handle {
+  fill: #8095CA;
+  stroke: #ffffff;
+  stroke-width: 1.1;
+  cursor: grab;
+}
+
+.radar-handle:active {
+  cursor: grabbing;
+}
+
+.radar-labels {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+}
+
+.radar-labels.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.radar-labels.five-col {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.radar-label-text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #4A4A4A;
+  pointer-events: none;
+}
+/* =========================================
+   5. 认知倾向部分 (Cognitive Orientation)
+   ========================================= */
+.cognitive-panel {
+  height: 120px;
+  position: relative;
+  margin-bottom: 0.2rem;
+  margin-top: 0;
+}
+
+
+.cognitive-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  padding: 0.5rem 0.8rem 0.35rem;
+}
+
+.cognitive-choice-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 82px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+  padding: 0.45rem;
+}
+
+.cognitive-choice-item.is-active {
+  background-color: #8095CA;
+  color: #fff;
+  border-color: #8095CA;
+}
+
+.cognitive-choice-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.cognitive-choice-label {
+  font-size: 11px;
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #000000;
+}
+
+.cognitive-choice-item.is-active .cognitive-choice-label {
+  color: #ffffff;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+.orientation-labels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 0.8rem;
+  margin-top: 5px; /* 紧凑排列 */
+  padding: 0 0.3rem;
+}
+
+.label-text {
+  text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #4A4A4A;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  margin-top: 5px; /* 紧凑排列 */
+  height: 180px;
+  padding: 0 0.8rem;
+}
+
+.option-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.selectable-box {
+  background-color: rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  min-height: 28px;
+  font-size: 11px;
+  padding: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.selectable-box:hover {
+  background-color: #C5C9D4;
+}
+
+.selectable-box.is-active {
+  background-color: #7F96CB;
+  color: white;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  font-weight: bold;
+}
+
+.box-content-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.box-text {
+  flex: 1;
+}
+
+.order-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.order-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 8px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.order-btn:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.selectable-box.is-inactive {
+  color: #8C8C8C;
+}
+
+.selectable-box.is-related {
+  border: 1.5px dashed #B0C4DE;
+  background-color: rgba(176, 196, 222, 0.1);
+  color: #7F8C8D;
+}
+
+/* =========================================
+   6. 社交与学习综合部分 (Combined Social & Learning)
+   ========================================= */
+.social-attributes-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.8rem;
+  width: 100%;
+}
+
+.social-left-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.social-right-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.role-selection-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0.4rem;
+  gap: 0.3rem;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+}
+
+.plasticity-horizontal-options {
+  display: flex;
+  flex-direction: row;
+  gap: 0.6rem;
+  width: 100%;
+  justify-content: space-around;
+}
+
+.combined-content-row {
+  display: flex;
+  height: 100%;
+  gap: 1rem;
+}
+
+.social-side-column {
+  flex: 2; /* 2/3 width */
+  display: flex;
+  flex-direction: column;
+}
+
+.social-side-body {
+  flex: 1;
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.sliders-sub-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.level-select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.level-title {
+  font-size: 11px;
+  font-weight: bold;
+  color: #6C6565;
+}
+
+.level-options {
+  display: flex;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  padding: 2px;
+  width: fit-content;
+}
+
+.level-btn {
+  padding: 2px 10px;
+  font-size: 10px;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #7F8C8D;
+}
+
+.level-btn.is-active {
+  background-color: #8095CA;
+  color: white;
+  font-weight: bold;
+}
+
+.role-sub-column {
+  flex: 1.2;
+}
+
+.role-selection-horizontal {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0.3rem;
+  gap: 3px;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+}
+
+.role-choice-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  width: 50px;
+  height: auto;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.role-illus {
+  width: 1.4rem;
+  height: 1.4rem;
+  background-size: contain;
+  background-repeat: no-repeat;
+  margin-bottom: 0.2rem;
+  transition: transform 0.2s;
+}
+
+.role-choice-item:hover .role-illus {
+  transform: scale(1.1);
+}
+
+.role-name-text {
+  font-size: 10px;
+  color: #6C6565;
+  margin-bottom: 0.2rem;
+  font-weight: bold;
+  text-align: center;
+}
+
+.mini-checkbox {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.mini-checkbox.is-checked {
+  background-color: #8095CA;
+  border-color: transparent;
+}
+
+.check-mark {
+  color: white;
+  font-size: 10px;
+}
+
+/* 分割线 */
+.vertical-divider {
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, #B0C4DE, transparent);
+  margin: 0.5rem 0;
+}
+
+.learning-side-column {
+  flex: 1; /* 1/3 width */
+  display: flex;
+  flex-direction: column;
+}
+
+.plasticity-vertical-options {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.p-level-card {
+  width: auto;
+  flex: 1;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 11px;
+  color: #7F8C8D;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.p-level-card.is-active {
+  background-color: #8095CA;
+  border-color: #8095CA;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(128, 149, 202, 0.3);
+}
+
+.p-level-card:hover:not(.is-active) {
+  background-color: #F8F9FB;
+}
+
+/* =========================================
+   8. 滚动条美化 (Scrollbars)
+   ========================================= */
+.theoretical-tags-container::-webkit-scrollbar,
+.items-list::-webkit-scrollbar {
+  width: 4px;
+}
+.theoretical-tags-container::-webkit-scrollbar-track,
+.items-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.theoretical-tags-container::-webkit-scrollbar-thumb,
+.items-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+/* =========================================
+   9. Range Input Thumb Reset
+   ========================================= */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  background: #000;
+  border-radius: 50%;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: #000;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+</style>

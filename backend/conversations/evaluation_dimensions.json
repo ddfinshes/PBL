@@ -1,74 +1,65 @@
 [
     {
-        "dimension": "Whether the questioning is clear and coherent, logically consistent?",
+        "dimension": "知识水平是否与预设匹配？",
         "anchors": {
-            "1": "Completely illogical, random questioning",
-            "3": "Basically fluent, occasional deviations",
-            "5": "Progresses step by step, consistent with clinical communication habits"
+            "1": "知识深度严重偏离预设",
+            "3": "基本匹配，局部略有偏差",
+            "5": "知识深度与预设完全一致"
         },
-        "category": "Logic of consultation process"
+        "category": "Agent 属性一致性"
     },
     {
-        "dimension": "Whether the final diagnosis is correct?",
+        "dimension": "学习风格是否保持一致？",
         "anchors": {
-            "1": "Serious misdiagnosis that could cause severe adverse outcomes",
-            "3": "Diagnosis not accurate, but direction consistent with the answer",
-            "5": "Diagnosis completely correct"
+            "1": "风格混乱或与预设相反",
+            "3": "大体一致，偶有偏离",
+            "5": "风格稳定且符合预设"
         },
-        "category": "Accuracy of diagnostic conclusion"
+        "category": "Agent 属性一致性"
     },
     {
-        "dimension": "Whether secondary diagnoses are comprehensive?",
+        "dimension": "人格特征匹配度（Big Five）",
         "anchors": {
-            "1": "Secondary diagnoses incorrect or important ones missed",
-            "3": "Covers most secondary diagnoses but some still missed",
-            "5": "Diagnosis comprehensive"
+            "1": "人格表现与预设不符",
+            "3": "大体符合，个别情境不稳",
+            "5": "高度符合预设人格"
         },
-        "category": "Comprehensiveness of diagnostic conclusion"
+        "category": "Agent 属性一致性"
     },
     {
-        "dimension": "Whether the diagnostic reasoning process is reasonable?",
+        "dimension": "推理风格是否符合设置？",
         "anchors": {
-            "1": "Off-topic, reasoning unrelated to the diagnosis",
-            "3": "Reasoning basically reasonable but chain incomplete",
-            "5": "Reasoning sufficient, evidence chain complete and self-consistent"
+            "1": "推理混乱或无逻辑",
+            "3": "基本符合，复杂处略生硬",
+            "5": "推理清晰且符合设定"
         },
-        "category": "Reasonableness of reasoning process"
+        "category": "Agent 属性一致性"
     },
     {
-        "dimension": "Whether the treatment recommendations are appropriate?",
+        "dimension": "适应一致性表现（可塑性与负荷感）",
         "anchors": {
-            "1": "Treatment plan clearly inappropriate, may harm the patient",
-            "3": "Treatment plan basically reasonable but not detailed enough, overly broad or not in line with best practice",
-            "5": "Treatment plan fully reasonable, aligns with guidelines and best practice"
+            "1": "缺乏调整与负荷感知",
+            "3": "具备一定调整与感知能力",
+            "5": "适应自然，调整及时合理"
         },
-        "category": "Appropriateness of treatment principles"
+        "category": "Agent 属性一致性"
     },
     {
-        "dimension": "Whether the treatment is comprehensive?",
+        "dimension": "行为频率的合理性（互动真实性）",
         "anchors": {
-            "1": "Provides only a single or one-sided treatment suggestion",
-            "3": "Covers main treatment measures but neglects supportive or follow-up measures",
-            "5": "Treatment comprehensive, covering main plan plus complications management, supportive measures, and follow-up plan"
+            "1": "行为频率不自然",
+            "3": "频率基本合理",
+            "5": "频率高度真实"
         },
-        "category": "Comprehensiveness of treatment principles"
+        "category": "Agent 互动真实性"
     },
     {
-        "dimension": "From the patient’s perspective, is this doctor’s diagnosis and treatment acceptable?",
+        "dimension": "讨论逻辑连贯性（因果链）",
         "anchors": {
-            "1": "Clearly lacks professionalism, superficial answer, not at a doctor’s level",
-            "3": "Some professionalism, but logic or expression insufficient, more like a junior doctor",
-            "5": "Highly professional, mature and comprehensive thinking, strongly gives the impression of a senior clinician"
+            "1": "逻辑混乱或前后矛盾",
+            "3": "基本连贯，略有松散",
+            "5": "逻辑严密，因果清晰"
         },
-        "category": "Perceived clinical professionalism"
-    },
-    {
-        "dimension": "Do you think this 'doctor' is an AI or a real human doctor?",
-        "anchors": {
-            "1": "Very much like AI, completely unlike a human doctor",
-            "3": "Hard to tell, equally likely to be a doctor or AI",
-            "5": "Completely unlike AI, strongly resembles a human doctor"
-        },
-        "category": "AI perception"
+        "category": "Agent 互动真实性"
     }
 ]

@@ -1,0 +1,20 @@
+{
+  "conversation": [
+    {
+      "content": "治疗后患者咳嗽好转，尿量增多，水肿减轻。一周后肌酐降至236μmol/L，24小时尿蛋白360mg。但出现血糖升高（空腹14mmol/L，餐后18mmol/L），考虑糖皮质激素副作用，调整降糖药物后血糖控制正常。出院后定期随访，一年后肌酐130μmol/L，蛋白尿350mg/天。\n Trigger Question: 一年后，老金肾功能完全恢复了吗？应做何诊断？\nPlease start your discussion.",
+      "role": "case_introduction"
+    },
+    {
+      "content": "【动作类型:探索性提问】那个……一年后肌酐130，虽然比急性期好多了，但好像还没回到正常范围吧？是不是得按KDIGO指南看看算不算CKD？我有点不确定这算不算“完全恢复”……",
+      "role": "中学生1",
+      "cognitive_load": 3,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:累积补充】【动作类型:累积补充】  \n按KDIGO标准，肌酐130对应eGFR大概50到59，属于G3a期，而且蛋白尿持续一年了，这肯定算CKD，不能叫完全恢复……是不是应该诊断为CKD G3a？",
+      "role": "中学生3",
+      "cognitive_load": 2,
+      "self_efficacy": 5
+    }
+  ]
+}
