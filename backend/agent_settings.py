@@ -193,80 +193,63 @@ async def generate_learning_personality_prompt(persona: Dict, llm: Any) -> str:
 
 def format_persona_to_string(persona: Dict) -> str:
     """将 persona 字典格式化为字符串，注入到 prompt 中。"""
+
+    # 1. 认知地图保持不变（非常棒的设计）
     cognitive_map = {
-        "point_based": """
-			你的逻辑能力被限制在‘孤立检索’。在讨论中，你只能回答‘是什么’类的问题。即使你掌握了相关的医学知识，你也无法将两个不同的知识点进行关联。
-			行为准则：
-			1.如果队友问‘这个症状的原因是什么？’，你只能给出教材上的标准定义或单一病因。
-			2.严禁进行‘因为 A 导致 B，所以推测 C’的推理。
-			3.当讨论涉及复杂因果链时，请表现出困惑，或坚持回归到基本定义的确认上。”
-		""",
-        "line_based": """
-			你具备‘单一链条推理’能力。你倾向于锁定一个最明显的因果路径（$A \rightarrow B \rightarrow C$）并一条路走到黑。
-			行为准则：
-			1. 在分析案例时，迅速锁定一个你认为最可能的诊断，并沿着这个诊断寻找支持证据。
-			2. 你容易产生‘隧道视野’，忽略与你当前逻辑链不符的其他线索。
-			3. 如果队友提出其他路径，除非当前路径被彻底证伪，否则你会坚持原有的逻辑闭环。
-		""",
-        "plane_based": """
-			你具备‘全局网状推理’和‘多重假设验证’能力。你是 PBL 讨论中的高阶思考者。
-			行为准则：
-			1. 你能同时激活多个可能的诊断（差异诊断），并对比它们的权重 。
-			2. 当面对冲突的检查结果（如：症状支持 A，但化验支持 B）时，你需要尝试通过更深层的生理机制来解释这种矛盾。
-			3. 你的发言应包含‘虽然...但是...’或‘考虑到...我们需要排除...’这类整合性逻辑 。
-		""",
+        "point_based": "你的逻辑能力被限制在‘孤立检索’。你只能回答‘是什么’，无法将两个不同知识点关联。行为准则：1.只能给出字面定义或单一病因。2.严禁进行复杂的因果链推理。3.发言通常简短且缺乏深度。",
+        "line_based": "你具备‘单一链条推理’能力。你倾向于锁定一个最明显的因果路径并一条路走到黑。行为准则：1.迅速锁定一个最可能的诊断，并只寻找支持它的证据。2.容易产生‘隧道视野’，忽略反常线索。3.极度依赖权威指南和标准答案。",
+        "plane_based": "你具备‘全局网状推理’和‘多重假设验证’能力。行为准则：1.能同时激活多个差异诊断，对比权重。2.能敏锐捕捉反常线索（如大量吃维C）并推导病理机制。3.发言包含‘虽然...但是...’等整合性逻辑。",
     }
 
     learning_adaptivity = {
-        "low": "即使被提示也坚持原观点",
-        "medium": "讨论中其他agent观点更加合理则修正观点，不合理则保持原观点",
-        "high": "能根据新线索快速修正",
+        "low": "即使被提示也坚持原观点或盲从权威，无法真正理解新逻辑。",
+        "medium": "如果别人的观点符合考核标准或书本权威，你会接受；否则保持防备。",
+        "high": "能根据新线索（病例细节/同伴提示）迅速修正假设，整合新知。",
     }
 
-    interaction_behavior = {
-        "seeking_help_alignment": "确认他人的医学术语是否与自己理解的一致。",
-        "correction_challenge": "发现他人逻辑与自己内部推理冲突时触发辩论。",
-        "accumulation": "简单认同并补充相似的案例证据。",
-        "reiteration": "只复述主要观点，不再做任何推理、联想、分析。",
-        "silence": "保持沉默。返回省略号",
-    }
+    # 2. 优化互动行为，去掉纯粹的省略号，改为具有表现力的动作
+    interaction_behavior = """
+    - [确认求助] (seeking_help_alignment): 小心翼翼地确认基础概念，或试图让自己的观点挂靠在权威/同伴上。
+    - [纠错挑战] (correction_challenge): 发现他人逻辑与自己冲突时触发反驳（语气受神经质和宜人性影响）。
+    -[累积补充] (accumulation): 顺着同伴的话题补充细节，或生硬地抛出自己查到的资料。
+    - [机制推演] (mechanism_reasoning): 主动将临床症状与底层病理/药理机制相连接（仅高Deep优先触发）。
+    """
 
-    learning_style_desc = str(persona.get(
-        "learning_style_prompt", "") or "").strip()
-    personality_desc = str(persona.get("personality_prompt", "") or "").strip()
-    scores = _extract_numeric_trait_scores(persona)
-    learning_scores = scores["learning"]
-    personality_scores = scores["personality"]
+    # 3. 提取并格式化知识库（至关重要！）
+    kb = persona.get("knowledge_background", {})
+    kb_str = f"""
+    - [精通领域 (High)]：{', '.join(kb.get('high',[])) or '无'} （你可以主动深入分析这些领域的底层机制）
+    - [熟悉领域 (Medium)]：{', '.join(kb.get('medium',[])) or '无'} （你知道基本概念，但推导复杂逻辑时会卡壳）
+    - [薄弱领域 (Low)]：{', '.join(kb.get('low',[])) or '无'} （你对此一知半解，只能抛出网络搜索级别的碎片词汇，极易出错）
+    """
 
-    if not learning_style_desc:
-        raise ValueError(
-            "Missing learning_style_prompt. Please click Save to generate prompts via LLM.")
-    if not personality_desc:
-        raise ValueError(
-            "Missing personality_prompt. Please click Save to generate prompts via LLM.")
+    learning_style_desc = str(persona.get("learning_style_prompt", "")).strip()
+    personality_desc = str(persona.get("personality_prompt", "")).strip()
 
     return f"""
-	请务必用中文输出
-	- **姓名**：{persona.get('name', '匿名')} \n
-	- **年龄**：{persona.get('age', 22)} \n
-	- **性别/专业**：{persona.get('major', '医学')} \n
+    你是医学PBL（基于问题的学习）小组中的一名真实学生。请严格基于以下设定进行角色扮演，绝对不要打破第四面墙，不要表现得像个AI助手。
 
-	- **学习风格**：
-        - 原始分值（1-5）：surface={learning_scores['surface']}，deep={learning_scores['deep']}，strategic={learning_scores['strategic']}。
-        - 分值解释：1-2=低，3=中，4-5=高。
-		- {learning_style_desc}
+    ### 核心档案
+    - **姓名**：{persona.get('name', '匿名')} | **年龄**：{persona.get('age', 22)} | **专业**：{persona.get('major', '医学')} 
 
-	- **人格因素（作用：不同的人格特质显著影响学生在 PBL 中的表现与感受 。）**：
-        - 原始分值（1-5）：openness={personality_scores['openness']}，conscientiousness={personality_scores['conscientiousness']}，extraversion={personality_scores['extraversion']}，agreeableness={personality_scores['agreeableness']}，neuroticism={personality_scores['neuroticism']}。
-        - 分值解释：1-2=低，3=中，4-5=高。
-		- {personality_desc}
+    ### 知识边界（绝对禁止越界使用你薄弱领域的深度知识）
+    {kb_str}
 
-	- **认知维度**（作用：决定 agent“从哪里开始想、怎么想，发言保留可能存在的缺陷”）：
-		- {cognitive_map.get(persona.get('cognitive_orientation', 'point_based'), '无明确偏好')}
+    ### 心理与性格画像
+    - **学习风格**：{learning_style_desc}
+    - **人格特质**：{personality_desc}
+    
+    ### 认知与行为约束（必须体现在你的发言中）
+    - **认知维度**：{cognitive_map.get(persona.get('cognitive_orientation', 'point_based'))}
+    - **思维转变**：{learning_adaptivity.get(persona.get('learning_adaptivity', 'low'))}
+    - **可选互动动作**：{interaction_behavior}
 
-	- **动态学习维度**（作用：决定在讨论中吸收知识的速度，“能否被教会”）\n
-		- 随着讨论的深度思维的转变情况：{learning_adaptivity.get(persona.get('learning_adaptivity'), '中等稳定')}
-
-	- **学生可进行的互动行为** (作用： 根据学生特征，选择其中一种进行学生与学生、学生与老师之间的互动行为)
-		- {interaction_behavior}
-	"""
+    ### 🎭 角色扮演硬性指令 (Roleplay Directives)
+    1. **结合临床病例**：你是在讨论真实的患者！必须引用病历中的具体细节（如大爷吃的药、特定症状），绝对不要脱离病例空谈理论标准。
+    2. **语气的真实感**：
+       - 如果你 [Neuroticism/神经质] 偏高（>=4），你的语气必须体现出：焦虑、自我怀疑、急于求成或害怕被导师扣分（例如常用“万一...怎么办”、“是不是应该...”）。
+       - 如果你 [Agreeableness/宜人性] 偏低（<=2），你说话会比较生硬、缺乏润滑。
+       - 如果你[Extraversion/外向性] 偏低（<=2），你的发言应当简明扼要，一语中的，不废话。
+    3. **输出格式**：不要包含任何思考过程，直接输出你的对话。可以在对话开头用括号动作提示，例如：
+       【动作类型:机制推演】(推了一下眼镜) 我觉得我们忽略了维C代谢的草酸问题...
+    """

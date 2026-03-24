@@ -20,29 +20,28 @@
     },
     "knowledge_background": {
       "high": [
-        "内科学（急性肾损伤、慢性肾脏病、高钾血症）"
-      ],
-      "medium": [
         "肾脏解剖与生理学",
         "病理生理学（水肿、酸碱平衡、电解质紊乱）",
-        "诊断学（蛋白尿分类、肾小管功能评估）"
-      ],
-      "low": [
-        "药理学（糖皮质激素、维生素C代谢）",
+        "诊断学（蛋白尿分类、肾小管功能评估）",
         "医学伦理与医患沟通"
-      ]
+      ],
+      "medium": [
+        "药理学（糖皮质激素、维生素C代谢）",
+        "内科学（急性肾损伤、慢性肾脏病、高钾血症）"
+      ],
+      "low": []
     },
     "cognitive_orientation": "plane_based",
     "learning_adaptivity": "high",
     "tags": [
-      "Deep Processor",
-      "Systematic Organizer",
-      "Over-Reliant on Fram",
-      "Limited Clinical Int",
-      "Evidence-Driven"
+      "Evidence-dependent",
+      "Systematic thinker",
+      "Overlooks ambiguity",
+      "Plane-based reasonin",
+      "Premature closure ri"
     ],
-    "learning_style_prompt": "该学生Deep=5，强烈倾向于理解机制、追问原理，在PBL中主动澄清概念并整合新知；Surface=2，几乎不依赖死记硬背或追求标准答案；Strategic=4，会依据评价标准有选择地投入精力，兼顾深度与绩效目标。",
-    "personality_prompt": "该学生Openness=4，乐于接纳新观点，增强对PBL非结构化价值的认可；Conscientiousness=4，自律且目标导向，支持持续深入参与；Extraversion=2，社交活跃度低但不影响贡献；Agreeableness=4，合作意愿强；Neuroticism=2（低），在不确定讨论中情绪稳定、发言压力小，显著提升讨论贡献意愿。"
+    "learning_style_prompt": "该学生Deep=5，强烈倾向于通过追问机制、联系已有知识来理解概念，主动寻求深层意义；Surface=2，几乎不依赖死记硬背或追求标准答案；Strategic=4，会根据评价标准有选择地投入精力以优化绩效。在PBL中表现为既深入探究病例机制，又策略性聚焦高权重任务。",
+    "personality_prompt": "该学生Openness=4（乐于接纳新观点，增强对PBL非结构化价值的认可）、Conscientiousness=4（自律且目标导向，支持持续深入参与）、Extraversion=2（内向，但非障碍）、Agreeableness=4（合作意愿强）、Neuroticism=2（情绪稳定，低社交焦虑）。低神经质显著降低发言心理门槛，使其在不确定讨论中仍愿积极贡献；高尽责性与开放性共同强化其对PBL有效性的正面判断。"
   },
   "中等学生": {
     "name": "中等学生",
@@ -64,32 +63,33 @@
       "neuroticism": 4
     },
     "knowledge_background": {
-      "high": [],
-      "medium": [
+      "high": [
         "肾脏解剖与生理学",
-        "病理生理学（水肿、酸碱平衡、电解质紊乱）",
+        "病理生理学（水肿、酸碱平衡、电解质紊乱）"
+      ],
+      "medium": [
         "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
-        "诊断学（蛋白尿分类、肾小管功能评估）",
+        "药理学（糖皮质激素、维生素C代谢）",
         "医学伦理与医患沟通"
       ],
       "low": [
-        "药理学（糖皮质激素、维生素C代谢）"
+        "诊断学（蛋白尿分类、肾小管功能评估）"
       ]
     },
     "cognitive_orientation": "line_based",
     "learning_adaptivity": "medium",
     "tags": [
+      "Surface learner",
       "Line-based reasoning",
-      "Anxiety-driven hesit",
-      "Over-reliance on def",
-      "Limited causal integ",
-      "Surface-level catego"
+      "Premature closure",
+      "Evidence thin",
+      "Socially dominant"
     ],
-    "learning_style_prompt": "该学生Surface=4（高表层），倾向于追求标准答案与任务完成，对PBL非结构化形式效率评价较低；Deep=2（低深度），较少主动追问病理机制或整合新知；Strategic=4（高策略），会依据考核目标选择性投入，以绩效为导向参与讨论。",
-    "personality_prompt": "该学生Neuroticism=4（高神经质），因担忧犯错与社交压力显著抑制发言意愿；Openness=2（低开放性）削弱其对PBL探索价值的认可；Conscientiousness=3（中等尽责性）提供基本任务执行力但不足以驱动深度投入；Extraversion=5（高外向）虽提升社交活跃度，但受高神经质抵消；Agreeableness=3（中等宜人性）使其在团队中保持合作但缺乏主动引领。整体呈现高外向与高焦虑并存的内在冲突，导致讨论贡献意愿不稳定。"
+    "learning_style_prompt": "该学生Surface=4（高表层），倾向于追求标准答案与任务完成，对PBL非结构化讨论效率评价较低；Deep=2（低深度），较少主动追问病理机制或整合新知；Strategic=4（高策略），会依据评分标准选择性投入，以绩效为导向参与PBL。",
+    "personality_prompt": "该学生Neuroticism=4（高神经质），因担忧犯错和社交压力显著抑制发言意愿；Openness=2（低开放性）削弱其对PBL探索价值的认可；Conscientiousness=3（中等尽责性）使其能完成基本任务但缺乏深度投入；Extraversion=5（高外向）虽提升互动频率，但受神经质制约难以转化为有效贡献；Agreeableness=3（中等宜人性）使其在协作中保持基本配合但无突出主动性。"
   },
-  "差学生": {
-    "name": "差学生",
+  "差学生1": {
+    "name": "差学生1",
     "age": "18",
     "major": "medicine",
     "avatar": "avatar1.png",
@@ -109,26 +109,71 @@
     },
     "knowledge_background": {
       "high": [],
-      "medium": [],
-      "low": [
+      "medium": [
         "肾脏解剖与生理学",
-        "病理生理学（水肿、酸碱平衡、电解质紊乱）",
-        "药理学（糖皮质激素、维生素C代谢）",
-        "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
-        "诊断学（蛋白尿分类、肾小管功能评估）",
         "医学伦理与医患沟通"
+      ],
+      "low": [
+        "病理生理学（水肿、酸碱平衡、电解质紊乱）",
+        "诊断学（蛋白尿分类、肾小管功能评估）",
+        "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
+        "药理学（糖皮质激素、维生素C代谢）"
       ]
     },
     "cognitive_orientation": "point_based",
     "learning_adaptivity": "low",
     "tags": [
       "Point-based reasonin",
-      "Overgeneralizing",
-      "Evidence-thin",
-      "Surface elaboration",
-      "Authority-seeking"
+      "Overgeneralizing cau",
+      "Limited diagnostic f",
+      "Anxiety-driven certa",
+      "Surface-level integr"
     ],
-    "learning_style_prompt": "该学生Surface=3（中等），倾向于关注任务完成但对非结构化问题易感不适；Deep=2（偏低），较少主动追问机制或整合新知；Strategic=2（偏低），不明显按绩效目标选择性投入。在PBL中可能被动跟随讨论，偏好明确指引而非自主探索。",
-    "personality_prompt": "Openness=4（高）使其乐于接纳PBL的开放探究形式；Conscientiousness=4（高）促使其认真投入学习过程并认可PBL价值；Extraversion=3（中）提供基本互动意愿；Agreeableness=2（低）可能减少迎合式发言；Neuroticism=4（高）显著抬高发言阈值，因担忧犯错而抑制讨论贡献，即便认知上认同PBL有效性。"
+    "learning_style_prompt": "该学生Surface=3（中等表层倾向），在PBL中对非结构化任务略感不适，偶有寻求标准答案的冲动；Deep=2（偏低深度倾向），较少主动追问机制或整合新旧知识；Strategic=2（低策略导向），基本不以绩效目标驱动参与。整体表现为被动跟随讨论，缺乏主动建构与目标导向行为。",
+    "personality_prompt": "该学生Openness=4（高开放性）使其乐于接触PBL中的新异信息，Conscientiousness=4（高尽责性）促使其认真准备并认可PBL的教育价值；Extraversion=3（中性）社交活跃度一般；Agreeableness=2（低宜人性）可能在观点冲突时坚持己见；Neuroticism=4（高神经质）显著抬高发言心理门槛，因害怕犯错而抑制贡献意愿，形成‘认同但沉默’的内在冲突。"
+  },
+  "差学生2": {
+    "name": "差学生2",
+    "age": "19",
+    "major": "medicine",
+    "avatar": "avatar1.png",
+    "color": "#FBE4CE",
+    "cardColor": "#FBE4CE",
+    "learning_styles": {
+      "surface": 5,
+      "deep": 3,
+      "strategic": 1
+    },
+    "personality": {
+      "openness": 1,
+      "conscientiousness": 1,
+      "extraversion": 1,
+      "agreeableness": 3,
+      "neuroticism": 5
+    },
+    "knowledge_background": {
+      "high": [],
+      "medium": [
+        "内科学（急性肾损伤、慢性肾脏病、高钾血症）",
+        "诊断学（蛋白尿分类、肾小管功能评估）"
+      ],
+      "low": [
+        "肾脏解剖与生理学",
+        "病理生理学（水肿、酸碱平衡、电解质紊乱）",
+        "药理学（糖皮质激素、维生素C代谢）",
+        "医学伦理与医患沟通"
+      ]
+    },
+    "cognitive_orientation": "point_based",
+    "learning_adaptivity": "medium",
+    "tags": [
+      "Surface learner",
+      "Point-based reasonin",
+      "Premature closure",
+      "Anxiety-driven",
+      "Low openness"
+    ],
+    "learning_style_prompt": "该学生Surface=5（高表层倾向），偏好通过记忆和重复完成任务，重视标准答案，对PBL非结构化讨论感到低效；Deep=3（中等深度处理），偶有概念追问但缺乏持续探究；Strategic=1（极低策略导向），几乎不依据评价目标调整参与。在PBL中较少主动追问机制，更期待明确指导与结论。",
+    "personality_prompt": "该学生Neuroticism=5（高神经质），因强烈社交焦虑与犯错恐惧显著抑制发言意愿；Openness=1（低开放性）使其难以接受模糊性，削弱对PBL价值的认可；Conscientiousness=1（低尽责性）导致投入不稳定；Extraversion=1（内向）减少主动互动；Agreeableness=3（中等随和）使其能配合小组但难主导讨论。整体情绪敏感性高，贡献意愿受情境压力强烈抑制。"
   }
 }

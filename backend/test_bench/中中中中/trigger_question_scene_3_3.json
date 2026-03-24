@@ -1,0 +1,98 @@
+{
+  "conversation": [
+    {
+      "content": "患者入院后给予降钾治疗，血钾降至4.8mmol/L。完善检查显示：血红蛋白102g/L↓，白蛋白33g/L↓，尿素32.9mmol/L↑，肌酐584μmol/L↑（去年12月为84μmol/L），eGFR 8.0ml/min/1.73m²↓。尿常规：蛋白质++↑，可见草酸钙结晶。尿六联蛋白显示α1微球蛋白↑，尿蛋白电泳示微量中、低分子量蛋白尿。24小时尿蛋白901mg/24h↑，尿钠、钾、氯、钙、磷均↓。\n Trigger Question: 如何鉴别肾前性AKI和急性肾小管坏死？\nPlease start your discussion.",
+      "role": "case_introduction"
+    },
+    {
+      "content": "【动作类型:探索性提问】那个……是不是应该先看尿钠和FENa来区分肾前性和急性肾小管坏死？我有点不确定，KDIGO指南里是怎么说的？",
+      "role": "中学生1",
+      "cognitive_load": 3,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:探索性提问】（语气焦虑）可是患者尿钠是低的，按KDIGO说的FENa小于1%才支持肾前性，但这里所有尿电解质都低，会不会干扰判断啊？我有点怕搞错类型……",
+      "role": "中学生3",
+      "cognitive_load": 1,
+      "self_efficacy": 5
+    },
+    {
+      "content": "【动作类型:探索性提问】（声音有点发虚）那个……中学生3说得对，尿钠低确实支持肾前性，但所有尿电解质都低，会不会是用了利尿剂啊？我记得呋塞米会让FENa假性升高，可这病人又没提用没用……万一是ATN就糟了，咱们是不是得再看看尿沉渣或者肌酐趋势？",
+      "role": "中学生1",
+      "cognitive_load": 3,
+      "self_efficacy": 5
+    },
+    {
+      "content": "【动作类型:探索性提问】（语气焦虑，语速偏快）对啊，关键就是他到底用没用利尿剂！要是用了呋塞米，FENa就算低也不能信，可病历里根本没写……咱们是不是该先确认用药史？不然按KDIGO硬套会误判的！",
+      "role": "中学生3",
+      "cognitive_load": 5,
+      "self_efficacy": 4
+    },
+    {
+      "content": "我正在思考，请稍等。",
+      "role": "中学生1",
+      "cognitive_load": 5,
+      "self_efficacy": 3
+    },
+    {
+      "content": "【动作类型:探索性提问】（声音发紧，有点结巴）那个……咱们能不能先确认大爷到底有没有用呋塞米？病历上真没写清楚，要是漏了这个，按KDIGO指南直接判肾前性，万一其实是ATN就麻烦了……",
+      "role": "中学生2",
+      "cognitive_load": 4,
+      "self_efficacy": 5
+    },
+    {
+      "content": "【动作类型:探索性提问】（低头翻病历，声音有点抖）中学生2说得对……要是没确认呋塞米使用情况，直接按FENa<1%判肾前性，会不会太草率了？KDIGO里不是强调要排除利尿剂干扰吗……咱们是不是必须先搞清楚这个？",
+      "role": "中学生1",
+      "cognitive_load": 6,
+      "self_efficacy": 3
+    },
+    {
+      "content": "【动作类型:探索性提问】（犹豫地翻着病历本）我也有点担心这个……要是病历真没写清楚呋塞米的事，光靠FENa<1%就说是肾前性，会不会误判？KDIGO确实说利尿剂会影响结果，咱们是不是得先统一一下：这种情况下还能不能用FENa来支持诊断？",
+      "role": "中学生4",
+      "cognitive_load": 3,
+      "self_efficacy": 5
+    },
+    {
+      "content": "【动作类型:探索性提问】（攥着病历本，声音有点发虚）那个……我查了KDIGO原文，确实写明“使用利尿剂时FENa不可靠”……可现在病历没提用没用呋塞米，咱们还能不能信这个FENa<1%啊？是不是得先确认用药史才能往下判？",
+      "role": "中学生1",
+      "cognitive_load": 8,
+      "self_efficacy": 2
+    },
+    {
+      "content": "【动作类型:探索性提问】（小声，有点着急）对……我也觉得必须先确认有没有用呋塞米，不然FENa<1%根本不能当依据，万一是用了利尿剂，这结果就完全误导人了……病历里真没写清楚吗？",
+      "role": "中学生2",
+      "cognitive_load": 8,
+      "self_efficacy": 5
+    },
+    {
+      "content": "...",
+      "role": "中学生1",
+      "cognitive_load": 9,
+      "self_efficacy": 1
+    },
+    {
+      "content": "...",
+      "role": "中学生3",
+      "cognitive_load": 9,
+      "self_efficacy": 2
+    },
+    {
+      "content": "...",
+      "role": "中学生2",
+      "cognitive_load": 8,
+      "self_efficacy": 4
+    },
+    {
+      "content": "...",
+      "role": "中学生1",
+      "cognitive_load": 8,
+      "self_efficacy": 1
+    },
+    {
+      "content": "...",
+      "role": "中学生3",
+      "cognitive_load": 8,
+      "self_efficacy": 1
+    }
+  ]
+}

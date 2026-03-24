@@ -363,98 +363,6 @@
       ],
       "trigger_questions": [
         {
-          "question": "什么是泡沫尿？泡沫尿等于蛋白尿吗？",
-          "type": "basic_concepts",
-          "learning_objectives": [
-            "能解释泡沫尿的形成机制",
-            "能区分泡沫尿与蛋白尿的关系"
-          ],
-          "knowledge_points": [
-            {
-              "id": "kp_1",
-              "point": "泡沫尿定义",
-              "explanation": "尿液表面出现细小、持久不散的泡沫"
-            },
-            {
-              "id": "kp_2",
-              "point": "泡沫尿成因",
-              "explanation": "尿液中蛋白质含量增加，降低表面张力，形成泡沫"
-            },
-            {
-              "id": "kp_3",
-              "point": "泡沫尿与蛋白尿关系",
-              "explanation": "泡沫尿通常提示蛋白尿，但并非所有泡沫尿都有临床意义的蛋白尿"
-            },
-            {
-              "id": "kp_4",
-              "point": "生理性泡沫尿",
-              "explanation": "排尿速度快、尿液浓缩、含有其他有机物质也可产生泡沫"
-            },
-            {
-              "id": "kp_5",
-              "point": "病理性泡沫尿",
-              "explanation": "持续存在的细小泡沫，通常提示尿蛋白>150mg/24h"
-            },
-            {
-              "id": "kp_6",
-              "point": "蛋白尿检测方法",
-              "explanation": "尿常规试纸法、24小时尿蛋白定量、尿蛋白肌酐比"
-            },
-            {
-              "id": "kp_7",
-              "point": "假阳性泡沫尿",
-              "explanation": "精液混入、阴道分泌物污染、某些药物可导致假阳性"
-            },
-            {
-              "id": "kp_8",
-              "point": "临床评估要点",
-              "explanation": "需要结合尿常规和其他检查确认是否存在真正蛋白尿"
-            }
-          ]
-        },
-        {
-          "question": "现有信息显示，老金的水肿属于哪种类型？",
-          "type": "clinical_classification",
-          "learning_objectives": [
-            "能根据临床特征判断水肿类型",
-            "能解释肾性水肿的病理生理特点"
-          ],
-          "knowledge_points": [
-            {
-              "concept": "肾性水肿特点",
-              "explanation": "晨起眼睑和面部水肿明显，下午下肢水肿加重"
-            },
-            {
-              "concept": "肾病综合征水肿",
-              "explanation": "全身性重度水肿，常伴大量蛋白尿、低蛋白血症、高脂血症"
-            },
-            {
-              "concept": "急性肾炎水肿",
-              "explanation": "轻中度水肿，主要因水钠潴留引起"
-            },
-            {
-              "concept": "患者水肿特征",
-              "explanation": "双下肢水肿、体重增加、伴蛋白尿和肾功能不全"
-            },
-            {
-              "concept": "鉴别诊断要点",
-              "explanation": "肾性水肿通常不伴颈静脉怒张、肝大等心衰表现"
-            },
-            {
-              "concept": "水肿严重程度评估",
-              "explanation": "根据凹陷深度和恢复时间分级（+到++++）"
-            },
-            {
-              "concept": "肾功能与水肿关系",
-              "explanation": "GFR下降导致钠水潴留，加重水肿"
-            },
-            {
-              "concept": "低蛋白血症作用",
-              "explanation": "血浆胶体渗透压下降促进组织液生成"
-            }
-          ]
-        },
-        {
           "question": "患者的高血压和肾功能不全之间是否有联系？",
           "type": "pathophysiology",
           "learning_objectives": [
@@ -581,48 +489,6 @@
           ]
         },
         {
-          "question": "患者心电图检查结果如何解释？",
-          "type": "clinical_interpretation",
-          "learning_objectives": [
-            "能识别高钾血症的心电图特征",
-            "能根据心电图变化评估高钾血症严重程度"
-          ],
-          "knowledge_points": [
-            {
-              "concept": "高钾血症心电图分期",
-              "explanation": "轻度（5.5-6.5mmol/L）：T波高尖；中度（6.5-8.0mmol/L）：PR延长、P波消失；重度（>8.0mmol/L）：QRS增宽、正弦波"
-            },
-            {
-              "concept": "T波高尖特征",
-              "explanation": "基底窄、对称、振幅高，尤其在胸前导联明显"
-            },
-            {
-              "concept": "P波变化",
-              "explanation": "振幅降低、时限延长，最终消失"
-            },
-            {
-              "concept": "QRS波变化",
-              "explanation": "逐渐增宽，与T波融合形成正弦波"
-            },
-            {
-              "concept": "心律失常风险",
-              "explanation": "可进展为室性心动过速、心室颤动、心脏停搏"
-            },
-            {
-              "concept": "鉴别诊断",
-              "explanation": "需与其他原因引起的T波改变鉴别，如心肌缺血"
-            },
-            {
-              "concept": "动态监测重要性",
-              "explanation": "心电图变化与血钾水平不一定完全平行，需密切监测"
-            },
-            {
-              "concept": "紧急处理指征",
-              "explanation": "出现QRS增宽或任何心律失常迹象需立即处理"
-            }
-          ]
-        },
-        {
           "question": "初步诊断是什么？还需要做哪些辅助检查？特别是针对肺部症状的检查？",
           "type": "diagnostic_reasoning",
           "learning_objectives": [
@@ -705,110 +571,9 @@
               "explanation": "血液透析起效快，适合紧急情况；腹膜透析相对温和"
             }
           ]
-        },
-        {
-          "question": "当患者疾病严重时，应如何和患者沟通，以获取患者信任并解除患者顾虑？",
-          "type": "communication_skills",
-          "learning_objectives": [
-            "能运用有效沟通技巧处理危重患者的心理需求",
-            "能建立良好的医患信任关系"
-          ],
-          "knowledge_points": [
-            {
-              "concept": "共情沟通",
-              "explanation": "理解患者的恐惧和焦虑，表达关心和支持"
-            },
-            {
-              "concept": "信息分层提供",
-              "explanation": "先提供关键信息，再逐步详细解释"
-            },
-            {
-              "concept": "使用通俗语言",
-              "explanation": "避免医学术语，用患者能理解的方式解释病情"
-            },
-            {
-              "concept": "确认理解",
-              "explanation": "请患者复述关键信息，确保正确理解"
-            },
-            {
-              "concept": "家属参与",
-              "explanation": "适当让家属参与沟通，提供情感支持"
-            },
-            {
-              "concept": "诚实透明",
-              "explanation": "如实告知病情严重性和治疗风险，不隐瞒"
-            },
-            {
-              "concept": "希望传递",
-              "explanation": "在告知风险的同时，强调积极治疗的可能性"
-            },
-            {
-              "concept": "文化敏感性",
-              "explanation": "考虑患者的文化背景和价值观，调整沟通方式"
-            }
-          ]
         }
       ],
       "trigger_question_learning_objectives": [
-        {
-          "trigger_question": "什么是泡沫尿？泡沫尿等于蛋白尿吗？",
-          "learning_objectives": [
-            "能解释泡沫尿的形成机制",
-            "能区分泡沫尿与蛋白尿的关系"
-          ],
-          "knowledge_points": [
-            {
-              "id": "kp_1",
-              "point": "泡沫尿定义",
-              "explanation": "尿液表面出现细小、持久不散的泡沫"
-            },
-            {
-              "id": "kp_2",
-              "point": "泡沫尿成因",
-              "explanation": "尿液中蛋白质含量增加，降低表面张力，形成泡沫"
-            },
-            {
-              "id": "kp_3",
-              "point": "泡沫尿与蛋白尿关系",
-              "explanation": "泡沫尿通常提示蛋白尿，但并非所有泡沫尿都有临床意义的蛋白尿"
-            },
-            {
-              "id": "kp_4",
-              "point": "生理性泡沫尿",
-              "explanation": "排尿速度快、尿液浓缩、含有其他有机物质也可产生泡沫"
-            },
-            {
-              "id": "kp_5",
-              "point": "病理性泡沫尿",
-              "explanation": "持续存在的细小泡沫，通常提示尿蛋白>150mg/24h"
-            },
-            {
-              "id": "kp_6",
-              "point": "蛋白尿检测方法",
-              "explanation": "尿常规试纸法、24小时尿蛋白定量、尿蛋白肌酐比"
-            },
-            {
-              "id": "kp_7",
-              "point": "假阳性泡沫尿",
-              "explanation": "精液混入、阴道分泌物污染、某些药物可导致假阳性"
-            },
-            {
-              "id": "kp_8",
-              "point": "临床评估要点",
-              "explanation": "需要结合尿常规和其他检查确认是否存在真正蛋白尿"
-            }
-          ],
-          "objective_overrides": {
-            "能解释泡沫尿的形成机制": false
-          }
-        },
-        {
-          "trigger_question": "现有信息显示，老金的水肿属于哪种类型？",
-          "learning_objectives": [
-            "能根据临床特征判断水肿类型",
-            "能解释肾性水肿的病理生理特点"
-          ]
-        },
         {
           "trigger_question": "患者的高血压和肾功能不全之间是否有联系？",
           "learning_objectives": [
@@ -831,13 +596,6 @@
           ]
         },
         {
-          "trigger_question": "患者心电图检查结果如何解释？",
-          "learning_objectives": [
-            "能识别高钾血症的心电图特征",
-            "能根据心电图变化评估高钾血症严重程度"
-          ]
-        },
-        {
           "trigger_question": "初步诊断是什么？还需要做哪些辅助检查？特别是针对肺部症状的检查？",
           "learning_objectives": [
             "能根据现有资料提出初步诊断",
@@ -849,13 +607,6 @@
           "learning_objectives": [
             "能准确判断紧急透析指征",
             "能权衡透析风险与获益"
-          ]
-        },
-        {
-          "trigger_question": "当患者疾病严重时，应如何和患者沟通，以获取患者信任并解除患者顾虑？",
-          "learning_objectives": [
-            "能运用有效沟通技巧处理危重患者的心理需求",
-            "能建立良好的医患信任关系"
           ]
         }
       ],
@@ -1003,130 +754,7 @@
           ]
         },
         {
-          "question": "肾小管坏死有哪些常见病因？",
-          "type": "etiology",
-          "learning_objectives": [
-            "能系统分类急性肾小管坏死的病因",
-            "能识别结晶性肾病的特殊病因"
-          ],
-          "knowledge_points": [
-            {
-              "concept": "缺血性损伤",
-              "explanation": "低血压、败血症、大手术、创伤、出血等导致肾脏低灌注"
-            },
-            {
-              "concept": "肾毒性物质",
-              "explanation": "氨基糖苷类抗生素、造影剂、重金属、化学毒物"
-            },
-            {
-              "concept": "急性溶血",
-              "explanation": "异型输血、免疫性溶血、挤压伤释放肌红蛋白"
-            },
-            {
-              "concept": "肾小管结晶",
-              "explanation": "草酸钙、尿酸、磷酸钙、药物结晶直接阻塞或间接损伤肾小管"
-            },
-            {
-              "concept": "草酸盐肾病",
-              "explanation": "维生素C过量、乙二醇中毒、高草酸尿症导致草酸钙沉积"
-            },
-            {
-              "concept": "药物结晶肾病",
-              "explanation": "阿昔洛韦、磺胺类、甲氨蝶呤、茚地那韦等在肾小管形成结晶"
-            },
-            {
-              "concept": "尿酸肾病",
-              "explanation": "肿瘤溶解综合征、痛风导致尿酸结晶沉积"
-            },
-            {
-              "concept": "磷酸钙沉积",
-              "explanation": "肿瘤溶解、横纹肌溶解、碱中毒等导致磷酸钙结晶"
-            }
-          ]
-        },
-        {
-          "question": "肺部CT提示肺部病变和心脏稍大，是急性肾功能不全引起的吗？",
-          "type": "multisystem_analysis",
-          "learning_objectives": [
-            "能分析AKI对其他器官系统的影响",
-            "能区分原发性和继发性心肺改变"
-          ],
-          "knowledge_points": [
-            {
-              "concept": "AKI与肺水肿",
-              "explanation": "AKI导致水钠潴留，容量负荷过重可引起急性肺水肿"
-            },
-            {
-              "concept": "AKI与心功能",
-              "explanation": "容量负荷过重、电解质紊乱、酸中毒可加重心脏负担"
-            },
-            {
-              "concept": "原发肺部感染",
-              "explanation": "患者有咳嗽、咳痰症状，可能存在原发肺部感染"
-            },
-            {
-              "concept": "心脏稍大原因",
-              "explanation": "长期高血压导致左心室肥厚，或急性容量负荷过重"
-            },
-            {
-              "concept": "鉴别要点",
-              "explanation": "肺部感染通常有发热、白细胞升高；心源性肺水肿有端坐呼吸、粉红色泡沫痰"
-            },
-            {
-              "concept": "BNP检测价值",
-              "explanation": "有助于区分心源性和非心源性呼吸困难"
-            },
-            {
-              "concept": "治疗反应观察",
-              "explanation": "利尿治疗后肺部病变改善提示容量相关"
-            },
-            {
-              "concept": "综合评估",
-              "explanation": "需结合临床症状、实验室检查、影像学特征综合判断"
-            }
-          ]
-        },
-        {
-          "question": "老金还需要做什么检查来明确病因？",
-          "type": "diagnostic_planning",
-          "learning_objectives": [
-            "能制定针对结晶性肾病的诊断策略",
-            "能选择适当的检查明确AKI病因"
-          ],
-          "knowledge_points": [
-            {
-              "concept": "肾活检指征",
-              "explanation": "AKI病因不明、怀疑肾小球或间质性疾病、需要明确病理类型"
-            },
-            {
-              "concept": "尿结晶分析",
-              "explanation": "偏振光显微镜观察结晶形态，区分草酸钙、尿酸等"
-            },
-            {
-              "concept": "24小时尿草酸",
-              "explanation": "评估草酸排泄量，正常<45mg/24h"
-            },
-            {
-              "concept": "血草酸水平",
-              "explanation": "直接评估草酸负荷，但检测不普及"
-            },
-            {
-              "concept": "维生素C水平",
-              "explanation": "评估维生素C摄入量，但半衰期短，意义有限"
-            },
-            {
-              "concept": "毒物筛查",
-              "explanation": "排除乙二醇、甲醇等中毒可能"
-            },
-            {
-              "concept": "免疫学检查",
-              "explanation": "ANA、ANCA、抗GBM抗体等排除自身免疫性疾病"
-            },
-            {
-              "concept": "影像学检查",
-              "explanation": "肾脏CT可显示肾钙化，但不如病理诊断准确"
-            }
-          ]
+          "question": " 老金还需要做什么检查来明确病因？"
         }
       ],
       "trigger_question_learning_objectives": [
@@ -1152,25 +780,8 @@
           ]
         },
         {
-          "trigger_question": "肾小管坏死有哪些常见病因？",
-          "learning_objectives": [
-            "能系统分类急性肾小管坏死的病因",
-            "能识别结晶性肾病的特殊病因"
-          ]
-        },
-        {
-          "trigger_question": "肺部CT提示肺部病变和心脏稍大，是急性肾功能不全引起的吗？",
-          "learning_objectives": [
-            "能分析AKI对其他器官系统的影响",
-            "能区分原发性和继发性心肺改变"
-          ]
-        },
-        {
-          "trigger_question": "老金还需要做什么检查来明确病因？",
-          "learning_objectives": [
-            "能制定针对结晶性肾病的诊断策略",
-            "能选择适当的检查明确AKI病因"
-          ]
+          "trigger_question": " 老金还需要做什么检查来明确病因？",
+          "learning_objectives": []
         }
       ],
       "scene_reference_knowledge": "",

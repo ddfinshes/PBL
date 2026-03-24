@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { computed, inject } from 'vue';
+import { computed, inject, ref, watch } from 'vue';
 import KnowledgeGraphMini from '../components/KnowledgeGraphMini.vue';
 
 defineProps({
@@ -52,6 +52,9 @@ const activeKey = computed(() => {
 	if (!hasActiveQuestion.value) return null;
 	return `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`;
 });
+
+// 防闪烁缓存：同一问题下按 agent_id 记住上一版有效图谱
+const graphCacheByQuestion = ref({}); // key -> { [agentId]: { mastered_points, knowledge_graph } }
 
 // 仅用于展示每个 agent 的 knowledge_graph 与 mastered_points
 const agentStatePayload = computed(() => {
@@ -93,19 +96,65 @@ const agentStatePayload = computed(() => {
 const agentGraphCards = computed(() => {
 	const payload = agentStatePayload.value;
 	if (!payload || !Array.isArray(payload.agents)) return [];
+	const qKey = activeKey.value;
+	const cacheForQuestion = (qKey && graphCacheByQuestion.value[qKey]) ? graphCacheByQuestion.value[qKey] : {};
 	return payload.agents.map((a) => {
 		const agentId = String(a.agent_id || '').trim();
 		const displayName = typeof getAgentName === 'function' ? getAgentName(agentId) : (agentId || 'Agent');
 		const color = typeof getAgentColor === 'function' ? getAgentColor(agentId) : '#8095CA';
+		const cached = cacheForQuestion?.[agentId] || {};
+		const incomingGraph = (a.knowledge_graph && typeof a.knowledge_graph === 'object') ? a.knowledge_graph : null;
+		const incomingNodes = incomingGraph && incomingGraph.nodes && typeof incomingGraph.nodes === 'object'
+			? incomingGraph.nodes
+			: null;
+		const incomingEdges = incomingGraph && Array.isArray(incomingGraph.edges)
+			? incomingGraph.edges
+			: null;
+		const hasIncomingGraph = !!(incomingNodes && Object.keys(incomingNodes).length > 0) || !!(incomingEdges && incomingEdges.length > 0);
+		const resolvedGraph = hasIncomingGraph
+			? { nodes: incomingNodes || {}, edges: incomingEdges || [] }
+			: (cached.knowledge_graph || { nodes: {}, edges: [] });
+		const incomingMastered = Array.isArray(a.mastered_points) ? a.mastered_points : [];
+		const resolvedMastered = incomingMastered.length > 0 ? incomingMastered : (cached.mastered_points || []);
 		return {
 			agent_id: agentId,
 			display_name: displayName,
 			color,
-			mastered_points: Array.isArray(a.mastered_points) ? a.mastered_points : [],
-			knowledge_graph: (a.knowledge_graph && typeof a.knowledge_graph === 'object') ? a.knowledge_graph : { nodes: {}, edges: [] }
+			mastered_points: resolvedMastered,
+			knowledge_graph: resolvedGraph
 		};
 	});
 });
+
+watch([activeKey, agentStatePayload], ([qKey, payload]) => {
+	if (!qKey || !payload || !Array.isArray(payload.agents)) return;
+
+	const nextForQuestion = { ...(graphCacheByQuestion.value[qKey] || {}) };
+	let changed = false;
+
+	payload.agents.forEach((agent) => {
+		const agentId = String(agent.agent_id || '').trim();
+		if (!agentId) return;
+		const graph = (agent.knowledge_graph && typeof agent.knowledge_graph === 'object') ? agent.knowledge_graph : { nodes: {}, edges: [] };
+		const nodeCount = graph.nodes && typeof graph.nodes === 'object' ? Object.keys(graph.nodes).length : 0;
+		const edgeCount = Array.isArray(graph.edges) ? graph.edges.length : 0;
+		const mastered = Array.isArray(agent.mastered_points) ? agent.mastered_points : [];
+
+		if (nodeCount > 0 || edgeCount > 0 || mastered.length > 0) {
+			nextForQuestion[agentId] = {
+				mastered_points: mastered,
+				knowledge_graph: graph
+			};
+			changed = true;
+		}
+	});
+
+	if (!changed) return;
+	graphCacheByQuestion.value = {
+		...graphCacheByQuestion.value,
+		[qKey]: nextForQuestion
+	};
+}, { deep: false });
 
 const allAgentNames = computed(() => {
 	return agentGraphCards.value.map((a) => a.display_name);

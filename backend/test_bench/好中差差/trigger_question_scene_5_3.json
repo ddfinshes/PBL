@@ -1,0 +1,20 @@
+{
+  "conversation": [
+    {
+      "content": "治疗后患者咳嗽好转，尿量增多，水肿减轻。一周后肌酐降至236μmol/L，24小时尿蛋白360mg。但出现血糖升高（空腹14mmol/L，餐后18mmol/L），考虑糖皮质激素副作用，调整降糖药物后血糖控制正常。出院后定期随访，一年后肌酐130μmol/L，蛋白尿350mg/天。\n Trigger Question: 慢性肾脏病如何分期？\nPlease start your discussion.",
+      "role": "case_introduction"
+    },
+    {
+      "content": "【动作类型:累积补充】那个……我查了KDIGO指南，CKD分期要看肾小球滤过率和蛋白尿。患者一年后肌酐130，估算eGFR大概在45-59之间，属于G3a；蛋白尿350mg/天是A2期，所以应该是CKD G3a A2期……应该没错吧？",
+      "role": "中等学生",
+      "cognitive_load": 3,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:累积补充】对，分期确实是G3a A2。eGFR在45-59说明肾小球滤过功能中度下降，但还没到严重阶段；蛋白尿350mg/天落在A2范围，提示存在轻度肾小球损伤。这个组合意味着患者有中等风险进展至更严重的肾功能减退，需要密切监测血压、蛋白尿和eGFR变化。",
+      "role": "好学生",
+      "cognitive_load": 1,
+      "self_efficacy": 5
+    }
+  ]
+}

@@ -7,6 +7,8 @@ Usage:
     python -m backend.offline_batch
     python -m backend.offline_batch --case "2024秋-泌尿系统PBL-肾脏中的“宝石”"
     python -m backend.offline_batch --case-file backend/case/example.json
+    python -m backend.offline_batch --case-file backend/case/example.json --scene 2
+    python -m backend.offline_batch --case-file backend/case/example.json --scene 2 --trigger-question 3
 """
 
 from __future__ import annotations
@@ -63,12 +65,27 @@ def _reset_and_build_graph(personas: Dict[str, Dict[str, Any]]):
 
 def _iter_case_files(case_name: Optional[str], case_file: Optional[str]) -> List[Path]:
     if case_file:
-        p = Path(case_file)
-        if not p.is_absolute():
-            p = Path.cwd() / p
-        if not p.exists() or p.suffix.lower() != ".json":
-            raise FileNotFoundError(f"Invalid --case-file: {case_file}")
-        return [p]
+        raw = Path(case_file)
+
+        candidates: List[Path] = []
+        if raw.is_absolute():
+            candidates.append(raw)
+        else:
+            # 1) Relative to current working directory.
+            candidates.append(Path.cwd() / raw)
+            # 2) Relative to backend/case for convenience from project root.
+            candidates.append(CASE_DIR / raw)
+            # 3) Treat value as stem under backend/case.
+            if raw.suffix.lower() != ".json":
+                candidates.append(CASE_DIR / f"{raw.name}.json")
+
+        for p in candidates:
+            if p.exists() and p.suffix.lower() == ".json":
+                return [p]
+
+        raise FileNotFoundError(
+            f"Invalid --case-file: {case_file}. Tried: {', '.join(str(p) for p in candidates)}"
+        )
 
     if case_name:
         direct = CASE_DIR / f"{case_name}.json"
@@ -249,7 +266,21 @@ def _flush_conversation(out_file: Path, conversation: List[Dict[str, str]]) -> N
                   f, ensure_ascii=False, indent=2)
 
 
-async def run_batch(case_name: Optional[str], case_file: Optional[str], output_root: Path) -> None:
+def _validate_positive_index(name: str, value: Optional[int]) -> None:
+    if value is not None and value < 1:
+        raise ValueError(f"{name} must be >= 1, got: {value}")
+
+
+async def run_batch(
+    case_name: Optional[str],
+    case_file: Optional[str],
+    output_root: Path,
+    scene_filter: Optional[int] = None,
+    trigger_question_filter: Optional[int] = None,
+) -> None:
+    _validate_positive_index("scene", scene_filter)
+    _validate_positive_index("trigger-question", trigger_question_filter)
+
     personas = _load_agent_personas()
     case_files = _iter_case_files(case_name=case_name, case_file=case_file)
 
@@ -275,9 +306,16 @@ async def run_batch(case_name: Optional[str], case_file: Optional[str], output_r
             if not isinstance(scene, dict):
                 continue
 
+            scene_idx_1 = scene_index_0 + 1
+            if scene_filter is not None and scene_filter != scene_idx_1:
+                continue
+
             questions = _extract_scene_questions(scene)
             for question_idx_1, trigger_question, objectives in questions:
                 if not trigger_question:
+                    continue
+
+                if trigger_question_filter is not None and trigger_question_filter != question_idx_1:
                     continue
 
                 question_index_0 = question_idx_1 - 1
@@ -285,7 +323,7 @@ async def run_batch(case_name: Optional[str], case_file: Optional[str], output_r
 
                 out_file = _write_output(
                     output_dir=case_output_dir,
-                    scene_idx_1=scene_index_0 + 1,
+                    scene_idx_1=scene_idx_1,
                     question_idx_1=question_idx_1,
                     payload={"conversation": []},
                 )
@@ -303,6 +341,9 @@ async def run_batch(case_name: Optional[str], case_file: Optional[str], output_r
                 written_files.append(out_file)
                 total_jobs += 1
                 print(f"[offline-batch] wrote: {out_file}")
+
+    if total_jobs == 0:
+        print("[offline-batch] no matching jobs to run with current filters.")
 
     print(f"[offline-batch] completed jobs: {total_jobs}")
     print(f"[offline-batch] output files: {len(written_files)}")
@@ -330,6 +371,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=str(DEFAULT_OUTPUT_DIR),
         help="Output directory root. Default: backend/test_bench",
     )
+    parser.add_argument(
+        "--scene",
+        type=int,
+        default=None,
+        help="Only run one scene index (1-based).",
+    )
+    parser.add_argument(
+        "--trigger-question",
+        type=int,
+        default=None,
+        help="Only run one trigger question index within each selected scene (1-based).",
+    )
     return parser
 
 
@@ -347,6 +400,8 @@ def main() -> None:
             case_name=args.case,
             case_file=args.case_file,
             output_root=output_root,
+            scene_filter=args.scene,
+            trigger_question_filter=args.trigger_question,
         )
     )
 

@@ -1,0 +1,68 @@
+{
+  "conversation": [
+    {
+      "content": "治疗后患者咳嗽好转，尿量增多，水肿减轻。一周后肌酐降至236μmol/L，24小时尿蛋白360mg。但出现血糖升高（空腹14mmol/L，餐后18mmol/L），考虑糖皮质激素副作用，调整降糖药物后血糖控制正常。出院后定期随访，一年后肌酐130μmol/L，蛋白尿350mg/天。\n Trigger Question: 一年后，老金肾功能完全恢复了吗？应做何诊断？\nPlease start your discussion.",
+      "role": "case_introduction"
+    },
+    {
+      "content": "【动作类型:探索性提问】那个……一年后肌酐130、蛋白尿还有350mg，这算完全恢复吗？我记得KDIGO指南里CKD分期好像要看肌酐估算的eGFR，还有蛋白尿水平，是不是得结合这两个指标才能判断有没有慢性肾脏病？",
+      "role": "中等学生",
+      "cognitive_load": 3,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:探索性提问】那个……我们是不是得先算出eGFR才能按KDIGO分？光看肌酐130和蛋白尿350够吗？",
+      "role": "差学生2",
+      "cognitive_load": 1,
+      "self_efficacy": 5
+    },
+    {
+      "content": "【动作类型:探索性提问】那个……是不是只要eGFR≥60，而且蛋白尿不到500mg，就不算CKD啊？我有点不确定，但好像KDIGO里说要两个指标一起看……",
+      "role": "差学生3",
+      "cognitive_load": 1,
+      "self_efficacy": 5
+    },
+    {
+      "content": "【动作类型:累积补充】那个……其实KDIGO里说，只要eGFR低于60持续三个月，或者蛋白尿超过300毫克每天，满足一个就算CKD了。大爷蛋白尿350mg都一年了，不管eGFR多少，应该已经符合CKD诊断了……吧？",
+      "role": "中等学生",
+      "cognitive_load": 1,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:探索性提问】那个……中等同学刚说只要蛋白尿超300mg一天、持续三个月就算CKD，是这样吗？那是不是就算eGFR正常也能诊断？我有点怕搞错标准……",
+      "role": "差学生2",
+      "cognitive_load": 2,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:探索性提问】（有点紧张地翻了下笔记）那个……我刚说的KDIGO标准，是不是真的只要蛋白尿>300mg/天持续三个月，哪怕eGFR正常也能诊断CKD啊？会不会是我们理解错了？",
+      "role": "中等学生",
+      "cognitive_load": 1,
+      "self_efficacy": 7
+    },
+    {
+      "content": "【动作类型:探索性提问】（低头小声）我……我也查了KDIGO，确实写的是只要蛋白尿>300mg/天持续三个月，不管eGFR正不正常，都能诊断CKD……但总觉得是不是漏了什么条件？",
+      "role": "差学生1",
+      "cognitive_load": 2,
+      "self_efficacy": 4
+    },
+    {
+      "content": "【动作类型:探索性提问】（攥着笔，声音有点发虚）那个……我刚又瞄了眼KDIGO原文，确实写的是蛋白尿>300mg/天持续三个月就算CKD，哪怕eGFR正常……但咱们病例里大爷肌酐都130了，eGFR肯定也低了吧？是不是其实两个条件都满足啊？",
+      "role": "差学生2",
+      "cognitive_load": 5,
+      "self_efficacy": 6
+    },
+    {
+      "content": "【动作类型:探索性提问】（犹豫地抬头）那个……我有点不确定，KDIGO真的允许单靠蛋白尿>300mg/天就诊断CKD吗？尤其咱们这大爷肌酐130，eGFR估计也掉到60以下了，是不是其实两个指标都符合，所以更稳？",
+      "role": "中等学生",
+      "cognitive_load": 2,
+      "self_efficacy": 4
+    },
+    {
+      "content": "【动作类型:探索性提问】（小声）我也有点懵……但KDIGO标准里确实写了，只要蛋白尿超300持续三个月，或者eGFR<60持续三个月，满足一个就行。咱们大爷两个都占了，应该稳了吧？",
+      "role": "差学生2",
+      "cognitive_load": 5,
+      "self_efficacy": 6
+    }
+  ]
+}

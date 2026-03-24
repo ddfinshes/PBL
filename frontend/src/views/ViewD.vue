@@ -507,7 +507,8 @@ const graphData = computed(() => {
           interventionId: msg.agent === 'teacher' ? msg.id : null,
           isOldTopic: isOldTopic,
           order: nodes.length,
-          depth: nodeDepth
+          depth: nodeDepth,
+          parentId: pNodeId // 记录父节点 ID
         };
         nodes.push(newNode);
         nodeMap.set(nodeId, newNode);
@@ -540,6 +541,17 @@ const graphData = computed(() => {
         });
       }
     }
+  });
+
+  // 识别分叉节点：如果一个节点作为 source 在 links 中出现超过 1 次，则是分叉点
+  const sourceOccurrenceMap = new Map();
+  links.forEach(l => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    sourceOccurrenceMap.set(src, (sourceOccurrenceMap.get(src) || 0) + 1);
+  });
+  
+  nodes.forEach(n => {
+    n.isAmbiguous = (sourceOccurrenceMap.get(n.id) || 0) > 1;
   });
 
   return { nodes, links };
@@ -711,9 +723,16 @@ const updateGraph = () => {
   node.exit().remove();
   const nodeEnter = node.enter()
     .append('g')
-    .attr('class', 'node-group')
+    .attr('class', d => `node-group ${d.isAmbiguous ? 'node-ambiguous' : ''}`)
+    .style('cursor', d => d.isAmbiguous ? 'not-allowed' : 'pointer')
     .on('click', (event, d) => {
       event.stopPropagation(); // 防止触发背景点击
+
+      // 如果节点有多个后缀路径，则不可点击（根据用户要求）
+      if (d.isAmbiguous) {
+        console.log('Ambiguous node clicked - interaction disabled');
+        return;
+      }
 
       // 判断是否点击在红旗图标上
       const target = event.target;
@@ -741,7 +760,7 @@ const updateGraph = () => {
       }
 
       // 【新增】当暂停时，点击节点需要切换后端的焦点，使其能从该节点恢复讨论
-      if (isPaused && leafId) {
+      if (isPaused?.value && leafId) {
         console.log('Switching focus to node leaf:', leafId, 'branch:', d.branch);
         switchNodeFocus(leafId, d.branch || 'main');
       }
@@ -1211,6 +1230,7 @@ onMounted(async () => {
 }
 .node-group { cursor: grab; }
 .node-group:active { cursor: grabbing; }
+.node-group.node-ambiguous { cursor: not-allowed !important; opacity: 0.8; }
 .topic-link { transition: stroke-dashoffset 0.5s; }
 
 /* Knowledge Coverage Styles */

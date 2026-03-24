@@ -37,6 +37,9 @@ from .agents import (
     student_personas,
     simplify_message,
     generate_learning_personality_sections,
+    topic_manager_node,
+    _objectives_achieved_by_llm,
+    _parallel_internalize_for_all_agents,
 )
 from .agent_preview import generate_student_preview_response
 from .graph_builder import build_graph, GraphState
@@ -2252,6 +2255,47 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
             "knowledge_coverage": cached_coverage,  # 【新增】返回历史快照中记录的评估结果
         })
 
+    async def _emit_cached_context_updates(scene_idx: int, question_idx: int, leaf_id: Optional[str], snapshot: Optional[Dict]) -> None:
+        """Replay cached node context to frontend without any LLM recomputation."""
+        snap = _build_state_snapshot(snapshot or {})
+        if not leaf_id:
+            return
+
+        cached_coverage = None
+        if leaf_id in sh["messages_map"]:
+            cached_coverage = sh["messages_map"][leaf_id].get("knowledge_coverage")
+
+        if cached_coverage:
+            await websocket.send_json({
+                "type": "knowledge_coverage_update",
+                "scene_index": int(scene_idx),
+                "question_index": int(question_idx),
+                "node_id": leaf_id,
+                "coverage": cached_coverage,
+            })
+
+        await websocket.send_json({
+            "type": "objective_evaluation_update",
+            "scene_index": int(scene_idx),
+            "question_index": int(question_idx),
+            "payload": {
+                "objective_evaluations": snap.get("objective_evaluations", []) or [],
+                "achieved_all": bool(snap.get("achieved_all", False)),
+                "updatedAt": datetime.now().timestamp() * 1000,
+            },
+        })
+
+        await websocket.send_json({
+            "type": "knowledge_state_update",
+            "scene_index": int(scene_idx),
+            "question_index": int(question_idx),
+            "knowledge_state": copy.deepcopy(snap.get("knowledge_state", {}) or {}),
+            "cognitive_load": copy.deepcopy(snap.get("cognitive_load", {}) or {}),
+            "self_efficacy": copy.deepcopy(snap.get("self_efficacy", {}) or {}),
+            "private_memory": copy.deepcopy(snap.get("private_memory", {}) or {}),
+            "updated_at": datetime.now().timestamp() * 1000,
+        })
+
     async def _recompute_and_emit_context_evaluations(scene_idx: int, question_idx: int, leaf_id: Optional[str], emit_ws: bool = True) -> Dict[str, Any]:
         """Re-evaluate knowledge coverage from current branch leaf context."""
         from . import pbl_info
@@ -2439,9 +2483,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
     async def output_processor():
         """处理输出队列的任务"""
         nonlocal runtime_state, graph_task, pause_requested, discussion_paused
-        # 【优化】追踪上一次发送的topic和objectives，用于检测变化并立即更新
+        # 【优化】追踪上一次发送的 topic, objectives, knowledge_state 用于检测并行节点的增量更新
+        # 这些信息一旦被 message_prepare_parallel_node 产出，就立即推送给前端
         previous_topic = None
         previous_objectives = None
+        previous_knowledge = None
 
         while True:
             try:
@@ -2455,31 +2501,103 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     event, s_idx, q_idx = item
 
                 for node, out in event.items():
-                    # 处理知识覆盖率评估结果 (由 knowledge_evaluator 节点产生)
-                    if node == "knowledge_evaluator" and out:
-                        kb_data = out.get("knowledge_state")
-                        if kb_data and kb_data.get("status") == "success":
-                            # 将知识覆盖率直接推送到前端，这会触发 ViewD 的更新
-                            # 携带 leaf_id，使其能精确对应到 graphData 的节点
-                            leaf_id = sh.get("active_id")
-                            if leaf_id:
-                                # 【核心同步修复】不仅发送到前端，还要立即更新内存中的 messages_map，
-                                # 否则下一条消息评估时 get_historical_scores 拿不到这个值。
-                                if leaf_id in sh["messages_map"]:
-                                    sh["messages_map"][leaf_id]["knowledge_coverage"] = kb_data
-                                    # 如果有 persist_discussion 需求也建议在这里触发
-                                    persist_discussion(
-                                        session_id, sh["messages_map"])
+                    # --- 【实时增量推送逻辑】 ---
+                    # 针对 message_prepare_parallel_node 产出的各种子状态进行即时同步
+                    # 避免等到 router 或下一个 student 节点执行完才在 message 推送中携带
 
-                                await websocket.send_json({
-                                    "type": "message_update",
-                                    "id": leaf_id,
-                                    "knowledge_coverage": kb_data,
-                                    "scene_index": s_idx,
-                                    "question_index": q_idx
-                                })
-                                logger.info(
-                                    f"DEBUG: [Server] Pushed sync coverage for {leaf_id} (Ratio: {kb_data.get('coverage_ratio')})")
+                    # 1. 话题实时更新 (topic_manager)
+                    if "current_topic" in out and out["current_topic"] != previous_topic:
+                        previous_topic = out["current_topic"]
+                        leaf_id = sh.get("active_id")
+                        if leaf_id:
+                            # 立即更新内存中的 topic, 确保同步
+                            if leaf_id in sh["messages_map"]:
+                                sh["messages_map"][leaf_id]["topic"] = previous_topic
+
+                            await websocket.send_json({
+                                "type": "message_update",
+                                "id": leaf_id,
+                                "topic": previous_topic,
+                                "scene_index": s_idx,
+                                "question_index": q_idx
+                            })
+                            # 【修复】ViewD 节点依赖 topic 来生成环形区域，若 leaf_id 的 topic 变了，
+                            # 需要触发前端重新渲染 graphData。发送 type: topic_update 确保 ViewD 监听到。
+                            await websocket.send_json({
+                                "type": "topic_update",
+                                "topic": previous_topic,
+                                "id": leaf_id,
+                                "scene_index": s_idx,
+                                "question_index": q_idx
+                            })
+                            logger.info(
+                                f"DEBUG: [Server] Pushed real-time topic: {previous_topic} for {leaf_id}")
+
+                    # 2. 知识覆盖率实时更新 (knowledge_evaluator)
+                    kb_data = out.get("knowledge_state")
+                    if kb_data and kb_data.get("status") == "success" and kb_data != previous_knowledge:
+                        previous_knowledge = kb_data
+                        leaf_id = sh.get("active_id")
+                        if leaf_id:
+                            if leaf_id in sh["messages_map"]:
+                                sh["messages_map"][leaf_id]["knowledge_coverage"] = kb_data
+                                persist_discussion(
+                                    session_id, sh["messages_map"])
+
+                            # 发送 message_update 供 ViewE 等视图消费
+                            await websocket.send_json({
+                                "type": "message_update",
+                                "id": leaf_id,
+                                "knowledge_coverage": kb_data,
+                                "scene_index": s_idx,
+                                "question_index": q_idx
+                            })
+
+                            # 【修复】关键：手动触发一次知识图谱评估推送，确保 ViewD 的节点颜色和仪表盘能实时刷新
+                            await _recompute_and_emit_context_evaluations(
+                                scene_idx=s_idx,
+                                question_index=q_idx,
+                                leaf_id=leaf_id,
+                                emit_ws=True
+                            )
+                            logger.info(
+                                f"DEBUG: [Server] Pushed real-time knowledge coverage for {leaf_id}")
+
+                    # 3. 学习目标评估实时更新 (run_objectives_evaluation)
+                    if "objective_evaluations" in out:
+                        # 此处 out 可能包含 objective_evaluations 列表和 achieved_all
+                        eval_payload = {
+                            "objective_evaluations": out.get("objective_evaluations", []),
+                            "achieved_all": out.get("achieved_all", False),
+                            "updatedAt": datetime.now().timestamp() * 1000
+                        }
+                        if eval_payload != previous_objectives:
+                            previous_objectives = eval_payload
+                            await websocket.send_json({
+                                "type": "objective_evaluation_update",
+                                "scene_index": s_idx,
+                                "question_index": q_idx,
+                                "payload": eval_payload
+                            })
+                            logger.info(
+                                f"DEBUG: [Server] Pushed real-time objective evaluation update")
+
+                    # 4. 学生知识图谱/状态实时更新（internalization）
+                    # 并行内化一旦完成，立即推送给前端，不等待后续节点。
+                    if any(k in out for k in ["knowledge_state", "cognitive_load", "self_efficacy", "private_memory"]):
+                        await websocket.send_json({
+                            "type": "knowledge_state_update",
+                            "scene_index": s_idx,
+                            "question_index": q_idx,
+                            "knowledge_state": out.get("knowledge_state", {}),
+                            "cognitive_load": out.get("cognitive_load", {}),
+                            "self_efficacy": out.get("self_efficacy", {}),
+                            "private_memory": out.get("private_memory", {}),
+                            "updated_at": datetime.now().timestamp() * 1000,
+                        })
+
+                    # 原有的知识覆盖率延迟推送逻辑 (保留作为兜底，但上方已有更及时的增量推送)
+                    # if node == "knowledge_evaluator" and out: ... (被上方的增量逻辑覆盖了)
 
                     runtime_state = _apply_out_to_runtime_state(
                         runtime_state, out)
@@ -2536,29 +2654,142 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                             })
 
                             # 【后台任务】异步进行消息简化
-                            async def _async_postprocess_message():
-                                """后台异步处理消息的简化，完成后通过WS更新前端"""
+                            async def _async_postprocess_message(
+                                _msg_id=msg_id,
+                                _sender=sender,
+                                _content=m.content,
+                                _scene_idx=s_idx,
+                                _question_idx=q_idx,
+                            ):
+                                """后台异步处理：谁先完成谁先推送（summary/topic/coverage/objective/knowledge_state）。"""
                                 try:
-                                    simplified = m.content
+                                    simplified = _content
                                     # 只有学生 Agent 的长发言才需要精简显示在 Storyline 中
-                                    if sender and sender not in ["case_introduction", "teacher", "host", "system"]:
-                                        simplified = await simplify_message(m.content)
+                                    if _sender and _sender not in ["case_introduction", "teacher", "host", "system"]:
+                                        simplified = await simplify_message(_content)
 
-                                    # 【优化】覆盖评估已在 summarizer 节点后同步执行，这里只做消息简化
-                                    # 异步更新前端
-                                    if simplified != m.content:
+                                    if simplified != _content:
                                         await websocket.send_json({
                                             "type": "message_update",
-                                            "id": msg_id,
+                                            "id": _msg_id,
                                             "summary": simplified,
                                         })
 
                                     # 更新内存中的消息数据
-                                    if msg_id in sh["messages_map"]:
-                                        sh["messages_map"][msg_id]["summary"] = simplified
+                                    if _msg_id in sh["messages_map"]:
+                                        sh["messages_map"][_msg_id]["summary"] = simplified
                                 except Exception as e:
                                     logger.error(
                                         f"Error in async message postprocessing: {e}")
+
+                                # 组装从根到当前消息的链路（供并行评估）
+                                chain = []
+                                curr_ptr = _msg_id
+                                safety = 0
+                                while curr_ptr and safety < 2000:
+                                    msg_data = sh["messages_map"].get(curr_ptr)
+                                    if not msg_data:
+                                        break
+                                    chain.append(msg_data.get("langchain_msg"))
+                                    curr_ptr = msg_data.get("parent_id")
+                                    safety += 1
+                                chain = [x for x in reversed(chain) if x is not None]
+                                if not chain:
+                                    return
+
+                                async def _task_topic():
+                                    try:
+                                        topic_out = await topic_manager_node({
+                                            "messages": chain,
+                                            "current_topic": runtime_state.get("current_topic", "Undefined"),
+                                        })
+                                        new_topic = str(topic_out.get("current_topic", "") or "").strip()
+                                        if not new_topic:
+                                            return
+                                        if _msg_id in sh["messages_map"]:
+                                            sh["messages_map"][_msg_id]["topic"] = new_topic
+                                            persist_discussion(session_id, sh["messages_map"])
+                                        await websocket.send_json({
+                                            "type": "message_update",
+                                            "id": _msg_id,
+                                            "topic": new_topic,
+                                            "scene_index": _scene_idx,
+                                            "question_index": _question_idx,
+                                        })
+                                        await websocket.send_json({
+                                            "type": "topic_update",
+                                            "id": _msg_id,
+                                            "topic": new_topic,
+                                            "scene_index": _scene_idx,
+                                            "question_index": _question_idx,
+                                        })
+                                    except Exception as e:
+                                        logger.error(f"Eager topic task failed: {e}")
+
+                                async def _task_coverage():
+                                    try:
+                                        await _recompute_and_emit_context_evaluations(
+                                            scene_idx=int(_scene_idx),
+                                            question_idx=int(_question_idx),
+                                            leaf_id=_msg_id,
+                                            emit_ws=True,
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"Eager coverage task failed: {e}")
+
+                                async def _task_objective():
+                                    try:
+                                        from . import pbl_info
+                                        trigger_question = str(getattr(pbl_info, "current_trigger_question", "") or "").strip()
+                                        learning_objectives = list(getattr(pbl_info, "current_learning_objectives", []) or [])
+                                        rt_key = f"{int(_scene_idx)}_{int(_question_idx)}"
+                                        overrides = dict(getattr(pbl_info, "objective_overrides", {}).get(rt_key, {}) or {})
+                                        if not learning_objectives:
+                                            return
+                                        objective_result = await _objectives_achieved_by_llm(
+                                            messages=chain,
+                                            trigger_question=trigger_question,
+                                            learning_objectives=learning_objectives,
+                                            teacher_overrides=overrides,
+                                        )
+                                        await websocket.send_json({
+                                            "type": "objective_evaluation_update",
+                                            "scene_index": int(_scene_idx),
+                                            "question_index": int(_question_idx),
+                                            "payload": {
+                                                "objective_evaluations": objective_result.get("objective_evaluations", []),
+                                                "achieved_all": bool(objective_result.get("achieved_all", False)),
+                                                "updatedAt": datetime.now().timestamp() * 1000,
+                                            },
+                                        })
+                                    except Exception as e:
+                                        logger.error(f"Eager objective task failed: {e}")
+
+                                async def _task_knowledge_state():
+                                    try:
+                                        seed = _snapshot_for_message(_msg_id)
+                                        seed["messages"] = chain
+                                        internalized = await _parallel_internalize_for_all_agents(seed, chain)
+                                        await websocket.send_json({
+                                            "type": "knowledge_state_update",
+                                            "scene_index": int(_scene_idx),
+                                            "question_index": int(_question_idx),
+                                            "knowledge_state": internalized.get("knowledge_state", {}),
+                                            "cognitive_load": internalized.get("cognitive_load", {}),
+                                            "self_efficacy": internalized.get("self_efficacy", {}),
+                                            "private_memory": internalized.get("private_memory", {}),
+                                            "updated_at": datetime.now().timestamp() * 1000,
+                                        })
+                                    except Exception as e:
+                                        logger.error(f"Eager knowledge-state task failed: {e}")
+
+                                await asyncio.gather(
+                                    _task_topic(),
+                                    _task_coverage(),
+                                    _task_objective(),
+                                    _task_knowledge_state(),
+                                    return_exceptions=True,
+                                )
 
                             # 提交后台任务，不阻塞当前流程
                             asyncio.create_task(_async_postprocess_message())
@@ -2569,11 +2800,17 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     if current_topic and current_topic != previous_topic:
                         # 主题发生变化，立即通知前端
                         await websocket.send_json({
-                            "id": sh["active_id"],  # 关联到最后一条消息
+                            "id": sh.get("active_id"),  # 关联到最后一条消息
                             "node": node,
                             "topic": current_topic,
                             "type": "topic_update"
                         })
+
+                        # 同步更新 messages_map 中的 topic，确保 persistent 准确
+                        active_id = sh.get("active_id")
+                        if active_id and active_id in sh["messages_map"]:
+                            sh["messages_map"][active_id]["topic"] = current_topic
+
                         previous_topic = current_topic
 
                     # Keep the active message snapshot aligned with latest state updates
@@ -2788,10 +3025,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     sh["current_branch"] = state["current_branch"]
                     runtime_state = _snapshot_for_message(sh["active_id"])
                     await _emit_state_restore(s_idx, q_idx, runtime_state)
-                    await _recompute_and_emit_context_evaluations(
+                    await _emit_cached_context_updates(
                         scene_idx=int(s_idx),
                         question_idx=int(q_idx),
                         leaf_id=sh.get("active_id"),
+                        snapshot=runtime_state,
                     )
                     logger.info(
                         f"Context switched to {q_key}: active_id={sh['active_id']}, branch={sh['current_branch']}")
@@ -2818,10 +3056,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                    target_question_idx, target_id, target_branch)
                     runtime_state = _snapshot_for_message(target_id)
                     await _emit_state_restore(target_scene_idx, target_question_idx, runtime_state)
-                    await _recompute_and_emit_context_evaluations(
+                    await _emit_cached_context_updates(
                         scene_idx=int(target_scene_idx),
                         question_idx=int(target_question_idx),
                         leaf_id=target_id,
+                        snapshot=runtime_state,
                     )
 
                     logger.info(
@@ -2847,10 +3086,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     update_q_state(target_scene_idx,
                                    target_question_idx, target_id, branch_id)
                     await _emit_state_restore(target_scene_idx, target_question_idx, runtime_state)
-                    await _recompute_and_emit_context_evaluations(
+                    await _emit_cached_context_updates(
                         scene_idx=int(target_scene_idx),
                         question_idx=int(target_question_idx),
                         leaf_id=target_id,
+                        snapshot=runtime_state,
                     )
 
                     logger.info(

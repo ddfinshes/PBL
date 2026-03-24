@@ -23,6 +23,24 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
   const discussionEndByQuestion = ref({}); // key: "scene_question" -> end payload
   const agentStateByQuestion = ref({}); // key: "scene_question" -> latest runtime snapshot
   const knowledgeCoverageByQuestion = ref({}); // key: "scene_question" -> { nodeLeafId -> coverage }
+  const stableTopicByQuestion = ref({}); // key: "scene_question" -> latest non-undefined topic
+
+  const isStableTopic = (topic) => {
+    const t = String(topic || '').trim().toLowerCase();
+    if (!t) return false;
+    return !['undefined', 'start_discussion', 'start discussion', '开始讨论', 'unrecognized', '待识别'].includes(t);
+  };
+
+  const getQuestionKey = (sceneIndex, questionIndex) => `${Number(sceneIndex ?? -1)}_${Number(questionIndex ?? -1)}`;
+
+  const cacheStableTopic = (sceneIndex, questionIndex, topic) => {
+    if (!isStableTopic(topic)) return;
+    const key = getQuestionKey(sceneIndex, questionIndex);
+    stableTopicByQuestion.value = {
+      ...stableTopicByQuestion.value,
+      [key]: String(topic).trim()
+    };
+  };
 
   const applyAgentStateSnapshot = (sceneIndex, questionIndex, snapshot) => {
     if (!Number.isFinite(sceneIndex) || !Number.isFinite(questionIndex)) return;
@@ -104,7 +122,14 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     };
 
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      let data = null;
+      try {
+        data = JSON.parse(event.data);
+      } catch (err) {
+        console.error('[usePBLSocket] Failed to parse websocket payload:', err);
+        return;
+      }
+      try {
 
       if (data.type === 'history_sync' && data.messages) {
         console.log('Synchronizing history from server:', data.messages.length);
@@ -144,6 +169,13 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       }
 
       if (data.type === 'agent_output' && (data.node || data.agent) && data.content) {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        const qKey = getQuestionKey(sceneIndex, questionIndex);
+        const stableTopic = stableTopicByQuestion.value[qKey] || currentTopic.value;
+        const incomingTopic = isStableTopic(data.topic) ? data.topic : '';
+        const resolvedTopic = incomingTopic || (isStableTopic(stableTopic) ? stableTopic : 'Undefined');
+
         const newMsg = {
           id: data.id || (sessionId + Math.random()),
           parent_id: data.parent_id,
@@ -151,12 +183,13 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
           agent: data.agent || data.node,
           text: data.content,
           summary: data.summary || data.content,
-          topic: data.topic || currentTopic.value,
+          topic: resolvedTopic,
           timestamp: Date.now(),
-          sceneIndex: data.scene_index,
-          questionIndex: data.question_index,
+          sceneIndex: sceneIndex,
+          questionIndex: questionIndex,
           stateSnapshot: data.state_snapshot || null
         };
+        cacheStableTopic(sceneIndex, questionIndex, resolvedTopic);
         messages.value.push(newMsg);
         activeMessageId.value = newMsg.id;
         applyAgentStateSnapshot(Number(newMsg.sceneIndex), Number(newMsg.questionIndex), newMsg.stateSnapshot);
@@ -188,21 +221,32 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         });
       }
 
-      // 【新增】处理异步消息更新（简化版本和知识覆盖）
+      // 【新增】处理异步消息更新（简化版本和知识覆盖/话题实效）
       if (data.type === 'message_update' && data.id) {
         const msgIdx = messages.value.findIndex(m => m.id === data.id);
         if (msgIdx !== -1) {
-          // 更新消息的summary和知识覆盖
+          // 更新消息的主题、summary和知识覆盖
+          if (data.topic) {
+            const msg = messages.value[msgIdx];
+            const sIdx = Number(data.scene_index ?? msg.sceneIndex ?? -1);
+            const qIdx = Number(data.question_index ?? msg.questionIndex ?? -1);
+            if (isStableTopic(data.topic)) {
+              messages.value[msgIdx].topic = data.topic;
+              cacheStableTopic(sIdx, qIdx, data.topic);
+              console.log(`[usePBLSocket] Real-time topic update for ${data.id}: ${data.topic}`);
+            }
+          }
           if (data.summary) {
             messages.value[msgIdx].summary = data.summary;
           }
           if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
             const msg = messages.value[msgIdx];
-            const sceneIndex = Number(msg.sceneIndex ?? -1);
-            const questionIndex = Number(msg.questionIndex ?? -1);
-            const key = `${sceneIndex}_${questionIndex}`;
-            const leafId = String(msg.id || '').trim();
-            if (leafId) {
+            const sIdx = Number(data.scene_index ?? msg.sceneIndex ?? -1);
+            const qIdx = Number(data.question_index ?? msg.questionIndex ?? -1);
+            const key = `${sIdx}_${qIdx}`;
+            const leafId = String(data.id || '').trim();
+
+            if (leafId && sIdx !== -1) {
               const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
               knowledgeCoverageByQuestion.value = {
                 ...knowledgeCoverageByQuestion.value,
@@ -214,6 +258,7 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
                   },
                 },
               };
+              console.log(`[usePBLSocket] Real-time coverage update for ${leafId}`);
             }
           }
         }
@@ -232,8 +277,10 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       }
 
       if (data.type === 'topic_update' && data.topic) {
+        if (!isStableTopic(data.topic)) return;
         console.log('Topic updated:', data.topic);
         currentTopic.value = data.topic;
+        cacheStableTopic(data.scene_index, data.question_index, data.topic);
 
         // 【分支关联】关联到当前最新的消息
         if (data.id) {
@@ -296,15 +343,20 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         const sceneIndex = Number(data.scene_index ?? -1);
         const questionIndex = Number(data.question_index ?? -1);
         const key = `${sceneIndex}_${questionIndex}`;
-        const incomingRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
         const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
+        const payloadRows = Array.isArray(data?.payload?.objective_evaluations) ? data.payload.objective_evaluations : [];
+        const directRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+        const incomingRows = payloadRows.length > 0 ? payloadRows : directRows;
+        const achievedAll = (typeof data?.payload?.achieved_all === 'boolean')
+          ? Boolean(data.payload.achieved_all)
+          : Boolean(data.achieved_all);
 
         objectiveEvaluationMap.value = {
           ...objectiveEvaluationMap.value,
           [key]: {
             ...prev,
             objectiveEvaluations: incomingRows,
-            achievedAll: Boolean(data.achieved_all),
+            achievedAll,
             updatedAt: Date.now()
           }
         };
@@ -410,6 +462,18 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
       }
 
+      if (data.type === 'knowledge_state_update') {
+        const sceneIndex = Number(data.scene_index ?? -1);
+        const questionIndex = Number(data.question_index ?? -1);
+        applyAgentStateSnapshot(sceneIndex, questionIndex, {
+          ...(agentStateByQuestion.value[`${sceneIndex}_${questionIndex}`] || {}),
+          knowledge_state: data.knowledge_state || {},
+          cognitive_load: data.cognitive_load || {},
+          self_efficacy: data.self_efficacy || {},
+          private_memory: data.private_memory || {}
+        });
+      }
+
       if (data.type === 'knowledge_coverage_update') {
         const sceneIndex = Number(data.scene_index ?? -1);
         const questionIndex = Number(data.question_index ?? -1);
@@ -443,6 +507,9 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
         };
         discussionStage.value = stageMap[stageNameCn] || stageNameCn;
         console.log('Stage updated:', data.stage_name);
+      }
+      } catch (err) {
+        console.error('[usePBLSocket] Error handling websocket payload:', data, err);
       }
     };
 

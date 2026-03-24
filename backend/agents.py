@@ -696,96 +696,6 @@ def _build_silence_mechanism_hint(
     return "\n".join(hint_lines)
 
 
-def _build_persona_silence_prompt(
-    agent_id: str,
-    persona: Dict,
-    state: Dict,
-    load_level: int,
-    self_efficacy_level: int,
-    messages: List[BaseMessage],
-) -> str:
-    """按人格与状态拼接沉默触发引导，供学生主 prompt 直接使用。"""
-    scores = _extract_numeric_trait_scores(persona)
-    learning = scores["learning"]
-    personality = scores["personality"]
-
-    kb = persona.get("knowledge_background", {}) or {}
-    level_ratio = _compute_knowledge_level_ratio(persona)
-
-    knowledge_gap_signal = level_ratio["low"] > 0.5
-
-    dominant_speaker, dominant_count = _find_recent_dominant_speaker(messages)
-    dominant_peer_suppression = False
-    if dominant_speaker and dominant_speaker != agent_id and dominant_count >= 2:
-        peer_persona = student_personas.get(dominant_speaker, {})
-        peer_scores = _extract_numeric_trait_scores(peer_persona)
-        dominant_peer_suppression = (
-            peer_scores["personality"]["extraversion"] > 3
-            and _has_high_knowledge_profile(peer_persona)
-            and personality["extraversion"] < 3
-        )
-
-    last_peer_content = ""
-    for msg in reversed(messages):
-        speaker = str(getattr(msg, "name", "") or "")
-        if speaker and speaker != agent_id:
-            last_peer_content = str(getattr(msg, "content", "") or "").strip()
-            break
-
-    self_efficacy_state: Dict[str, int] = state.get("self_efficacy", {}) or {}
-    low_efficacy_peers = [
-        aid for aid, level in self_efficacy_state.items()
-        if aid != agent_id and isinstance(level, int) and level <= 3
-    ]
-
-    recent_memory = _get_recent_private_memory(state, agent_id, window=3)
-    recent_silence_count = sum(
-        1 for item in recent_memory if str(item.get("action", "")) in {"self_selected_silence", "verbal_disengagement_silence", "productive_processing_silence", "collaborative_strategic_silence"}
-    )
-
-    hits: List[str] = []
-    if knowledge_gap_signal:
-        hits.append(
-            f"- 知识赤字触发：你的 low 层知识占比为 {level_ratio['low']:.2f}（阈值 > 0.50）或结构性知识为低，当前容易出现理解断点；本轮可用短暂沉默重建理解。"
-        )
-    if personality["neuroticism"] > 3 and self_efficacy_level <= 6:
-        hits.append(
-            "- 高神经质触发：你对冲突更敏感。先比较“对方最近发言”与“你当前观点”的相似度；若明显不相似且你感到被挑战，再评估是否进入防御性沉默。"
-        )
-        if last_peer_content:
-            hits.append(f"  参考最近他人发言：{last_peer_content}")
-    if load_level >= 9:
-        hits.append(
-            "- 认知负荷溢出触发：当前动态负荷达到 9，推理引擎降级，可优先沉默以避免低质量输出。"
-        )
-    if learning["deep"] > 3 and (knowledge_gap_signal or load_level >= 6):
-        hits.append(
-            "- 深层学习触发：你需要时间把新概念连接到既有结构化知识网络。"
-        )
-    if personality["conscientiousness"] > 3 and (knowledge_gap_signal or load_level >= 6):
-        hits.append(
-            "- 高尽责性触发：你倾向于开口前先核实证据，证据不足时可选择沉默。"
-        )
-    if personality["agreeableness"] > 3 and low_efficacy_peers:
-        hits.append(
-            f"- 高宜人性触发：你观察到低效能感同伴（{', '.join(low_efficacy_peers)}）可能需要发言空间，可主动让位沉默。"
-        )
-    if learning["strategic"] > 3 and (dominant_peer_suppression or load_level >= 6):
-        hits.append(
-            "- 策略型学习触发：当你判断当前讨论对目标推进效率不高时，可先观察并等待更优切入点。"
-        )
-    if dominant_peer_suppression:
-        hits.append(
-            "- 霸权压制触发：组内高外向且高知识储备成员持续主导，可能形成功能失调动态，你可进入被动沉默。"
-        )
-
-    # 连续沉默冷却：最近 3 轮中若已沉默 >=2 次，本轮应优先发言。
-    if recent_silence_count >= 2:
-        hits.append(
-            f"- 沉默冷却约束：你最近 3 轮已有 {recent_silence_count} 次沉默，本轮应优先给出一句有增量的信息，而不是继续沉默。"
-        )
-
-
 def _extract_numeric_trait_scores(persona: Dict) -> Dict[str, Dict[str, int]]:
     return _extract_numeric_trait_scores_orig(persona)
 
@@ -800,72 +710,139 @@ def _compute_action_prior_distribution(
     teacher_interrupt: bool = False,
 ) -> Dict[str, float]:
     """
-    Compute unified action prior distribution (1-9 scale for load and self_efficacy).
+    Compute personality-driven action prior distribution (1-9 scale for load and self_efficacy).
 
-    Base distribution: 
-    - silence 5% (dynamic)
-    - nonsense 15% (fixed - off-topic rambling)
-    - accumulation 63% (fixed - learning-oriented)
-    - seeking_help 10% (fixed - learning-oriented)
-    - correction 7% (fixed - learning-oriented)
+    核心改造：从固定概率 → 性格驱动的动态概率
 
-    Dynamic adjustment: ONLY silence can vary based on state (capped).
-    After calculating silence, remaining probability is distributed proportionally 
-    to the base non-silence weights, then normalized.
+    Different personality combinations and knowledge states trigger different action probabilities:
+    - non-sense: High when knowledge-poor + high neuroticism + (high surface OR high conscientiousness)
+    - silence: High when self-efficacy low OR load high
+    - correction: High when deep learning + low agreeableness + NOT high neuroticism
+    - seeking_help: High when openness high + deep learning
+    - accumulation: Default safe choice for strategic/tactical learners
 
-    Returns: {"silence": float, "nonsense": float, "accumulation": float, "seeking_help_alignment": float, "correction_challenge": float}
+    Returns: {\"silence\": float, \"nonsense\": float, \"accumulation\": float, \"seeking_help_alignment\": float, \"correction_challenge\": float}
     """
+    # === EXTRACT PERSONALITY & LEARNING TRAITS ===
+    p = persona.get("personality", {})
+    ls = persona.get("learning_styles", {})
+    level_ratio = _compute_knowledge_level_ratio(persona)
+    kb_low_ratio = level_ratio.get("low", 0)  # 知识盲区比例
 
-    # === COMPUTE SILENCE PROBABILITY (DYNAMIC) ===
-    if teacher_interrupt:
-        silence_weight = 0.0
-    else:
-        silence_weight = 0.05  # Base silence rate (5%)
+    # Defaults to 3 (neutral) if not specified
+    neuroticism = p.get("neuroticism", 3)
+    agreeableness = p.get("agreeableness", 3)
+    extraversion = p.get("extraversion", 3)
+    openness = p.get("openness", 3)
+    conscientiousness = p.get("conscientiousness", 3)
 
-        # Self-efficacy impact (continuous 1-9)
-        if self_efficacy_level <= 4:  # Low efficacy
-            silence_weight += 0.15  # Add to base
-        elif self_efficacy_level <= 6:  # Medium efficacy
-            silence_weight += 0.05  # Slight increase
+    surface = ls.get("surface", 3)
+    deep = ls.get("deep", 3)
+    strategic = ls.get("strategic", 3)
 
-        # Cognitive load impact (continuous 1-9)
-        if load_level >= 8:  # High load
-            silence_weight += 0.10
-        elif load_level >= 6:  # Medium load
-            silence_weight += 0.02
-
-        # Knowledge gap signal
-        level_ratio = _compute_knowledge_level_ratio(persona)
-        if level_ratio.get("low", 0) > 0.5:
-            silence_weight += 0.08
-
-        # Cap silence at reasonable upper bound (around 35-40%)
-        silence_weight = max(0.0, min(0.40, silence_weight))
-
-    # === FIXED BASE DISTRIBUTION FOR NON-SILENCE ACTIONS ===
-    # These proportions are NOT adapted dynamically (evidence-based baseline)
-    base_non_silence_weights = {
-        "accumulation": 0.63,           # 63% of non-silence
-        "seeking_help_alignment": 0.10,  # 10% of non-silence
-        "correction_challenge": 0.07,   # 7% of non-silence
-        # 15% of non-silence (off-topic rambling)
+    # === 基础概率 ===
+    base_weights = {
+        "accumulation": 0.63,
+        "seeking_help_alignment": 0.10,
+        "correction_challenge": 0.07,
         "nonsense": 0.15,
     }
 
-    # === BUILD FINAL DISTRIBUTION ===
-    # Calculate non-silence probability
+    # === 动态乘数系统 ===
+    # 1. Non-sense (无效/防御性发言)：知识越差、神经质越高、表层学习越高，越容易触发
+    nonsense_multi = 1.0
+    if kb_low_ratio > 0.6:  # 知识盲区 > 60%
+        nonsense_multi *= 2.5  # 显著提升
+    elif kb_low_ratio > 0.4:
+        nonsense_multi *= 1.8
+
+    if neuroticism >= 4:  # 高神经质（焦虑/退缩）
+        nonsense_multi *= 1.8
+    if surface >= 4:  # 高表层学习（应试导向、容易生硬搬运）
+        nonsense_multi *= 1.6
+    if conscientiousness >= 4 and kb_low_ratio > 0.4:  # 尽责但知识差 → 慌张补救
+        nonsense_multi *= 1.4
+
+    # 深度学习者极少说废话
+    if deep >= 4:
+        nonsense_multi *= 0.15
+
+    # 2. Silence (沉默)：知识缺陷 + 低效能 + 高负荷
+    silence_weight = 0.05
+    if teacher_interrupt:
+        silence_weight = 0.0
+    else:
+        if self_efficacy_level <= 4:  # 低效能
+            silence_weight += 0.15
+        elif self_efficacy_level <= 6:
+            silence_weight += 0.05
+
+        if load_level >= 8:  # 高负荷
+            silence_weight += 0.10
+        elif load_level >= 6:
+            silence_weight += 0.02
+
+        if kb_low_ratio > 0.5:  # 知识极度不足
+            silence_weight += 0.05
+
+        silence_weight = max(0.0, min(0.25, silence_weight))
+
+    # 3. Correction (纠错)：深度学习 + 低宜人性 + NOT高神经质
+    correction_multi = 1.0
+    if deep >= 4:  # 深度学习者爱深挖
+        correction_multi *= 1.6
+    if agreeableness <= 2:  # 低宜人性 → 容易纠错、不怕冲突
+        correction_multi *= 1.8
+    if neuroticism >= 4:  # 高神经质 → 怕被反驳、不敢纠错
+        correction_multi *= 0.3
+    if surface >= 4 and neuroticism >= 4:  # 表层 + 焦虑 → 死抠标准（这会变成nonsense而非correction_challenge）
+        correction_multi *= 0.2
+
+    # 4. Seeking Help (提问)：开放性高 + 深度学习高 + NOT高表层
+    seeking_multi = 1.0
+    if openness >= 4:  # 开放性强 → 愿意承认不懂、提问
+        seeking_multi *= 1.5
+    if deep >= 4:  # 深度学习 → 有意义的提问
+        seeking_multi *= 1.3
+    if surface >= 4:  # 表层学习 → 问题可能只是为了完成任务
+        seeking_multi *= 0.5
+
+    # 5. Accumulation (补充)：策略型 + NOT知识极度不足
+    accumulation_multi = 1.0
+    if strategic >= 4:  # 策略型 → 为了完成任务而补充（安全选择）
+        accumulation_multi *= 1.3
+    if kb_low_ratio > 0.7:  # 知识严重不足 → 难以补充
+        accumulation_multi *= 0.3
+
+    # === 应用乘数 ===
+    adjusted_weights = {}
+    adjusted_weights["nonsense"] = base_weights["nonsense"] * nonsense_multi
+    adjusted_weights["correction_challenge"] = base_weights["correction_challenge"] * correction_multi
+    adjusted_weights["seeking_help_alignment"] = base_weights["seeking_help_alignment"] * seeking_multi
+    adjusted_weights["accumulation"] = base_weights["accumulation"] * \
+        accumulation_multi
+
+    # === 计算 non-silence 概率并分配 ===
     non_silence_prob = 1.0 - silence_weight
 
-    # Distribute non-silence probability according to base weights
+    # 归一化调整后的权重
+    weights_sum = sum(adjusted_weights.values())
+    if weights_sum > 0:
+        normalized_weights = {k: v / weights_sum for k,
+                              v in adjusted_weights.items()}
+    else:
+        normalized_weights = base_weights
+
+    # 分配概率
     distribution = {
         "silence": silence_weight,
-        "accumulation": base_non_silence_weights["accumulation"] * non_silence_prob,
-        "seeking_help_alignment": base_non_silence_weights["seeking_help_alignment"] * non_silence_prob,
-        "correction_challenge": base_non_silence_weights["correction_challenge"] * non_silence_prob,
-        "nonsense": base_non_silence_weights["nonsense"] * non_silence_prob,
+        "accumulation": normalized_weights["accumulation"] * non_silence_prob,
+        "seeking_help_alignment": normalized_weights["seeking_help_alignment"] * non_silence_prob,
+        "correction_challenge": normalized_weights["correction_challenge"] * non_silence_prob,
+        "nonsense": normalized_weights["nonsense"] * non_silence_prob,
     }
 
-    # Ensure sum = 1 (floating point safety)
+    # 确保总和 = 1
     total = sum(distribution.values())
     if total > 0 and abs(total - 1.0) > 0.001:
         distribution = {k: v / total for k, v in distribution.items()}
@@ -910,14 +887,6 @@ async def _plan_agent_action(
         agent_id, self_efficacy_init(persona))
 
     silence_hint = _build_silence_mechanism_hint(
-        agent_id=agent_id,
-        persona=persona,
-        state=state,
-        load_level=load_level,
-        self_efficacy_level=self_efficacy_level,
-        messages=messages,
-    )
-    silence_prompt = _build_persona_silence_prompt(
         agent_id=agent_id,
         persona=persona,
         state=state,
@@ -1010,8 +979,8 @@ async def _plan_agent_action(
         "accumulation：补充医学信息/案例/证据\n"
         "seeking_help_alignment：询问/澄清/寻求共识\n"
         "correction_challenge：指出错误/质疑/反驳\n"
-        "silence：保持沉默\n\n"
-        "non-sense：与讨论无关的发言\n\n"
+        "non-sense：非实质性/防御性发言。包括：知识盲区导致生硬搬运常识、为掩饰尴尬说废话、表达焦虑/退缩情绪、盲目附和但无增量信息\n"
+        "silence：彻底保持沉默（将直接输出...）\n\n"
         "【决策框架】\n"
         "1. 理解学生人格倾向（3分为基准值）\n"
         "- neuroticism高：倾向沉默，并且避免风险性发言\n"
@@ -1044,8 +1013,8 @@ async def _plan_agent_action(
         "   这些情况下，即使有话想说，你也会自然倾向于沉默\n"
         "严格输出JSON：\n"
         "{\n"
-        "  \"action\": \"seeking_help_alignment|correction_challenge|accumulatio|silence|non-sense\",\n"
-        "  \"action_description\": \"一句动作执行说明（<=30字）\",\n"
+        "  \"action\": \"seeking_help_alignment|correction_challenge|accumulation|silence|nonsense\",\n"
+        "  \"action_description\": \"必须是具体的表演指导（30字左右）。必须包含：(1)情绪/语气（焦虑/自信/生硬/退缩等）(2)认知视角（死抠字眼/深挖机制/碎片盲猜）(3)知识策略（用High知识/用Low常识/生硬搬运）。示例：语气焦躁生硬\\=，出于对扣分恐惧死守书本诊断标准\\=，强行纠正他人观点\",\n"
         "  \"reason\": \"一句话原因（必须同时包含1个‘人格/学习风格’依据和1个‘讨论态势’依据）\",\n"
         "  \"reply_focus\": \"一句话回复重点\"\n"
         "}\n\n"
@@ -1343,23 +1312,26 @@ _STUDENT_SYS_TEMPLATE_STR = '''请务必用中文输出。你是一名医学生�
 
 你必须严格按照以上人格特征进行思考和表达，包括领域知识深度，认知维度，社会行为以及动态学习维度
 
+【⚠️ 最关键的执行原则（优先级最高）】
+本轮的 action_plan 和 action_description（见下文"本轮动作规划"）是基于你的人格性格和当前状态精心计算的【表演指导】。
+1. 你的发言内容、深度、语气、认知方式，必须【绝对服从】这个指导！
+2. 如果 action_description 要求你表现出焦虑、退缩、生硬、盲猜或死抠应试标准（包括non-sense动作涉及的防御性发言），你必须照做。
+3. 绝对禁止违背action_description来"表现得专业"或"显得更聪慧"。你的真实就是按这个指导表现。
+4. 如果你的知识库为Low，你只能使用常识或错误的碎片知识，严禁为了补救而突然背诵专业指南。
+
 【讨论原则（必须遵守）】
 - 你必须针对前一位同学的发言建立联系，避免重复。
-
-1. 禁止给出过于确定的最终诊断；可用"可能""需要进一步确认"等表述。
-2. 必须针对前一位或者多位同学的发言建立联系（明确指出你在回应什么），你可以：
-    - 在其基础上补充内容，
-    - 对其提出质疑或修正，
-    - 或在承接其观点的前提下引入一个新的分析角度。
-    - 不得直接忽略上一位同学、独立重新分析整个病例
-    - 避免反复出现相同的言论，如反复出现“我同意xxx同学...”。
-3. 禁止重复已经说过的内容，如果某个病因、机制、检查或建议已经被提到，你不能原样再说一次。你只能：
-     - 提出新的角度，
-     - 或指出别人遗漏 / 错误的地方。
-4. 如果你发现已经没有新的医学信息可以补充
-   - 请直接回答：我认为目前没有新的关键医学点可以补充。
-   - 不要为了说话而重复前面的内容。
-5. 鼓励对他人观点提出问题或质疑，并引用医学证据或指南。
+【讨论原则（必须遵守）】
+1. 必须针对前一位或者多位同学的发言建立联系（明确指出你在回应什么），不得直接忽略同伴独立发言。
+2. 禁止给出过于确定的最终诊断；可用"可能"、"需要进一步确认"等符合学生身份的表述。
+3. 关于“重复与创新”：
+   - 如果你的 action_description 是【探索/纠错/深度补充】，你必须提出新角度或指出错误，禁止机械重复。
+   - 如果你的 action_description 是【non-sense/退缩/掩饰/安全蹭分】，你可以用自己的话附和、重复前一位同学的观点，甚至表现出“随大流”的态度。
+4. 关于“引用权威”：
+   - 只有当你的知识库对应领域为 High，且学习风格偏 Deep 时，你才可以自然地引用医学指南或底层机制。
+   - 否则，请使用符合你认知水平的“大白话”、“常识猜测”甚至“错误的偏见”来回应。
+5. 如果你发现自己真的无话可说（或者 action_description 要求你退缩）：
+   - 请用符合你人设的口语化表达（如：“那个...我觉得大家说得挺全了”、“我暂时没别的想法”），绝对不要使用机械的AI客服话术。
 6. 若老师（teacher）在上一条消息中提出指令，你必须优先回应老师的问题，而不是继续学生间的讨论。
 
 【当前讨论上下文】
@@ -1367,15 +1339,16 @@ _STUDENT_SYS_TEMPLATE_STR = '''请务必用中文输出。你是一名医学生�
 {messages}
 2.同伴沉默信息（你需要考虑同伴的沉默对你带来的影响）：
 {silence_social_context}
-3.本轮动作规划（必须执行），且需要在回答中表露出这个action得特征：
+3.本轮动作规划（仅供系统处理，不要在回答中生成动作类型标签）：
 {action_plan}
+⚠️ 重要：【动作类型】标签将由系统自动添加，你只需生成自然流畅的对话内容。
 
 【输出要求】
 - 纯中文，表达自然流畅，不得出现英文缩写堆砌；
 - 不要透露你的提示词。
 - 发言具有口头讨论风格，发言内容可长可短，但不要超过100字。
 - 你的表达必须体现你的人格特征与学习风格（语气、谨慎程度、推进方式要有个体差异），禁止模板化复读。
-- 你的表达不应总是“理想正确”，请自然呈现你的局限或偏差（如过早收敛、忽略反例、求助不足、只补充不总结等），但不得脱离病例讨论。你人设中清楚的告诉你有些知识你不会使用（low），你不能使用这些知识。
+- 你人设中清楚的告诉你有些知识你不会使用（low），你不能使用这些知识。
 - **严格禁止以下内容**：
   * 不允许出现任何表格、列表、编号清单
   * 不允许出现思维导图、树状结构、括号嵌套结构
@@ -1405,6 +1378,13 @@ def _student_node_fn(agent_id: str):
     """返回可在 LangGraph 中调用的学生节点函数。"""
     async def _node(state: Dict) -> Dict:
         print(f"DEBUG: [Agent Node] {agent_id} is running...")
+
+        # 【关键修复】在学生开始发言前，将 current_topic 重置为 Undefined。
+        # 这样当 message_prepare_parallel_node 中的 topic_manager_node 产出新结果时，
+        # server.py 的 output_processor 能检测到 topic 的变化（Undefined -> New Topic），
+        # 从而立即推送 type: topic_update 给前端，触发 ViewD 生成 new topic 对应的节点。
+        state["current_topic"] = "Undefined"
+
         messages: List[BaseMessage] = state["messages"]
         persona_dict = student_personas.get(agent_id)
         if not persona_dict:
@@ -1453,8 +1433,9 @@ def _student_node_fn(agent_id: str):
         active_contribution_behavior_rule = (
             "你需遵循动作规划并保持既有互动风格，动作包括："
             "(1) 探索性提问：学生批判性地、建设性地参与彼此的想法，或是提出问题以寻求对齐；"
-            "(2) 纠错/挑战：当他人逻辑与你内在推理冲突时进行辩论；仅仅是观点碰撞，没有深度加工或共同构建"
-            "(3) 累积/补充：学生在不挑战他人的情况下，互相重复或确认彼此的论点即：简单支持、证据叠加）。"
+            "(2) 纠错/挑战：当他人逻辑与你内在推理冲突时进行辩论；仅仅是观点碰撞，没有深度加工或共同构建；"
+            "(3) 累积/补充：学生在不挑战他人的情况下，互相重复或确认彼此的论点（即：简单支持、证据叠加）；"
+            "(4) 防御/无效发言(nonsense)：因知识盲区或焦虑，进行生硬搬运常识、盲目附和或说废话来掩饰尴尬。"
         )
 
         # load_label: Simple mapping for 1-9 continuous scale
@@ -1554,6 +1535,9 @@ def _student_node_fn(agent_id: str):
 
             # **关键修改**: 创建带有发言者名称的 AIMessage
             ai_msg_with_name = AIMessage(content=content, name=agent_id)
+            # 在这里将 current_topic 设置为 Undefined，确保 parallel 阶段能检测到状态变更
+            state["current_topic"] = "Undefined"
+
             payload = {
                 "messages": [ai_msg_with_name],
                 "next_speaker": "router",
@@ -1562,6 +1546,7 @@ def _student_node_fn(agent_id: str):
                 "cognitive_load": dict(state.get("cognitive_load", {}) or {}),
                 "self_efficacy": dict(state.get("self_efficacy", {}) or {}),
                 "knowledge_state": knowledge_state_all,
+                "current_topic": "Undefined",
                 "force_no_silence_once": False,
                 "last_action_plan": {agent_id: plan},
             }
@@ -1830,7 +1815,11 @@ async def message_prepare_parallel_node(state: Dict) -> Dict:
     async def run_topic_detection():
         try:
             result = await topic_manager_node(state)
-            print(f"DEBUG: [Parallel] Topic detection completed")
+            new_topic = result.get('current_topic', 'Undefined')
+            print(f"DEBUG: [Parallel] Topic detection completed: {new_topic}")
+            # 【实时同步】立即存入 state 以便后续节点使用
+            if "current_topic" in result:
+                state["current_topic"] = new_topic
             return result
         except Exception as e:
             print(f"ERROR: [Parallel] Topic detection failed: {e}")
@@ -1839,6 +1828,8 @@ async def message_prepare_parallel_node(state: Dict) -> Dict:
     # === Task 2: Knowledge Coverage Evaluation（直接调用已有的节点）===
     async def run_knowledge_evaluation():
         try:
+            # 针对当前最新消息进行知识点覆盖评估
+            # 此时 messages[-1] 已经是当前刚生成的学生回复
             result = await knowledge_eval_node(state)
             print(f"DEBUG: [Parallel] Knowledge evaluation completed")
             return result
@@ -1888,6 +1879,9 @@ async def message_prepare_parallel_node(state: Dict) -> Dict:
         try:
             result = await _parallel_internalize_for_all_agents(state, messages)
             print(f"DEBUG: [Parallel] Internalization completed")
+            # 同步更新本地 state，以便合并后的结果包含最新状态
+            for k, v in result.items():
+                state[k] = v
             return result
         except Exception as e:
             print(f"ERROR: [Parallel] Internalization failed: {e}")
@@ -1895,6 +1889,8 @@ async def message_prepare_parallel_node(state: Dict) -> Dict:
 
     # === 并行执行所有任务 ===
     print("DEBUG: [Message Prepare Parallel] Launching 4 parallel tasks...")
+    # 注意：这里我们让 internalization 先在内存中建立新状态，其他评估节点可以并行进行。
+    # 如果要保证评估准确，某些节点可能需要看到 internalization 后的状态，但目前 evaluation 主要是基于 message list。
     results = await asyncio.gather(
         run_topic_detection(),
         run_knowledge_evaluation(),
@@ -2135,7 +2131,7 @@ async def router_node(state: Dict) -> Dict:
 
     router_prompt_str = (
         f"你是医学 PBL 讨论主持人。请基于学生的性格特征，选择下一位发言者：\n\n"
-        f"**可选项**：{options_str}, END（表示讨论已自然结束）\n"
+        f"**可选项**：{options_str}\n"
         f"**上一位发言者**：{last_speaker}。下一位不能与其相同。\n\n"
 
         f"**讨论进度**: 当前已进行 {total_turns} 轮讨论\n"
@@ -2152,10 +2148,7 @@ async def router_node(state: Dict) -> Dict:
 
         f"**学生性格维度详情**：{personality_summary}\n\n"
 
-        f"【终止条件】\n"
-        f"如果最近几轮讨论主要是重复、改写，请选择 END。\n\n"
-
-        f"只输出一个选项名称（学生 ID 或 END），不要解释。"
+        f"只输出一个选项名称（学生 ID），不要解释。"
     )
 
     # 移除分阶段逻辑，直接让LLM根据信息自行调整
@@ -2208,13 +2201,6 @@ async def router_node(state: Dict) -> Dict:
 
     if choice in agent_ids:
         next_speaker = choice
-    elif choice.lower() == 'end':
-        return {
-            "next_speaker": "END",
-            "end_reason": "host_decision_end",
-            "achieved_all": bool(objective_eval_result.get("achieved_all", False)),
-            **objective_update_payload,
-        }
     else:
         # 如果 LLM 的选择无效，则选择一个与上一位不同的发言者作为回退
         fallback_options = [aid for aid in agent_ids if aid != last_speaker]

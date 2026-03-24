@@ -187,10 +187,16 @@ const filteredMessages = computed(() => {
        }
        
        let tName = m.topic || '待识别';
-       const nodeKey = `${m.branch_id || 'main'}_${tName}`;
+       const nodeKeyPrefix = `${m.branch_id || 'main'}_${tName}`;
        return {
          ...m,
-         isCurrentTopic: !!(selectedTopic.value && nodeKey === selectedTopic.value)
+         isCurrentTopic: !!(
+          selectedTopic.value &&
+          (
+            nodeKeyPrefix === selectedTopic.value ||
+            String(selectedTopic.value).startsWith(`${nodeKeyPrefix}_`)
+          )
+         )
        };
     });
 });
