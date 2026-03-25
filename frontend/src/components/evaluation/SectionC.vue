@@ -247,18 +247,28 @@ export default {
       
       const caseKey = `case${props.currentCaseId}`
       const agentName = currentAgent.value
-      
+
+      // 选中的 evaluator（scene/file）优先使用
+      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+
       // 优先从localStorage缓存读取
       const storageKey = `evaluation_scores_${props.username}`
       const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
-      
-      // 检查数据结构
+
       const caseScores = scores[caseKey] || {}
-      const agentScores = caseScores[agentName] || {}
-      const dimensions = agentScores.dimensions || {}
-      
+      let dimensions = {}
+
+      if (sceneKey) {
+        const sceneScores = caseScores[sceneKey] || {}
+        const agentScores = sceneScores[agentName] || {}
+        dimensions = agentScores.dimensions || {}
+      } else {
+        // 向后兼容，旧结构直接在 case -> agent
+        const agentScores = caseScores[agentName] || {}
+        dimensions = agentScores.dimensions || {}
+      }
+
       const score = dimensions[dimensionKey] || 0
-      
       return score
     }
 
@@ -273,21 +283,30 @@ export default {
       
       const caseKey = `case${props.currentCaseId}`
       const agentName = currentAgent.value
+      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
       
       try {
         // 实时保存到后端
+        // 识别 evaluator id（优先）和 scene
+        const evaluatorId = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+        const sceneKey = props.selectedEvaluator?.file || props.selectedEvaluator?.id || null
+
+        const bodyPayload = {
+          username: props.username,
+          case_id: caseKey,
+          scene: sceneKey,
+          agent_name: agentName,
+          dimension_key: dimensionKey,
+          score: score
+        }
+        if (evaluatorId) bodyPayload['evaluator_id'] = evaluatorId
+
         const response = await fetch('/api/evaluation/save-dimension-score', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            username: props.username,
-            case_id: caseKey,
-            agent_name: agentName,
-            dimension_key: dimensionKey,
-            score: score
-          })
+          body: JSON.stringify(bodyPayload)
         })
         
         if (response.ok) {
@@ -299,18 +318,21 @@ export default {
         console.error('保存评分到后端出错:', error)
       }
       
-      // 同时保存到localStorage作为缓存
+      // 同时保存到localStorage作为缓存（支持 case -> scene -> agent -> dimensions）
       const storageKey = `evaluation_scores_${props.username}`
       const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
-      
-      // 初始化数据结构
+
       if (!scores[caseKey]) scores[caseKey] = {}
-      if (!scores[caseKey][agentName]) scores[caseKey][agentName] = { dimensions: {} }
-      
-      // 设置评分到dimensions对象中
-      scores[caseKey][agentName].dimensions[dimensionKey] = score
-      
-      // 保存到localStorage
+
+      if (sceneKey) {
+        if (!scores[caseKey][sceneKey]) scores[caseKey][sceneKey] = {}
+        if (!scores[caseKey][sceneKey][agentName]) scores[caseKey][sceneKey][agentName] = { dimensions: {} }
+        scores[caseKey][sceneKey][agentName].dimensions[dimensionKey] = score
+      } else {
+        if (!scores[caseKey][agentName]) scores[caseKey][agentName] = { dimensions: {} }
+        scores[caseKey][agentName].dimensions[dimensionKey] = score
+      }
+
       localStorage.setItem(storageKey, JSON.stringify(scores))
       
       console.log('localStorage已更新:', scores)
@@ -365,19 +387,34 @@ export default {
       console.log('开始从后端加载用户评分数据，用户名:', props.username)
       
       try {
-        const response = await fetch(`/api/evaluation/get-user-scores?username=${props.username}`)
+        // 请求时带上 case_id 与可选 scene 参数以获取更精确的数据
+        const caseKey = `case${props.currentCaseId}`
+        const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+        let url = `/api/evaluation/get-user-scores?username=${props.username}&case_id=${caseKey}`
+        if (sceneKey) url += `&scene=${sceneKey}`
+        const response = await fetch(url)
         console.log('后端响应状态:', response.status, response.statusText)
         
         if (response.ok) {
           const data = await response.json()
           console.log('后端返回的原始数据:', data)
           
-          if (data.status === 'success' && data.scores) {
-            // 将后端数据同步到localStorage
+            if (data.status === 'success' && data.scores) {
+            // 将后端数据同步到localStorage（保留其他 case 的数据）
             const storageKey = `evaluation_scores_${props.username}`
-            localStorage.setItem(storageKey, JSON.stringify(data.scores))
-            console.log('从后端加载用户评分数据成功，已保存到localStorage:', data.scores)
-            
+            const existing = JSON.parse(localStorage.getItem(storageKey) || '{}')
+            // data.scores 可能是整个 case 层级或单个 scene 层级
+            if (!existing[caseKey]) existing[caseKey] = {}
+            // 如果返回的是 scene 层级（当 scene 查询时），直接写入 case[scene] = data.scores
+            if (sceneKey) {
+              existing[caseKey][sceneKey] = data.scores
+            } else {
+              // 返回整个 case 层级，直接覆盖
+              existing[caseKey] = data.scores
+            }
+            localStorage.setItem(storageKey, JSON.stringify(existing))
+            console.log('从后端加载用户评分数据成功，已合并到localStorage:', existing[caseKey])
+
             // 强制触发重新渲染
             scoreUpdateTrigger.value++
           } else {
@@ -427,11 +464,18 @@ export default {
         
         const caseKey = `case${props.currentCaseId}`
         const caseScores = scores[caseKey] || {}
-        
-        // 检查每个agent的所有维度是否都有评分且不为0
+        const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+
+        // 检查每个agent的所有维度是否都有评分且不为0（支持 case->scene->agent 结构）
         for (const agentName of Object.keys(agents.value)) {
-          const agentScores = caseScores[agentName] || {}
-          
+          let agentScores = {}
+          if (sceneKey) {
+            const sceneScores = caseScores[sceneKey] || {}
+            agentScores = sceneScores[agentName] || {}
+          } else {
+            agentScores = caseScores[agentName] || {}
+          }
+
           // 检查该agent的所有维度
           for (const dimension of evaluationDimensions.value) {
             const dimensionKey = `${dimension.category}-${dimension.dimension}`
@@ -452,14 +496,20 @@ export default {
     // 加载反馈意见
     const loadFeedback = () => {
       if (!props.username || !props.currentCaseId || !currentAgent.value) return
-      
+
       const storageKey = `evaluation_feedback_${props.username}`
       const feedbacks = JSON.parse(localStorage.getItem(storageKey) || '{}')
-      
+
       const caseKey = `case${props.currentCaseId}`
       const agentName = currentAgent.value
-      
-      const feedback = feedbacks[caseKey]?.[agentName] || ''
+      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+
+      let feedback = ''
+      if (sceneKey) {
+        feedback = feedbacks[caseKey]?.[sceneKey]?.[agentName] || ''
+      } else {
+        feedback = feedbacks[caseKey]?.[agentName] || ''
+      }
       feedbackText.value = feedback
     }
 
@@ -478,13 +528,18 @@ export default {
       
       const storageKey = `evaluation_feedback_${props.username}`
       const feedbacks = JSON.parse(localStorage.getItem(storageKey) || '{}')
-      
+
       // 初始化数据结构
       if (!feedbacks[caseKey]) feedbacks[caseKey] = {}
-      
-      // 保存反馈，即使为空也保存
-      feedbacks[caseKey][agentName] = feedbackText.value
-      
+      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+
+      if (sceneKey) {
+        if (!feedbacks[caseKey][sceneKey]) feedbacks[caseKey][sceneKey] = {}
+        feedbacks[caseKey][sceneKey][agentName] = feedbackText.value
+      } else {
+        feedbacks[caseKey][agentName] = feedbackText.value
+      }
+
       // 保存到localStorage
       localStorage.setItem(storageKey, JSON.stringify(feedbacks))
       
@@ -565,6 +620,17 @@ export default {
       }
     }, { immediate: true })
 
+    // 当选中的 evaluator (scene/file) 改变时，重新加载该 scene 的评分和反馈
+    watch(() => props.selectedEvaluator, async (newVal) => {
+      console.log('SectionC: selectedEvaluator 变化:', newVal)
+      // 重新从后端加载 scene 级别评分
+      await loadUserScoresFromBackend()
+      // 重新加载反馈
+      loadFeedback()
+      // 触发视图更新
+      scoreUpdateTrigger.value++
+    })
+
     // 监听反馈文本变化，实时保存到localStorage
     let feedbackSaveTimeout = null
     watch(feedbackText, () => {
@@ -609,14 +675,23 @@ export default {
       
       const caseKey = `case${props.currentCaseId}`
       const agentName = currentAgent.value
-      
+
       // 从localStorage获取评分数据
       const storageKey = `evaluation_scores_${props.username}`
       const scores = JSON.parse(localStorage.getItem(storageKey) || '{}')
-      
+
       const caseScores = scores[caseKey] || {}
-      const agentScores = caseScores[agentName] || {}
-      const dimensions = agentScores.dimensions || {}
+      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+      let dimensions = {}
+
+      if (sceneKey) {
+        const sceneScores = caseScores[sceneKey] || {}
+        const agentScores = sceneScores[agentName] || {}
+        dimensions = agentScores.dimensions || {}
+      } else {
+        const agentScores = caseScores[agentName] || {}
+        dimensions = agentScores.dimensions || {}
+      }
       
       // 计算已评分的维度数量（包含所有维度）
       let scoredCount = 0

@@ -704,6 +704,9 @@ def save_feedback():
 
         username = data.get('username')
         case_id = data.get('case_id')
+        # 可选的 scene/文件名（例如 trigger_question_scene_2_4）
+        scene = data.get('scene') or data.get(
+            'scene_filename') or data.get('file')
         evaluator_id = data.get('evaluator_id')  # 向后兼容
         agent_name = data.get('agent_name')      # 新参数：agent名称
         feedback = data.get('feedback', '')
@@ -964,6 +967,9 @@ def save_dimension_score():
         agent_name = data.get('agent_name')      # 新参数：agent名称
         dimension_key = data.get('dimension_key')
         score = data.get('score')
+        # 可选的 scene/文件名（例如 trigger_question_scene_2_4）
+        scene = data.get('scene') or data.get(
+            'scene_filename') or data.get('file')
 
         # 确定使用的标识符：优先使用agent_name，其次使用evaluator_id
         identifier = agent_name or evaluator_id
@@ -1001,12 +1007,22 @@ def save_dimension_score():
         if case_id not in user_data['evaluation_results']:
             user_data['evaluation_results'][case_id] = {}
 
-        if identifier not in user_data['evaluation_results'][case_id]:
-            user_data['evaluation_results'][case_id][identifier] = {
-                'dimensions': {}}
+        # 如果提供了 scene，则在 case -> scene -> identifier 的结构下保存
+        if scene:
+            if scene not in user_data['evaluation_results'][case_id]:
+                user_data['evaluation_results'][case_id][scene] = {}
+            if identifier not in user_data['evaluation_results'][case_id][scene]:
+                user_data['evaluation_results'][case_id][scene][identifier] = {
+                    'dimensions': {}}
 
-        # 保存评分
-        user_data['evaluation_results'][case_id][identifier]['dimensions'][dimension_key] = score
+            # 保存评分到 scene 层级
+            user_data['evaluation_results'][case_id][scene][identifier]['dimensions'][dimension_key] = score
+        else:
+            # 向后兼容：case -> identifier 的老结构
+            if identifier not in user_data['evaluation_results'][case_id]:
+                user_data['evaluation_results'][case_id][identifier] = {
+                    'dimensions': {}}
+            user_data['evaluation_results'][case_id][identifier]['dimensions'][dimension_key] = score
         user_data['updated_at'] = datetime.now().isoformat()
 
         # 保存更新后的用户文件
@@ -1035,6 +1051,8 @@ def get_user_scores():
     try:
         username = request.args.get('username')
         case_id = request.args.get('case_id')
+        # 可选的 scene 查询参数
+        scene = request.args.get('scene')
 
         if not username:
             return jsonify({'error': '缺少用户名信息'}), 400
@@ -1056,12 +1074,13 @@ def get_user_scores():
         print(f"用户 {username} 的评分数据: {evaluation_results}")
 
         if case_id:
-            # 如果指定了case_id，只返回该case的评分
             case_scores = evaluation_results.get(case_id, {})
-            return jsonify({
-                'status': 'success',
-                'scores': case_scores
-            })
+            # 如果指定了 scene，则只返回该 scene 层级的数据（兼容老数据）
+            if scene:
+                scene_scores = case_scores.get(scene, {})
+                return jsonify({'status': 'success', 'scores': scene_scores})
+            # 否则返回整个 case 层级（可能是老结构或包含多个 scene）
+            return jsonify({'status': 'success', 'scores': case_scores})
         else:
             # 返回所有case的评分
             return jsonify({

@@ -241,7 +241,19 @@ export default {
 
     async handleEvaluatorSelected(evaluatorData) {
       console.log('评估者已选择:', evaluatorData);
-      this.selectedEvaluator = evaluatorData;
+      // 兼容两种传入格式：
+      // 1) 旧格式 { caseId, evaluator }
+      // 2) 新格式 evaluator
+      if (evaluatorData && evaluatorData.evaluator) {
+        this.selectedEvaluator = evaluatorData.evaluator;
+        // 如果传来了 caseId，一并更新
+        if (evaluatorData.caseId) {
+          this.currentCaseId = evaluatorData.caseId;
+          localStorage.setItem('evaluation_current_case_id', this.currentCaseId.toString());
+        }
+      } else {
+        this.selectedEvaluator = evaluatorData;
+      }
       // 检查当前案例状态
     },
     

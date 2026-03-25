@@ -241,11 +241,8 @@ export default {
 
     selectEvaluator(evaluator) {
       this.selectedEvaluator = evaluator;
-      // 向父组件发送选中的评估者信息
-      this.$emit('evaluator-selected', {
-        caseId: this.currentCaseId,
-        evaluator: evaluator
-      });
+      // 向父组件发送选中的评估者信息 - 发送原始 evaluator 对象以便父组件统一处理
+      this.$emit('evaluator-selected', evaluator);
     },
 
     // 检查case的排序状态（简化版本）
