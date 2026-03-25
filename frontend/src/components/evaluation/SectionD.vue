@@ -96,7 +96,7 @@ export default {
       default: ''
     }
   },
-  emits: ['back-to-analysis'],
+  emits: ['back-to-analysis', 'logout'],
   setup(props, { emit }) {
     const patientInfo = ref('');
     const mainSuit = ref('');
@@ -418,9 +418,7 @@ export default {
     };
 
     const handleLogout = () => {
-      localStorage.removeItem('evaluation_username');
-      localStorage.removeItem('evaluation_user_info');
-      window.location.reload(); // 刷新页面回到登录页
+      emit('logout');
     };
     
     // Check if port 5000 (Analysis service) is open

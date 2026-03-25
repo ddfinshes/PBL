@@ -1,23 +1,8 @@
 {
   "username": "a",
-  "created_at": "2026-03-22T18:02:17.366749",
+  "created_at": "2026-03-25T10:56:11.166362",
+  "last_login": "2026-03-25T10:57:45.450905",
   "evaluations": [],
   "current_case_index": 0,
-  "total_cases_completed": 0,
-  "updated_at": "2026-03-23T13:47:10.522049",
-  "evaluation_results": {
-    "case8": {
-      "中学生1": {
-        "dimensions": {
-          "Agent 属性一致性-知识水平是否与预设匹配？": 2
-        }
-      },
-      "中学生2": {
-        "dimensions": {
-          "Agent 属性一致性-知识水平是否与预设匹配？": 3
-        }
-      }
-    }
-  },
-  "last_login": "2026-03-23T15:01:01.254936"
+  "total_cases_completed": 0
 }

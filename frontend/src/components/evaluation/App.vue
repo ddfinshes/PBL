@@ -45,6 +45,7 @@
         :username="username"
         :currentCaseId="currentCaseId"
         :currentAgentName="currentAgentName"
+        @logout="logout"
       />
     </div>
 
