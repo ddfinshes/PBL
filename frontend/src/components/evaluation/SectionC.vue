@@ -20,16 +20,8 @@
       <div class="title-instruction-row">
         <div class="title-progress-container">
           <h3>评估维度</h3>
-          <div class="progress-indicator">
-            <span class="progress-text">{{ getScoringProgress() }}</span>
-          </div>
         </div>
-        
-        <!-- 醒目的提示框 -->
-        <div class="instruction-box">
-          <div class="instruction-icon">⭐</div>
-          <div class="instruction-text">4. 完成每个维度的评分</div>
-        </div>
+      
       </div>
       
       <!-- 反馈按钮 -->
@@ -66,10 +58,6 @@
     </div>
     
     <div class="evaluation-content">
-      <!-- 调试信息 -->
-      <div v-if="evaluationDimensions.length === 0" style="color: red; padding: 20px; text-align: center;">
-        加载中...)
-      </div>
       
       <div class="dimensions-list">
         <div
@@ -249,7 +237,7 @@ export default {
       const agentName = currentAgent.value
 
       // 选中的 evaluator（scene/file）优先使用
-      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+      const sceneKey = props.selectedEvaluator?.file || props.selectedEvaluator?.id || null
 
       // 优先从localStorage缓存读取
       const storageKey = `evaluation_scores_${props.username}`
@@ -283,11 +271,11 @@ export default {
       
       const caseKey = `case${props.currentCaseId}`
       const agentName = currentAgent.value
-      const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+      const sceneKey = props.selectedEvaluator?.file || props.selectedEvaluator?.id || null
       
       try {
         // 实时保存到后端
-        // 识别 evaluator id（优先）和 scene
+        // 识别 evaluator id（优先）和 scene（优先使用文件名带 .json）
         const evaluatorId = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
         const sceneKey = props.selectedEvaluator?.file || props.selectedEvaluator?.id || null
 
@@ -389,7 +377,7 @@ export default {
       try {
         // 请求时带上 case_id 与可选 scene 参数以获取更精确的数据
         const caseKey = `case${props.currentCaseId}`
-        const sceneKey = props.selectedEvaluator?.id || props.selectedEvaluator?.file || null
+        const sceneKey = props.selectedEvaluator?.file || props.selectedEvaluator?.id || null
         let url = `/api/evaluation/get-user-scores?username=${props.username}&case_id=${caseKey}`
         if (sceneKey) url += `&scene=${sceneKey}`
         const response = await fetch(url)

@@ -29,6 +29,7 @@
         @back-to-analysis="handleBackToAnalysis"
       />
       <C 
+        ref="sectionC"
         class="c-container" 
         :username="username"
         :currentCaseId="currentCaseId"
@@ -174,6 +175,15 @@ export default {
           if (this.$refs.sectionB) {
             this.$refs.sectionB.fetchCaseInfo();
           }
+          if (this.$refs.sectionC) {
+            try {
+              await this.$refs.sectionC.loadUserScoresFromBackend()
+              await this.$refs.sectionC.loadDimensionsFromLocalStorage()
+              this.$refs.sectionC.loadFeedback()
+            } catch (e) {
+              console.warn('sectionC load on login failed', e)
+            }
+          }
         });
       } catch (error) {
         console.error('User initialization failed:', error);
@@ -210,6 +220,12 @@ export default {
       this.$nextTick(() => {
         if (this.$refs.sectionA) {
           this.$refs.sectionA.loadEvaluators();
+        }
+        if (this.$refs.sectionC) {
+          // reload scores/dimensions/feedback for new case
+          this.$refs.sectionC.loadUserScoresFromBackend()
+          this.$refs.sectionC.loadDimensionsFromLocalStorage()
+          this.$refs.sectionC.loadFeedback()
         }
       });
     },
@@ -390,6 +406,11 @@ export default {
           }
           if (this.$refs.sectionB) {
             this.$refs.sectionB.fetchCaseInfo();
+          }
+          if (this.$refs.sectionC) {
+            this.$refs.sectionC.loadUserScoresFromBackend()
+            this.$refs.sectionC.loadDimensionsFromLocalStorage()
+            this.$refs.sectionC.loadFeedback()
           }
         });
         
