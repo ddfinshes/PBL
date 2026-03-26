@@ -1655,16 +1655,15 @@ async def topic_manager_node(state: Dict) -> Dict:
     recent_context = messages[MES_INDEX:]
 
     topic_prompt = (
-        f"你是一名医学 PBL 讨论标注专家。请识别当前讨论的核心医学知识点。\n"
-        f"当前记录主题：'{current_topic}'。\n"
-        f"判断规则：\n"
-        f"1. 必须是具体医学知识点，例如：碳代谢与肾损伤、糖尿病足合并感染、急性心梗心电图特征等。\n"
-        f"2. 严禁返回阶段词，如病例介绍、开始讨论、继续分析、总结阶段。\n"
-        f"3. 若当前主题为 undefined 或不是知识点，请基于近期对话立即提炼一个具体医学知识点作为新主题。\n"
-        f"4. 输出长度尽量简短专业，不超过4个词。\n"
-        f"5. 不要给出过细分层级。\n"
-        f"6. 若有人询问，请翻译为询问的主题而不是给出回答。\n"
-        f"只返回知识点名称，不要附加解释。"
+        f"你是一名医学 PBL 讨论主题标注专家。请严格按照以下规则识别当前讨论的**核心医学主题**。\n\n"
+        f"**当前记录主题**：'{current_topic}'\n\n"
+        f"**识别规则**：\n"
+        f"1. 提取一个简洁的医学需要有知识主题，长度限制：最多4个词、不超过15个字符。\n"
+        f"2. 示例医学主题：肾脏病变、急性肾损伤、心源性水肿、糖代谢异常等。\n"
+        f"3. 严禁返回：阶段步骤词（如\"病例介绍\"、\"继续讨论\"、\"总结阶段\"）、完整的疑问句、原文句子。\n"
+        f"4. 若有问题句，提炼为问题涉及的主题而非回答这个问题。\n"
+        f"5. **绝对不要返回整条用户提问或任何长句子**。只返回医学主题关键词。\n\n"
+        f"**输出格式**：直接输出主题名称，不输出任何解释、格式字符或额外文本、禁止识别为agent的动作类型或（）。"
     )
 
     prompt = ChatPromptTemplate.from_messages([
@@ -1674,7 +1673,24 @@ async def topic_manager_node(state: Dict) -> Dict:
 
     try:
         result = await _ainvoke_with_log(SUM_LLM, prompt, "topic_detection")
-        new_topic = result.content.strip().strip("'").strip("\"")
+        new_topic = result.content.strip().strip("'").strip("\"").strip()
+        
+        # 防护机制：如果返回的内容过长（>50字符），说明可能返回了原句，进行降级处理
+        if len(new_topic) > 50:
+            # 尝试从新主题中提取关键词
+            import re
+            # 查找可能的医学术语（中文词组）
+            keywords = re.findall(r'[\u4e00-\u9fff]{2,6}', new_topic)
+            if keywords:
+                # 取前2-3个关键词作为主题
+                extracted = '、'.join(keywords[:3])
+                print(f"DEBUG: [Topic Manager] Output too long ({len(new_topic)} chars), extracted keywords: {extracted}")
+                new_topic = extracted
+            else:
+                # 如果无法提取，保持当前主题
+                print(f"DEBUG: [Topic Manager] Output too long and no keywords found, keeping current topic")
+                return {"current_topic": current_topic}
+        
         print(f"DEBUG: [Topic Manager] Detected topic: {new_topic}")
         return {"current_topic": new_topic}
     except Exception as e:

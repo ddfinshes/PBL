@@ -79,6 +79,14 @@ class KnowledgeStateService:
         mastered_points = list(before_mastered)
         knowledge_graph = normalized.get("knowledge_graph")
 
+        # 确保knowledge_graph总是dict类型
+        if not isinstance(knowledge_graph, dict):
+            knowledge_graph = {"nodes": {}, "edges": []}
+            logger.warning(
+                "KNOWLEDGE_UPDATE_REPAIR agent=%s: knowledge_graph was None, initialized to empty graph",
+                agent_id
+            )
+
         # 获取学生特性
         adaptivity = str(persona.get("learning_adaptivity", "medium")).lower()
         orientation = str(persona.get(
@@ -262,12 +270,17 @@ class KnowledgeStateService:
             logger.warning("KNOWLEDGE_GRAPH_UPDATE log failed: %s", e)
 
         # 保留/回写知识图谱（结构拓扑目前不在这里改变，只更新掌握点列表）
+        # 确保knowledge_graph总是被保留，即使是空图谱
+        if not isinstance(knowledge_graph, dict):
+            knowledge_graph = {"nodes": {}, "edges": []}
+        # 强制类型修正，防止污染
+        if not isinstance(knowledge_graph, dict):
+            knowledge_graph = {"nodes": {}, "edges": []}
         new_state: Dict[str, Any] = {
             "knowledge_background": kb,
             "mastered_points": mastered_points,
+            "knowledge_graph": knowledge_graph,  # 总是包含知识图谱
         }
-        if isinstance(knowledge_graph, dict):
-            new_state["knowledge_graph"] = knowledge_graph
         return new_state
 
     @staticmethod
@@ -355,11 +368,15 @@ class KnowledgeStateService:
         Canonical schema:
         {
           "knowledge_background": {"high": [...], "medium": [...], "low": [...]},
-          "mastered_points": [...]
+          "mastered_points": [...],
+          "knowledge_graph": {...}  # 总是包含知识图谱
         }
         """
         state = dict(agent_state or {})
+        # 总是保留知识图谱，如果存在的话；否则使用空图谱
         existing_graph = state.get("knowledge_graph")
+        if not isinstance(existing_graph, dict):
+            existing_graph = {"nodes": {}, "edges": []}
 
         if "knowledge_background" in state and isinstance(state.get("knowledge_background"), dict):
             kb = state.get("knowledge_background", {}) or {}
@@ -375,10 +392,8 @@ class KnowledgeStateService:
             result: Dict[str, Any] = {
                 "knowledge_background": normalized_kb,
                 "mastered_points": KnowledgeStateService._dedupe_keep_order(mastered),
+                "knowledge_graph": existing_graph,  # 总是包含知识图谱
             }
-            # 透传已有知识图谱（如果已存在）
-            if isinstance(existing_graph, dict):
-                result["knowledge_graph"] = existing_graph
             return result
 
         # Backward compatibility: old shape {domains: {name:{level}}, details:{point:{level}}}
@@ -403,9 +418,8 @@ class KnowledgeStateService:
         result: Dict[str, Any] = {
             "knowledge_background": normalized_kb,
             "mastered_points": KnowledgeStateService._dedupe_keep_order(mastered_points),
+            "knowledge_graph": existing_graph,  # 总是包含知识图谱
         }
-        if isinstance(existing_graph, dict):
-            result["knowledge_graph"] = existing_graph
         return result
 
     @staticmethod
@@ -494,6 +508,7 @@ class KnowledgeStateService:
     def init_agent_state_from_persona(persona: Dict, shared_domains: List[str]) -> Dict[str, Dict]:
         """Initialize canonical state using persona knowledge_background + empty mastered_points
         并根据当前案例 + cognitive_orientation 构建该学生的知识图谱视图。
+        确保每个agent都有初始知识图谱（失败时降级为空图谱）。
         """
         knowledge_background = KnowledgeStateService._empty_knowledge_background()
         for domain in shared_domains:
@@ -503,8 +518,8 @@ class KnowledgeStateService:
             knowledge_background[level] = KnowledgeStateService._dedupe_keep_order(
                 knowledge_background[level])
 
-        # 尝试基于当前病例构建知识图谱（失败时安全降级为 None）
-        knowledge_graph = None
+        # 尝试基于当前病例构建知识图谱（失败时安全降级为空图谱）
+        knowledge_graph: Dict[str, Any] = {"nodes": {}, "edges": []}  # 默认空图谱
         try:
             case_name = getattr(pbl_info, "current_case_name", "") or ""
             if case_name:
@@ -515,10 +530,12 @@ class KnowledgeStateService:
                     orientation = str(
                         persona.get("cognitive_orientation", "point_based")
                     ).lower()
-                    knowledge_graph = build_agent_knowledge_graph(
+                    generated_graph = build_agent_knowledge_graph(
                         case_data=case_data,
                         cognitive_orientation=orientation,
                     )
+                    if isinstance(generated_graph, dict):
+                        knowledge_graph = generated_graph
 
                     # 初始化可观测性：输出图谱规模 + 少量示例边
                     try:
@@ -557,18 +574,23 @@ class KnowledgeStateService:
                     except Exception as e:
                         logger.warning(
                             "KNOWLEDGE_GRAPH_INIT log failed: %s", e)
+                else:
+                    logger.warning(
+                        "KNOWLEDGE_GRAPH_INIT case_path not found: %s, using empty graph", case_name)
+            else:
+                logger.warning(
+                    "KNOWLEDGE_GRAPH_INIT current_case_name is empty, using empty graph")
         except Exception as e:
-            # 仅记录日志，不影响主流程
+            # 仅记录日志，不影响主流程，降级为空图谱
             logging.getLogger(__name__).warning(
-                "Init agent knowledge_graph failed: %s", e
+                "Init agent knowledge_graph failed: %s, using empty graph", e
             )
 
         state: Dict[str, Any] = {
             "knowledge_background": knowledge_background,
             "mastered_points": [],
+            "knowledge_graph": knowledge_graph,  # 总是包含知识图谱（可能是空的）
         }
-        if isinstance(knowledge_graph, dict):
-            state["knowledge_graph"] = knowledge_graph
         return state
 
     @staticmethod
@@ -610,18 +632,28 @@ class KnowledgeStateService:
         for level in KNOWLEDGE_LEVELS:
             kb[level] = KnowledgeStateService._dedupe_keep_order(kb[level])
 
+        # 在重新分配前保存原始知识图谱
+        original_graph = agent_state.get(
+            "knowledge_graph") if isinstance(agent_state, dict) else None
+
         agent_state = {
             "knowledge_background": kb,
             "mastered_points": KnowledgeStateService._dedupe_keep_order(agent_state.get("mastered_points", [])),
         }
-        # 透传已存在的知识图谱
-        existing_graph = state.get("knowledge_graph") if isinstance(
-            state, dict) else None
-        graph_in_agent = (agent_state or {}).get("knowledge_graph")
-        if isinstance(graph_in_agent, dict):
-            agent_state["knowledge_graph"] = graph_in_agent
+        # 透传已存在的知识图谱，并强制类型修正
+        existing_graph = state.get(
+            "knowledge_graph") if isinstance(state, dict) else None
+
+        # 优先使用原始agent_state中的knowledge_graph，其次使用state级别的，否则初始化为空
+        if isinstance(original_graph, dict):
+            agent_state["knowledge_graph"] = original_graph
         elif isinstance(existing_graph, dict):
             agent_state["knowledge_graph"] = existing_graph
+        else:
+            agent_state["knowledge_graph"] = {"nodes": {}, "edges": []}
+        # 再次强制类型修正，彻底防止污染
+        if not isinstance(agent_state["knowledge_graph"], dict):
+            agent_state["knowledge_graph"] = {"nodes": {}, "edges": []}
         knowledge_state_all[agent_id] = agent_state
         return knowledge_state_all, agent_state
 

@@ -2612,12 +2612,27 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
                     # 4. 学生知识图谱/状态实时更新（internalization）
                     # 并行内化一旦完成，立即推送给前端，不等待后续节点。
+
                     if any(k in out for k in ["knowledge_state", "cognitive_load", "self_efficacy", "private_memory"]):
+                        ks = out.get("knowledge_state", {})
+                        # 补全每个 agent 的 knowledge_graph.edges
+
+                        for aid, agent_state in ks.items():
+                            if not isinstance(agent_state, dict):
+                                logger.warning(
+                                    f"[WS] Agent {aid} knowledge_state is not dict: {type(agent_state)}")
+                                continue
+                            kg = agent_state.get("knowledge_graph")
+                            if isinstance(kg, dict) and kg.get("nodes") and (not kg.get("edges") or len(kg.get("edges", [])) == 0):
+                                logger.warning(
+                                    f"[WS] Agent {aid} knowledge_graph.edges is empty, nodes={len(kg['nodes'])}")
+                                # 可补全逻辑
+
                         await websocket.send_json({
                             "type": "knowledge_state_update",
                             "scene_index": s_idx,
                             "question_index": q_idx,
-                            "knowledge_state": out.get("knowledge_state", {}),
+                            "knowledge_state": ks,
                             "cognitive_load": out.get("cognitive_load", {}),
                             "self_efficacy": out.get("self_efficacy", {}),
                             "private_memory": out.get("private_memory", {}),

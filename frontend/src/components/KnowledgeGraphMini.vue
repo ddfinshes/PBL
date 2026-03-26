@@ -271,9 +271,21 @@ onMounted(() => {
   onBeforeUnmount(() => ro.disconnect());
 });
 
+
+// 只允许首次“从空到非空”时自动渲染一次
+let hasRenderedNonEmpty = false;
 watch(
-  () => [props.graph, props.masteredPoints],
-  () => render(),
+  () => props.graph,
+  (g) => {
+    console.log('graph for', props.title, g);},
+  (newGraph, oldGraph) => {
+    const wasEmpty = !oldGraph || !oldGraph.nodes || Object.keys(oldGraph.nodes).length === 0;
+    const nowNonEmpty = newGraph && newGraph.nodes && Object.keys(newGraph.nodes).length > 0;
+    if (!hasRenderedNonEmpty && wasEmpty && nowNonEmpty) {
+      render();
+      hasRenderedNonEmpty = true;
+    }
+  },
   { deep: true }
 );
 
