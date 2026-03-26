@@ -18,7 +18,7 @@
     <div v-if="showSummaryModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8">
       <div class="bg-white border border-gray-300 rounded-2xl w-full max-w-2xl max-h-[80%] flex flex-col shadow-2xl">
         <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h4 class="text-gray-800 font-bold">In-Depth Analysis of Instructor Intervention Points</h4>
+          <h4 class="text-gray-800 font-bold">教师引导策略分析（Scaffolding Strategy Analysis）</h4>
           <button @click="showSummaryModal = false" class="text-gray-400 hover:text-white">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -29,28 +29,31 @@
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             <p class="text-gray-600 text-sm italic">Waiting for Analysis...</p>
           </div>
-          <div v-else-if="currentSummaryParts.context || currentSummaryParts.action || currentSummaryParts.consequence" class="space-y-4">
+          <div v-else-if="currentSummaryParts.problem_space || currentSummaryParts.predicted_difficulties || currentSummaryParts.intervention_action" class="space-y-4">
             <div class="space-y-2">
-              <label class="text-xs text-blue-600 font-medium uppercase tracking-wider">Before Intervention: Discussion Status Summary</label>
+              <label class="text-xs text-blue-600 font-medium uppercase tracking-wider">明确问题空间（Problem Space）</label>
               <textarea 
-                v-model="currentSummaryParts.context"
+                v-model="currentSummaryParts.problem_space"
                 class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-blue-200 focus:border-blue-400 outline-none text-sm leading-relaxed"
+                placeholder="核心概念、学科知识和21世纪技能..."
               ></textarea>
             </div>
             
             <div class="space-y-2">
-              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">Intervention: Instructor Action Description</label>
+              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">预测困难点（Predicted Difficulties）</label>
               <textarea 
-                v-model="currentSummaryParts.action"
+                v-model="currentSummaryParts.predicted_difficulties"
                 class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-red-200 focus:border-red-400 outline-none text-sm leading-relaxed"
+                placeholder="学生可能出现的困难情景..."
               ></textarea>
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs text-green-600 font-medium uppercase tracking-wider">After Intervention: Immediate Interaction Changes</label>
+              <label class="text-xs text-green-600 font-medium uppercase tracking-wider">引导的Action（Intervention Action）</label>
               <textarea 
-                v-model="currentSummaryParts.consequence"
+                v-model="currentSummaryParts.intervention_action"
                 class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-green-200 focus:border-green-400 outline-none text-sm leading-relaxed"
+                placeholder="教师引导的目的和具体行为..."
               ></textarea>
             </div>
           </div>
@@ -62,7 +65,7 @@
         <div class="p-4 border-t border-gray-200 flex justify-end gap-3">
           <button @click="showSummaryModal = false" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-800">Cancel</button>
           <button 
-            v-if="currentSummaryParts.context"
+            v-if="currentSummaryParts.problem_space"
             @click="saveSummary" 
             class="px-6 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
           >
@@ -117,9 +120,9 @@ watch(activeQuestionInfo, () => {
 const showSummaryModal = ref(false);
 const summaryLoading = ref(false);
 const currentSummaryParts = ref({
-  context: '',
-  action: '',
-  consequence: ''
+  problem_space: '',
+  predicted_difficulties: '',
+  intervention_action: ''
 });
 const summaryInterventionId = ref('');
 const isHighlightingFlags = ref(false);
@@ -138,7 +141,7 @@ const openSummaryModal = async (node) => {
   }
 
   // 2. 如果没有缓存，则清空并调用后端接口
-  currentSummaryParts.value = { context: '', action: '', consequence: '' };
+  currentSummaryParts.value = { problem_space: '', predicted_difficulties: '', intervention_action: '' };
   showSummaryModal.value = true;
   summaryLoading.value = true;
   
@@ -154,7 +157,7 @@ const openSummaryModal = async (node) => {
     }
   } catch (err) {
     console.error('Failed to generate summary:', err);
-    currentSummaryParts.value = { context: '生成失败', action: '生成失败', consequence: '生成失败' };
+    currentSummaryParts.value = { problem_space: '生成失败', predicted_difficulties: '生成失败', intervention_action: '生成失败' };
   } finally {
     summaryLoading.value = false;
   }
@@ -724,9 +727,17 @@ const updateGraph = () => {
   const nodeEnter = node.enter()
     .append('g')
     .attr('class', d => `node-group ${d.isAmbiguous ? 'node-ambiguous' : ''}`)
-    .style('cursor', d => d.isAmbiguous ? 'not-allowed' : 'pointer')
+    .style('cursor', d => {
+      if (d.isAmbiguous) return 'not-allowed';
+      return isPaused?.value ? 'pointer' : 'not-allowed';
+    })
     .on('click', (event, d) => {
       event.stopPropagation(); // 防止触发背景点击
+
+      // 如果没有暂停，禁止点击
+      if (!isPaused?.value) {
+        return;
+      }
 
       // 如果节点有多个后缀路径，则不可点击（根据用户要求）
       if (d.isAmbiguous) {
@@ -760,10 +771,8 @@ const updateGraph = () => {
       }
 
       // 【新增】当暂停时，点击节点需要切换后端的焦点，使其能从该节点恢复讨论
-      if (isPaused?.value && leafId) {
-        console.log('Switching focus to node leaf:', leafId, 'branch:', d.branch);
-        switchNodeFocus(leafId, d.branch || 'main');
-      }
+      console.log('Switching focus to node leaf:', leafId, 'branch:', d.branch);
+      switchNodeFocus(leafId, d.branch || 'main');
     })
     .call(d3.drag()
       .on('start', dragstarted)
@@ -1084,6 +1093,18 @@ watch([selectedTopic, mainPathSet, isHighlightingFlags], ([newTopic, newPath, is
       simulation.alpha(0.15).restart();
   }
 }, { deep: true });
+
+// 【新增】监听暂停状态，更新节点cursor样式
+watch(() => isPaused?.value, (newPaused) => {
+  if (!svgRef.value) return;
+  const svg = d3.select(svgRef.value);
+  
+  svg.selectAll('.node-group')
+    .style('cursor', d => {
+      if (d.isAmbiguous) return 'not-allowed';
+      return newPaused ? 'pointer' : 'not-allowed';
+    });
+});
 
 // 【新增】追踪覆盖率评估状态，防止频繁重复计算
 const isCoverageEvaluating = ref(false);

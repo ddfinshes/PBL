@@ -1904,15 +1904,14 @@ async def api_generate_intervention_summary(request: InterventionSummaryRequest)
             resp = await llm.ainvoke(prompt_content)
             return resp.content
 
-        prompt_context = f"你是一名 PBL 教育专家。请根据提供的学生讨论上下文，总结在此教师介入前的讨论状态（包含主题趋势、学生观点分布、是否存在僵局或不均等）。\n上下文：\n{context_text}\n要求：客观、简练，直接输出总结，不要包含开头。输出英文"
-        prompt_action = f"你是一名 PBL 教育专家。请对以下教师的干预行为进行客观的‘形式性描述’（如：提问、复述、指出证据、点名等）。\n干预内容：\n{intervention_msg['content']}\n要求：去意图化，仅描述事实，直接输出。输出英文"
-        prompt_consequence = f"你是一名 PBL 教育专家。请根据教师介入后的后续讨论，总结即时的互动变化（是否产生了新假设、讨论是否聚焦、语气变化等）。\n后续讨论：\n{consequence_text}\n要求：客观简练，直接输出。输出英文"
-
+        prompt_intervention_action = f"你是一名 PBL 教育专家。请对以下教师的干预行为进行客观的‘形式性描述’（如：提问、复述、指出证据、点名等）。\n干预内容：\n{intervention_msg['content']}\n要求：去意图化，仅描述事实，直接输出。"
+        prompt_predicted_difficulties = f"你是一名 PBL 教育专家。请根据提供的学生讨论上下文，总结在此教师介入前的讨论状态（包含主题趋势、学生观点分布、是否存在僵局或不均等）。\n上下文：\n{context_text}\n要求：客观、简练，直接输出总结，不要包含开头。"
+        prompt_problem_space = f"你是一名 PBL 教育专家。请根据学生的讨论内容，明确此刻学生需要掌握的核心概念、学科知识和21世纪技能。\n讨论上下文：\n{context_text}\n要求：具体列出知识和技能点，直接输出中文"
         # 并行执行
         results = await asyncio.gather(
-            get_part(prompt_context),
-            get_part(prompt_action),
-            get_part(prompt_consequence)
+            get_part(prompt_problem_space),
+            get_part(prompt_predicted_difficulties),
+            get_part(prompt_intervention_action)
         )
 
         logger.info("LLM summary generation completed successfully.")
@@ -1920,9 +1919,9 @@ async def api_generate_intervention_summary(request: InterventionSummaryRequest)
         return {
             "status": "success",
             "summary_parts": {
-                "context": results[0],
-                "action": results[1],
-                "consequence": results[2]
+                "problem_space": results[0],
+                "predicted_difficulties": results[1],
+                "intervention_action": results[2]
             }
         }
     except Exception as e:
@@ -1932,7 +1931,7 @@ async def api_generate_intervention_summary(request: InterventionSummaryRequest)
 
 @app_fastapi.post("/api/save-intervention-summary")
 async def api_save_intervention_summary(request: SaveSummaryRequest):
-    """将编辑后的总结保存回 discussion.json"""
+    """将编辑后的总结保存回 discussion.json，同时保存引导策略到 scaffold.json"""
     try:
         if not DISCUSSION_FILE.exists():
             return {"status": "error", "detail": "File not found"}, 404
@@ -1956,6 +1955,34 @@ async def api_save_intervention_summary(request: SaveSummaryRequest):
 
         with open(DISCUSSION_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+
+        # 同时保存到 scaffold.json
+        scaffold_file = BASE_DIR / "scaffold.json"
+        scaffold_data = {}
+        if scaffold_file.exists():
+            with open(scaffold_file, "r", encoding="utf-8") as f:
+                scaffold_data = json.load(f)
+
+        if "scaffolding_strategies" not in scaffold_data:
+            scaffold_data["scaffolding_strategies"] = {}
+
+        strategy_key = f"{session_id}_{block_key}_{request.intervention_id}"
+        scaffolding_parts = request.summary_data.get("parts", {})
+        scaffold_data["scaffolding_strategies"][strategy_key] = {
+            "session_id": session_id,
+            "scene_index": request.scene_index,
+            "question_index": request.question_index,
+            "intervention_id": request.intervention_id,
+            "problem_space": scaffolding_parts.get("problem_space", ""),
+            "predicted_difficulties": scaffolding_parts.get("predicted_difficulties", ""),
+            "intervention_action": scaffolding_parts.get("intervention_action", ""),
+            "timestamp": request.summary_data.get("timestamp", datetime.now().isoformat())
+        }
+
+        with open(scaffold_file, "w", encoding="utf-8") as f:
+            json.dump(scaffold_data, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"Scaffolding strategy saved for {strategy_key}")
 
         return {"status": "success"}
     except Exception as e:
@@ -2263,7 +2290,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
 
         cached_coverage = None
         if leaf_id in sh["messages_map"]:
-            cached_coverage = sh["messages_map"][leaf_id].get("knowledge_coverage")
+            cached_coverage = sh["messages_map"][leaf_id].get(
+                "knowledge_coverage")
 
         if cached_coverage:
             await websocket.send_json({
@@ -2693,7 +2721,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                     chain.append(msg_data.get("langchain_msg"))
                                     curr_ptr = msg_data.get("parent_id")
                                     safety += 1
-                                chain = [x for x in reversed(chain) if x is not None]
+                                chain = [x for x in reversed(
+                                    chain) if x is not None]
                                 if not chain:
                                     return
 
@@ -2703,12 +2732,14 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                             "messages": chain,
                                             "current_topic": runtime_state.get("current_topic", "Undefined"),
                                         })
-                                        new_topic = str(topic_out.get("current_topic", "") or "").strip()
+                                        new_topic = str(topic_out.get(
+                                            "current_topic", "") or "").strip()
                                         if not new_topic:
                                             return
                                         if _msg_id in sh["messages_map"]:
                                             sh["messages_map"][_msg_id]["topic"] = new_topic
-                                            persist_discussion(session_id, sh["messages_map"])
+                                            persist_discussion(
+                                                session_id, sh["messages_map"])
                                         await websocket.send_json({
                                             "type": "message_update",
                                             "id": _msg_id,
@@ -2724,7 +2755,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                             "question_index": _question_idx,
                                         })
                                     except Exception as e:
-                                        logger.error(f"Eager topic task failed: {e}")
+                                        logger.error(
+                                            f"Eager topic task failed: {e}")
 
                                 async def _task_coverage():
                                     try:
@@ -2735,15 +2767,19 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                             emit_ws=True,
                                         )
                                     except Exception as e:
-                                        logger.error(f"Eager coverage task failed: {e}")
+                                        logger.error(
+                                            f"Eager coverage task failed: {e}")
 
                                 async def _task_objective():
                                     try:
                                         from . import pbl_info
-                                        trigger_question = str(getattr(pbl_info, "current_trigger_question", "") or "").strip()
-                                        learning_objectives = list(getattr(pbl_info, "current_learning_objectives", []) or [])
+                                        trigger_question = str(
+                                            getattr(pbl_info, "current_trigger_question", "") or "").strip()
+                                        learning_objectives = list(
+                                            getattr(pbl_info, "current_learning_objectives", []) or [])
                                         rt_key = f"{int(_scene_idx)}_{int(_question_idx)}"
-                                        overrides = dict(getattr(pbl_info, "objective_overrides", {}).get(rt_key, {}) or {})
+                                        overrides = dict(
+                                            getattr(pbl_info, "objective_overrides", {}).get(rt_key, {}) or {})
                                         if not learning_objectives:
                                             return
                                         objective_result = await _objectives_achieved_by_llm(
@@ -2763,7 +2799,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                             },
                                         })
                                     except Exception as e:
-                                        logger.error(f"Eager objective task failed: {e}")
+                                        logger.error(
+                                            f"Eager objective task failed: {e}")
 
                                 async def _task_knowledge_state():
                                     try:
@@ -2781,7 +2818,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                                             "updated_at": datetime.now().timestamp() * 1000,
                                         })
                                     except Exception as e:
-                                        logger.error(f"Eager knowledge-state task failed: {e}")
+                                        logger.error(
+                                            f"Eager knowledge-state task failed: {e}")
 
                                 await asyncio.gather(
                                     _task_topic(),
@@ -3241,58 +3279,6 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                         "Pause requested; waiting for current in-flight event to finish.")
 
             elif action == "resume_discussion" or action == "force_resume":
-                logger.info(f"教师指令：恢复讨论 (Action: {action})。")
-                if pause_requested and not discussion_paused:
-                    try:
-                        await asyncio.wait_for(_wait_until_paused(), timeout=8.0)
-                    except asyncio.TimeoutError:
-                        logger.warning(
-                            "Resume requested before pause barrier completed; forcing stop.")
-
-                await _stop_graph_tasks(drain_pending=False, clear_queue=True)
-
-                from . import pbl_info
-
-                chain = []
-                curr_ptr = sh["active_id"]
-                while curr_ptr:
-                    m_data = sh["messages_map"].get(curr_ptr)
-                    if not m_data:
-                        break
-                    chain.append(m_data["langchain_msg"])
-                    curr_ptr = m_data.get("parent_id")
-                chain.reverse()
-
-                resume_state = None
-                if chain:
-                    # 【修复】使用当前runtime_state中的total_messages，而不是snapshot中的静态值
-                    historical_turns = int(
-                        runtime_state.get("total_messages", 0) or 0)
-                    resume_state = {
-                        "messages": chain,
-                        "total_messages": historical_turns,
-                        "private_memory": copy.deepcopy(runtime_state.get("private_memory", {}) or {}),
-                        "knowledge_state": copy.deepcopy(runtime_state.get("knowledge_state", {}) or {}),
-                        "cognitive_load": copy.deepcopy(runtime_state.get("cognitive_load", {}) or {}),
-                        "self_efficacy": copy.deepcopy(runtime_state.get("self_efficacy", {}) or {}),
-                        "discussion_active": True,
-                        "is_teacher_interrupted": False,
-                        "force_no_silence_once": False,
-                        "current_topic": runtime_state.get("current_topic", "Undefined"),
-                        "next_speaker": "router"
-                    }
-                    runtime_state = _build_state_snapshot(resume_state)
-                else:
-                    runtime_state = _build_state_snapshot(runtime_state)
-
-                graph_task = asyncio.create_task(stream_langgraph(
-                    resume_state, pbl_info.active_scene_index, pbl_info.active_question_index))
-                output_task = asyncio.create_task(output_processor())
-                discussion_paused = False
-                logger.info("教师强制恢复讨论（override-triggered）")
-                await websocket.send_json({"type": "discussion_resumed"})
-
-            elif action == "force_resume":
                 logger.info("教师强制恢复讨论（override触发，不受 isPaused 限制）")
                 if pause_requested and not discussion_paused:
                     try:
@@ -3320,32 +3306,29 @@ async def ws_endpoint(websocket: WebSocket, session_id: str):
                     curr_ptr = m_data.get("parent_id")
                 chain.reverse()
 
-                # 如果链条为空，说明只有初始消息，使用 None 让 checkpoint 恢复
-                resume_state = None
-                if chain:
-                    # 【修复】使用当前runtime_state中的total_messages，而不是snapshot中的静态值
-                    historical_turns = int(
-                        runtime_state.get("total_messages", 0) or 0)
-                    resume_state = {
-                        "messages": chain,
-                        "total_messages": historical_turns,
-                        "private_memory": copy.deepcopy(runtime_state.get("private_memory", {}) or {}),
-                        "knowledge_state": copy.deepcopy(runtime_state.get("knowledge_state", {}) or {}),
-                        "cognitive_load": copy.deepcopy(runtime_state.get("cognitive_load", {}) or {}),
-                        "self_efficacy": copy.deepcopy(runtime_state.get("self_efficacy", {}) or {}),
-                        "discussion_active": bool(runtime_state.get("discussion_active", True)),
-                        "is_teacher_interrupted": bool(runtime_state.get("is_teacher_interrupted", False)),
-                        "force_no_silence_once": bool(runtime_state.get("force_no_silence_once", False)),
-                        "current_topic": runtime_state.get("current_topic", "Undefined"),
-                        "next_speaker": "router"
-                    }
-                    runtime_state = _build_state_snapshot(resume_state)
-                    logger.info(
-                        f"Resuming with {len(chain)} historical messages from {sh['active_id']} on branch {sh['current_branch']}")
-                else:
-                    runtime_state = _build_state_snapshot(runtime_state)
-                    logger.info(
-                        f"No messages to resume, using checkpoint recovery on branch {sh['current_branch']}")
+                # 【修复】恢复时始终构建有效的状态，即使chain为空也要用runtime_state的数据
+                historical_turns = int(
+                    runtime_state.get("total_messages", 0) or 0)
+                resume_state = {
+                    "messages": chain,  # 可能是空列表，但这样LangGraph能启动
+                    "total_messages": historical_turns,
+                    "private_memory": copy.deepcopy(runtime_state.get("private_memory", {}) or {}),
+                    "knowledge_state": copy.deepcopy(runtime_state.get("knowledge_state", {}) or {}),
+                    "cognitive_load": copy.deepcopy(runtime_state.get("cognitive_load", {}) or {}),
+                    "self_efficacy": copy.deepcopy(runtime_state.get("self_efficacy", {}) or {}),
+                    "discussion_active": bool(runtime_state.get("discussion_active", True)),
+                    "is_teacher_interrupted": bool(runtime_state.get("is_teacher_interrupted", False)),
+                    "force_no_silence_once": bool(runtime_state.get("force_no_silence_once", False)),
+                    "current_topic": runtime_state.get("current_topic", "Undefined"),
+                    "next_speaker": "router",
+                    "trigger_question": runtime_state.get("trigger_question", ""),
+                    "objective_evaluations": copy.deepcopy(runtime_state.get("objective_evaluations", []) or []),
+                    "achieved_all": bool(runtime_state.get("achieved_all", False)),
+                    "end_reason": runtime_state.get("end_reason", "")
+                }
+                runtime_state = _build_state_snapshot(resume_state)
+                logger.info(
+                    f"{'Resuming with' if chain else 'No messages found, resuming from checkpoint with'} {len(chain)} historical messages from {sh.get('active_id', 'unknown')} on branch {sh.get('current_branch', 'main')}")
 
                 graph_task = asyncio.create_task(stream_langgraph(
                     resume_state, pbl_info.active_scene_index, pbl_info.active_question_index))

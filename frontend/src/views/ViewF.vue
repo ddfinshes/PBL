@@ -57,7 +57,9 @@
           <button
             type="button"
             class="rollback-btn"
-            title="回滚到此消息"
+            :class="{ 'disabled': !isPaused }"
+            :disabled="!isPaused"
+            :title="isPaused ? '回滚到此消息' : '暂停讨论后可回滚'"
             aria-label="回滚到此消息"
             @click.stop="handleRollback(message)"
           >
@@ -69,6 +71,19 @@
             :agent-config="getAgentConfig(message.agent)"
             class="relative z-10 pr-10"
           />
+
+          <!-- 【新增】思考动画 - 在最后一条消息后显示，暂停时消失 -->
+          <div
+            v-if="shouldShowThinkingAnimation && message.id === filteredMessages[filteredMessages.length - 1]?.id"
+            class="thinking-indicator mt-3"
+          >
+            <div class="thinking-dots">
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+            </div>
+            <span class="thinking-text">学生正在思考...</span>
+          </div>
         </div>
       </div>
     </main>
@@ -131,6 +146,29 @@ const endHint = computed(() => {
   }
   return null
 })
+
+// 【新增】判断是否应该显示思考动画
+const shouldShowThinkingAnimation = computed(() => {
+  // 暂停时不显示动画
+  if (isPaused.value) return false
+  
+  // 没有消息时不显示
+  if (!filteredMessages.value?.length) return false
+  
+  // 检查最后一条消息是否不是teacher/system/case_introduction
+  const lastMsg = filteredMessages.value[filteredMessages.value.length - 1]
+  if (!lastMsg) return false
+  
+  const agent = String(lastMsg.agent || '').trim().toLowerCase()
+  // 如果最后一条消息来自teacher或system，不显示动画
+  if (['teacher', 'system', 'case_introduction', 'teacher_handler'].includes(agent)) {
+    return false
+  }
+  
+  // 其他agent消息后显示动画
+  return true
+})
+
 // 获取特定消息 ID 向上溯源的所有父节点 ID（即该分支的完整路径）
 const getChainForId = (leafId) => {
   const chain = new Set();
@@ -327,9 +365,88 @@ onMounted(() => {
   transition: all 0.2s ease;
 }
 
-.rollback-btn:hover {
+.rollback-btn:hover:not(:disabled) {
   background: #111827;
   color: #ffffff;
   border-color: #111827;
+}
+
+.rollback-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rollback-btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.95);
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+/* 【新增】思考动画样式 */
+.thinking-indicator {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.3s ease-in-out;
+  margin-left: 4px;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.thinking-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #9ca3af;
+  animation: bounce 1.4s infinite;
+}
+
+.thinking-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.thinking-dots .dot:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.thinking-dots .dot:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.thinking-text {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+  font-style: italic;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
