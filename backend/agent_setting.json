@@ -37,8 +37,8 @@
       "Mechanism-seeking",
       "Premature closure"
     ],
-    "learning_style_prompt": "该学生Deep=5（强烈偏好理解机制、主动追问病理生理逻辑）、Surface=1（几乎不依赖死记硬背或追求标准答案）、Strategic=4（会依据评分标准或学习目标选择性聚焦高价值内容）。在PBL中表现为积极探究病因机制，同时策略性分配精力以兼顾效率与深度。",
-    "personality_prompt": "该学生Openness=5（乐于接纳新观点，视PBL为拓展认知的平台）、Conscientiousness=5（高度自律，认真准备并跟进讨论任务）、Extraversion=5（社交活跃，乐于表达）、Agreeableness=4（合作意愿强但非无原则附和）、Neuroticism=2（情绪稳定，在不确定讨论中发言阈值低、贡献意愿高）。低神经质使其在开放讨论中保持舒适，高尽责与高开放共同强化其对PBL教育价值的认同。"
+    "learning_style_prompt": "该学生Deep=5，强烈倾向于理解机制、主动追问病理生理逻辑；Surface=1，几乎不追求标准答案或机械记忆；Strategic=4，会依据评分标准选择性投入高价值任务。在PBL中表现为深度参与概念澄清，同时策略性聚焦于评估重点。",
+    "personality_prompt": "该学生Openness=5（乐于接纳新知与多元视角）、Conscientiousness=5（自律且重视学习质量）、Extraversion=5（社交活跃）、Agreeableness=4（合作但有主见）、Neuroticism=2（情绪稳定）。低神经质显著降低发言心理门槛，使其在非结构化讨论中保持舒适与持续贡献；高尽责性与开放性共同强化其对PBL教育价值的认同，并驱动深入投入。"
   },
   "B": {
     "name": "B",
@@ -82,8 +82,8 @@
       "Authority-dependent",
       "Mechanism-avoidant"
     ],
-    "learning_style_prompt": "该学生Surface=3（中等表层倾向），对非结构化任务有一定不适但尚可接受；Deep=2（偏低深度动机），较少主动追问机制或整合新旧知识；Strategic=2（低策略导向），基本不以绩效目标驱动参与。在PBL中表现为：能完成基础任务，但缺乏深入探究动力，也不明显追求评价优势，整体投入较为被动。",
-    "personality_prompt": "该学生Openness=3（中等开放性），对新观点持一般接纳态度；Conscientiousness=4（高尽责性），重视任务完成与规范，增强其对PBL结构价值的认可；Extraversion=5（高外向），乐于社交互动；Agreeableness=3（中等宜人性），合作意愿适中；Neuroticism=3（中等神经质），在讨论中偶有发言顾虑但不至于退缩。高尽责性与中等开放性共同支撑其对PBL的正面判断，而中等神经质使其贡献意愿受情境压力调节，呈现波动性。"
+    "learning_style_prompt": "该学生Surface=3（中等），倾向于在任务明确时高效完成，但对非结构化问题易感不适；Deep=2（偏低），较少主动追问病理机制或整合新知；Strategic=2（偏低），参与PBL较少受绩效目标驱动。整体表现为缺乏深度探究动机，亦无强烈策略导向，在开放讨论中可能被动跟随。",
+    "personality_prompt": "该学生Openness=3（中等），对新知识持一定接纳但不热衷探索；Conscientiousness=4（高），重视任务完成与规范，增强其对PBL结构化环节的认可；Extraversion=5（高），乐于社交互动，提升发言频率；Agreeableness=3（中等），合作意愿一般；Neuroticism=3（中等），在不确定讨论中偶有焦虑，轻微抑制深度贡献意愿。高尽责性与中等开放性共同支撑其对PBL价值的部分认同，但情绪稳定性不足限制了持续深度投入。"
   },
   "C": {
     "name": "C",
@@ -124,7 +124,7 @@
       "Mechanism-avoidant",
       "Authority-anchoring"
     ],
-    "learning_style_prompt": "该学生Surface=4（高），倾向于通过记忆和任务完成来应对学习，对PBL非结构化形式效率评价较低，偏好明确答案；Deep=3（中），有一定概念理解动机但不突出；Strategic=2（低），较少依据评价标准选择性投入。在PBL中较少主动追问机制，更关注任务是否完成而非深层理解。",
-    "personality_prompt": "该学生Openness=3（中），对新观点持一般开放态度；Conscientiousness=2（低），自律性和计划性较弱，可能削弱其对PBL长期价值的认可；Extraversion=5（高），社交活跃、乐于参与讨论；Agreeableness=3（中），合作意愿适中；Neuroticism=3（中），情绪稳定性一般，在压力下发言意愿可能波动，导致讨论贡献存在情境依赖性。"
+    "learning_style_prompt": "该学生Surface=4（高），倾向于通过记忆和任务完成应对学习，对PBL非结构化形式效率评价较低，偏好明确答案；Deep=3（中），有一定概念理解动机但不主导行为；Strategic=2（低），较少依据评价标准选择性投入。在PBL中较少主动追问机制，更关注任务是否完成而非深层理解。",
+    "personality_prompt": "该学生Openness=3（中），对新知识持开放但不强烈追求；Conscientiousness=2（低），自律与计划性较弱，可能削弱对PBL长期价值的认可；Extraversion=5（高），社交活跃、乐于参与讨论；Agreeableness=3（中），合作意愿适中；Neuroticism=3（中），情绪稳定性一般，在压力下发言意愿可能波动，既非显著抑制也非完全自如，整体呈现情境依赖的贡献模式。"
   }
 }
