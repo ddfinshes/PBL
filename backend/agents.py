@@ -37,7 +37,7 @@ from .agent_config import (
 # -------------------- 公共 LLM 实例 --------------------
 
 MES_INDEX = -3
-MAX_DISCUSSION_TURNS = 15
+MAX_DISCUSSION_TURNS = 40
 OBJECTIVE_EVAL_INTERVAL = 1  # 每条消息后都评估动态水平，确保及时更新
 
 ACTION_OPTIONS = [
@@ -128,6 +128,7 @@ def _apply_knowledge_updates_from_internalization_payload(
     load_level: int,
     trigger_objectives: List[str] = None,
     agent_id: str = "",
+    total_messages: int = 0,
 ) -> Dict[str, Dict]:
     return KnowledgeStateService.apply_knowledge_updates(
         agent_id=agent_id,
@@ -136,6 +137,7 @@ def _apply_knowledge_updates_from_internalization_payload(
         payload=payload,
         load_level=load_level,
         trigger_objectives=trigger_objectives,
+        total_messages=total_messages,
     )
 
 
@@ -367,6 +369,7 @@ async def _parallel_internalize_for_all_agents(state: Dict, messages: List[BaseM
             load_level=int(cognitive_load_state.get(aid, 6) or 6),
             trigger_objectives=state.get("trigger_learning_objectives", []),
             agent_id=aid,
+            total_messages=int(state.get("total_messages", 0) or 0),
         )
 
     return {
@@ -742,10 +745,11 @@ def _compute_action_prior_distribution(
 
     # === 基础概率 ===
     base_weights = {
-        "accumulation": 0.63,
-        "seeking_help_alignment": 0.10,
-        "correction_challenge": 0.07,
-        "nonsense": 0.15,
+        "accumulation": 0.65,
+        "seeking_help_alignment": 0.2,
+        "correction_challenge": 0.2,
+        # 稍微降低胡扯概率
+        "nonsense": 0.08,
     }
 
     # === 动态乘数系统 ===
@@ -842,6 +846,23 @@ def _compute_action_prior_distribution(
         "nonsense": normalized_weights["nonsense"] * non_silence_prob,
     }
 
+    # 强制最小降低胡扯概率，防止由于动态倍率异常太高
+    distribution["nonsense"] = min(distribution.get("nonsense", 0.0), 0.15)
+    non_silence_remaining = 1.0 - \
+        distribution["silence"] - distribution["nonsense"]
+    if non_silence_remaining < 0:
+        non_silence_remaining = 0
+
+    # 重新按比例分配非nonsense、非silence权重
+    non_nonsense_sum = distribution.get("accumulation", 0) + distribution.get(
+        "seeking_help_alignment", 0) + distribution.get("correction_challenge", 0)
+    if non_nonsense_sum > 0:
+        scale = non_silence_remaining / non_nonsense_sum
+        distribution["accumulation"] *= scale
+        distribution["seeking_help_alignment"] *= scale
+        distribution["correction_challenge"] *= scale
+    return distribution
+
     # 确保总和 = 1
     total = sum(distribution.values())
     if total > 0 and abs(total - 1.0) > 0.001:
@@ -924,6 +945,19 @@ async def _plan_agent_action(
         mastery_counts["high"] +
         mastery_counts["medium"] + mastery_counts["low"],
     )
+    graph_state = agent_knowledge_state.get(
+        "knowledge_graph", {}) if isinstance(agent_knowledge_state, dict) else {}
+    graph_nodes = len(graph_state.get("nodes", {})) if isinstance(
+        graph_state.get("nodes", {}), dict) else 0
+    graph_edges = len(graph_state.get("edges", [])) if isinstance(
+        graph_state.get("edges", []), list) else 0
+    graph_preview = []
+    if isinstance(graph_state.get("edges", []), list):
+        for edge in graph_state.get("edges", [])[:6]:
+            if isinstance(edge, dict):
+                graph_preview.append(
+                    f"{edge.get('source')} -[{edge.get('relation')}]-> {edge.get('target')}")
+
     knowledge_status = {
         "high_ratio": round(mastery_counts["high"] / total_mastery, 2),
         "medium_ratio": round(mastery_counts["medium"] / total_mastery, 2),
@@ -932,6 +966,9 @@ async def _plan_agent_action(
         "medium_count": mastery_counts["medium"],
         "low_count": mastery_counts["low"],
         "knowledge_brief": knowledge_brief,
+        "graph_nodes": graph_nodes,
+        "graph_edges": graph_edges,
+        "graph_preview": graph_preview,
     }
 
     # Unified action prior distribution calculation
@@ -991,7 +1028,8 @@ async def _plan_agent_action(
         f"- cognitive_load: {load_level} (≤3低负荷，≥8高负荷)\n\n"
         "3. 参考行动先验分布（基于性格、知识、状态综合计算）\n"
         f"{json.dumps(prior_probs, ensure_ascii=False)}\n"
-        f"知识：掌握高={knowledge_status.get('high_ratio', 0):.0%}, 低={knowledge_status.get('low_ratio', 0):.0%}\n\n"
+        f"知识：掌握高={knowledge_status.get('high_ratio', 0):.0%}, 低={knowledge_status.get('low_ratio', 0):.0%}, 知识图谱节点={knowledge_status.get('graph_nodes', 0)}, 关系={knowledge_status.get('graph_edges', 0)}\n"
+        f"知识图谱预览：{'; '.join(knowledge_status.get('graph_preview', [])) or '无'}\n\n"
         "4. 分析讨论内容逻辑与冲突\n\n"
         "输出格式：{\"action\": \"...\", \"reason\": \"...\", \"action_description\": \"...\", \"reply_focus\": \"...\"}\n\n"
         f"[人设]\n{persona_text_for_plan}\n\n"
@@ -1341,7 +1379,6 @@ _STUDENT_SYS_TEMPLATE_STR = '''请务必用中文输出。你是一名医学生�
 {silence_social_context}
 3.本轮动作规划（仅供系统处理，不要在回答中生成动作类型标签）：
 {action_plan}
-⚠️ 重要：【动作类型】标签将由系统自动添加，你只需生成自然流畅的对话内容。
 
 【输出要求】
 - 纯中文，表达自然流畅，不得出现英文缩写堆砌；
@@ -1494,6 +1531,24 @@ def _student_node_fn(agent_id: str):
         knowledge_state_brief = _build_knowledge_mastery_brief(
             agent_knowledge_state)
 
+        # 将知识图谱信息补充进学生 prompt，以确保生成阶段可见知识图谱结构和当前掌握点。
+        kg = agent_knowledge_state.get("knowledge_graph", {}) if isinstance(
+            agent_knowledge_state, dict) else {}
+        kg_nodes = len(kg.get("nodes", {}) if isinstance(
+            kg.get("nodes", {}), dict) else {})
+        kg_edges = len(kg.get("edges", []) if isinstance(
+            kg.get("edges", []), list) else [])
+        kg_edges_preview = []
+        if isinstance(kg.get("edges", []), list):
+            for edge in kg.get("edges", [])[:5]:
+                if isinstance(edge, dict):
+                    kg_edges_preview.append(
+                        f"{edge.get('source')} -[{edge.get('relation')}]-> {edge.get('target')}")
+        kg_summary = (
+            f"知识图谱节点={kg_nodes}, 关系={kg_edges}. "
+            f"部分关系示例: {'; '.join(kg_edges_preview) or '无'}。"
+        )
+
         prompt = STUDENT_PROMPT.invoke(
             {
                 "persona": persona_str,
@@ -1502,7 +1557,7 @@ def _student_node_fn(agent_id: str):
                 "silence_persona_prompt": "本轮已在独立规划阶段完成沉默判断；仅在确有新增风险时才沉默。",
                 "action_plan": plan_text,
                 "latest_processed_info": latest_processed_info,
-                "knowledge_state_brief": knowledge_state_brief,
+                "knowledge_state_brief": f"{knowledge_state_brief}\n{kg_summary}",
             }
         )
 
@@ -1517,9 +1572,10 @@ def _student_node_fn(agent_id: str):
             action_type = str(plan.get("action", "accumulation")
                               or "accumulation").strip()
             action_reason = str(plan.get("reason", "") or "planner decision")
-            action_label = ACTION_DISPLAY_LABELS.get(action_type, action_type)
-            if content:
-                content = f"【动作类型:{action_label}】{content}"
+            # 不再在学生发言中附带动作类型前缀
+            # action_label = ACTION_DISPLAY_LABELS.get(action_type, action_type)
+            # if content:
+            #     content = f"【动作类型:{action_label}】{content}"
 
             private_memory_update = _append_private_memory(
                 state=state,
@@ -1595,6 +1651,7 @@ async def teacher_handler_node(state: Dict) -> Dict:
         "force_no_silence_once": True,
         "teacher_nominated_agent": nominated_agent,
         "next_speaker": "message_prepare_parallel",  # 老师干预后，重新执行并行预处理更新状态
+        "total_messages": 1,
     }
 
 
@@ -1674,7 +1731,7 @@ async def topic_manager_node(state: Dict) -> Dict:
     try:
         result = await _ainvoke_with_log(SUM_LLM, prompt, "topic_detection")
         new_topic = result.content.strip().strip("'").strip("\"").strip()
-        
+
         # 防护机制：如果返回的内容过长（>50字符），说明可能返回了原句，进行降级处理
         if len(new_topic) > 50:
             # 尝试从新主题中提取关键词
@@ -1684,13 +1741,15 @@ async def topic_manager_node(state: Dict) -> Dict:
             if keywords:
                 # 取前2-3个关键词作为主题
                 extracted = '、'.join(keywords[:3])
-                print(f"DEBUG: [Topic Manager] Output too long ({len(new_topic)} chars), extracted keywords: {extracted}")
+                print(
+                    f"DEBUG: [Topic Manager] Output too long ({len(new_topic)} chars), extracted keywords: {extracted}")
                 new_topic = extracted
             else:
                 # 如果无法提取，保持当前主题
-                print(f"DEBUG: [Topic Manager] Output too long and no keywords found, keeping current topic")
+                print(
+                    f"DEBUG: [Topic Manager] Output too long and no keywords found, keeping current topic")
                 return {"current_topic": current_topic}
-        
+
         print(f"DEBUG: [Topic Manager] Detected topic: {new_topic}")
         return {"current_topic": new_topic}
     except Exception as e:
@@ -1717,6 +1776,13 @@ async def knowledge_eval_node(state: Dict) -> Dict:
     last_msg = messages[-1]
     last_content = getattr(last_msg, "content", "")
     if _is_silence_like_content(last_content):
+        return {}
+
+    # -- 减少频繁LLM调用：仅在第1轮及每隔5轮做一次知识评估 --
+    total_messages = int(state.get("total_messages", 0) or 0)
+    if total_messages > 2:
+        print(
+            f"DEBUG: [Knowledge Eval] Skipping round {total_messages} to reduce LLM calls")
         return {}
 
     # 获取消息 ID 和父 ID (LangGraph 的消息通常带有 id 属性)
@@ -1844,6 +1910,12 @@ async def message_prepare_parallel_node(state: Dict) -> Dict:
     # === Task 2: Knowledge Coverage Evaluation（直接调用已有的节点）===
     async def run_knowledge_evaluation():
         try:
+            total_messages = int(state.get("total_messages", 0) or 0)
+            if total_messages > 2:
+                print(
+                    f"DEBUG: [Parallel] Skipping knowledge evaluation at round {total_messages}")
+                return {}
+
             # 针对当前最新消息进行知识点覆盖评估
             # 此时 messages[-1] 已经是当前刚生成的学生回复
             result = await knowledge_eval_node(state)
@@ -1957,7 +2029,8 @@ async def router_node(state: Dict) -> Dict:
     messages: List[BaseMessage] = state["messages"]
 
     # Hard stop to prevent unbounded graph recursion when semantic stop is missed.
-    total_messages = int(state.get("total_messages", 0) or 0)
+    total_messages = max(
+        int(state.get("total_messages", 0) or 0), len(messages))
     if total_messages >= MAX_DISCUSSION_TURNS:
         print(
             f"DEBUG: [Router Node] max discussion turns reached ({total_messages}), routing to END"

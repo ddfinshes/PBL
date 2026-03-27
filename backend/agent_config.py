@@ -61,6 +61,7 @@ class KnowledgeStateService:
         payload: Dict,
         load_level: int,
         trigger_objectives: List[str] = None,
+        total_messages: int = 0,
     ) -> Dict[str, Dict]:
         """根据内化结果更新知识状态。
 
@@ -147,127 +148,146 @@ class KnowledgeStateService:
             mastered_points)
 
         # ---- 可观测性：输出每轮知识状态变化 ----
-        try:
-            before_set = set(str(p or "").strip()
-                             for p in before_mastered if str(p or "").strip())
-            after_set = set(mastered_points)
-            added = [p for p in mastered_points if p not in before_set]
-            g_nodes = 0
-            g_edges = 0
-            graph_visual_lines: List[str] = []
-            if isinstance(knowledge_graph, dict):
-                nodes_obj = knowledge_graph.get("nodes", {})
-                edges_obj = knowledge_graph.get("edges", [])
-                g_nodes = len(nodes_obj) if isinstance(nodes_obj, dict) else 0
-                g_edges = len(edges_obj) if isinstance(edges_obj, list) else 0
-
-                # 构造一个小型“邻接视图”，帮助直观理解当前图谱结构
-                if isinstance(nodes_obj, dict) and isinstance(edges_obj, list):
-                    # 1) 列出新增掌握点对应的节点ID（精确用 point 匹配）
-                    added_ids: List[str] = []
-                    added_clean = [s for s in added if s]
-                    for nid, node in nodes_obj.items():
-                        try:
-                            if not isinstance(node, dict):
-                                continue
-                            pt = str(node.get("point", "") or "").strip()
-                            if pt and pt in added_clean:
-                                added_ids.append(str(nid))
-                        except Exception:
-                            continue
-                    added_ids = added_ids[:5]
-
-                    # 2) 为这些节点构造一小段“邻接列表” ASCII 视图
-                    if added_ids:
-                        graph_visual_lines.append("新增掌握点局部邻接视图：")
-                        for nid in added_ids:
-                            node = nodes_obj.get(nid, {})
-                            label = ""
-                            try:
-                                label = str(node.get("point", "")
-                                            or "").strip()
-                            except Exception:
-                                pass
-                            neighbors: List[str] = []
-                            for e in edges_obj:
-                                if not isinstance(e, dict):
-                                    continue
-                                src = str(e.get("source", "") or "")
-                                dst = str(e.get("target", "") or "")
-                                rel = str(e.get("relation", "") or "")
-                                if src == nid:
-                                    tgt_label = ""
-                                    try:
-                                        tgt_label = str(
-                                            (nodes_obj.get(dst, {}) or {}).get(
-                                                "point", "") or ""
-                                        ).strip()
-                                    except Exception:
-                                        tgt_label = ""
-                                    neighbors.append(
-                                        f"{nid} -[{rel}]-> {dst} ({tgt_label})")
-                                elif dst == nid:
-                                    src_label = ""
-                                    try:
-                                        src_label = str(
-                                            (nodes_obj.get(src, {}) or {}).get(
-                                                "point", "") or ""
-                                        ).strip()
-                                    except Exception:
-                                        src_label = ""
-                                    neighbors.append(
-                                        f"{src} -[{rel}]-> {nid} ({src_label})")
-                            # 控制长度：每个点最多展示若干条边
-                            neighbors = neighbors[:6]
-                            graph_visual_lines.append(
-                                f"  [{nid}] {label or 'N/A'}:"
-                            )
-                            if neighbors:
-                                for line in neighbors:
-                                    graph_visual_lines.append(f"    {line}")
-                            else:
-                                graph_visual_lines.append("    (无直接邻接边)")
-
-                    # 若本轮没有新增掌握点，则给一个小的整体 preview
-                    if not added_ids and g_nodes > 0 and g_edges > 0:
-                        graph_visual_lines.append("图谱整体预览（前若干条边）：")
-                        for e in edges_obj[:8]:
-                            if not isinstance(e, dict):
-                                continue
-                            src = str(e.get("source", "") or "")
-                            dst = str(e.get("target", "") or "")
-                            rel = str(e.get("relation", "") or "")
-                            src_label = str(
-                                (nodes_obj.get(src, {}) or {}).get(
-                                    "point", "") or ""
-                            ).strip()
-                            dst_label = str(
-                                (nodes_obj.get(dst, {}) or {}).get(
-                                    "point", "") or ""
-                            ).strip()
-                            graph_visual_lines.append(
-                                f"  {src} ({src_label}) -[{rel}]-> {dst} ({dst_label})"
-                            )
-
-            graph_visual_block = "\n".join(
-                graph_visual_lines) if graph_visual_lines else ""
-
+        should_compute_graph = (total_messages <= 2)
+        if not should_compute_graph:
             logger.info(
-                "KNOWLEDGE_GRAPH_UPDATE agent=%s name=%s orientation=%s load=%s "
-                "added_mastered=%s total_mastered=%s graph_nodes=%s graph_edges=%s\n%s",
+                "KNOWLEDGE_GRAPH_UPDATE_SKIPPED agent=%s name=%s orientation=%s load=%s "
+                "total_mastered=%s graph_nodes=%s graph_edges=%s",
                 str(agent_id or "").strip() or "unknown",
                 str(persona.get("name", "") or "").strip() or "unknown",
                 str(persona.get("cognitive_orientation",
                     "point_based") or "").strip(),
                 int(load_level),
-                added[:6],
                 len(mastered_points),
-                g_nodes,
-                g_edges,
-                graph_visual_block,
+                len(knowledge_graph.get("nodes", {})
+                    if isinstance(knowledge_graph, dict) else {}),
+                len(knowledge_graph.get("edges", [])
+                    if isinstance(knowledge_graph, dict) else []),
             )
-        except Exception as e:
-            logger.warning("KNOWLEDGE_GRAPH_UPDATE log failed: %s", e)
+        else:
+            try:
+                before_set = set(str(p or "").strip()
+                                 for p in before_mastered if str(p or "").strip())
+                after_set = set(mastered_points)
+                added = [p for p in mastered_points if p not in before_set]
+                g_nodes = 0
+                g_edges = 0
+                graph_visual_lines: List[str] = []
+
+                if isinstance(knowledge_graph, dict):
+                    nodes_obj = knowledge_graph.get("nodes", {})
+                    edges_obj = knowledge_graph.get("edges", [])
+                    g_nodes = len(nodes_obj) if isinstance(
+                        nodes_obj, dict) else 0
+                    g_edges = len(edges_obj) if isinstance(
+                        edges_obj, list) else 0
+
+                    # 构造一个小型“邻接视图”，帮助直观理解当前图谱结构
+                    if isinstance(nodes_obj, dict) and isinstance(edges_obj, list):
+                        # 1) 列出新增掌握点对应的节点ID（精确用 point 匹配）
+                        added_ids: List[str] = []
+                        added_clean = [s for s in added if s]
+                        for nid, node in nodes_obj.items():
+                            try:
+                                if not isinstance(node, dict):
+                                    continue
+                                pt = str(node.get("point", "") or "").strip()
+                                if pt and pt in added_clean:
+                                    added_ids.append(str(nid))
+                            except Exception:
+                                continue
+                        added_ids = added_ids[:5]
+
+                        # 2) 为这些节点构造一小段“邻接列表” ASCII 视图
+                        if added_ids:
+                            graph_visual_lines.append("新增掌握点局部邻接视图：")
+                            for nid in added_ids:
+                                node = nodes_obj.get(nid, {})
+                                label = ""
+                                try:
+                                    label = str(node.get("point", "")
+                                                or "").strip()
+                                except Exception:
+                                    pass
+                                neighbors: List[str] = []
+                                for e in edges_obj:
+                                    if not isinstance(e, dict):
+                                        continue
+                                    src = str(e.get("source", "") or "")
+                                    dst = str(e.get("target", "") or "")
+                                    rel = str(e.get("relation", "") or "")
+                                    if src == nid:
+                                        tgt_label = ""
+                                        try:
+                                            tgt_label = str(
+                                                (nodes_obj.get(dst, {}) or {}).get(
+                                                    "point", "") or ""
+                                            ).strip()
+                                        except Exception:
+                                            tgt_label = ""
+                                        neighbors.append(
+                                            f"{nid} -[{rel}]-> {dst} ({tgt_label})")
+                                    elif dst == nid:
+                                        src_label = ""
+                                        try:
+                                            src_label = str(
+                                                (nodes_obj.get(src, {}) or {}).get(
+                                                    "point", "") or ""
+                                            ).strip()
+                                        except Exception:
+                                            src_label = ""
+                                        neighbors.append(
+                                            f"{src} -[{rel}]-> {nid} ({src_label})")
+                                # 控制长度：每个点最多展示若干条边
+                                neighbors = neighbors[:6]
+                                graph_visual_lines.append(
+                                    f"  [{nid}] {label or 'N/A'}:")
+                                if neighbors:
+                                    for line in neighbors:
+                                        graph_visual_lines.append(
+                                            f"    {line}")
+                                else:
+                                    graph_visual_lines.append("    (无直接邻接边)")
+
+                        # 若本轮没有新增掌握点，则给一个小的整体 preview
+                        if not added_ids and g_nodes > 0 and g_edges > 0:
+                            graph_visual_lines.append("图谱整体预览（前若干条边）：")
+                            for e in edges_obj[:8]:
+                                if not isinstance(e, dict):
+                                    continue
+                                src = str(e.get("source", "") or "")
+                                dst = str(e.get("target", "") or "")
+                                rel = str(e.get("relation", "") or "")
+                                src_label = str(
+                                    (nodes_obj.get(src, {}) or {}).get(
+                                        "point", "") or ""
+                                ).strip()
+                                dst_label = str(
+                                    (nodes_obj.get(dst, {}) or {}).get(
+                                        "point", "") or ""
+                                ).strip()
+                                graph_visual_lines.append(
+                                    f"  {src} ({src_label}) -[{rel}]-> {dst} ({dst_label})")
+
+                graph_visual_block = "\n".join(
+                    graph_visual_lines) if graph_visual_lines else ""
+
+                logger.info(
+                    "KNOWLEDGE_GRAPH_UPDATE agent=%s name=%s orientation=%s load=%s "
+                    "added_mastered=%s total_mastered=%s graph_nodes=%s graph_edges=%s\n%s",
+                    str(agent_id or "").strip() or "unknown",
+                    str(persona.get("name", "") or "").strip() or "unknown",
+                    str(persona.get("cognitive_orientation",
+                        "point_based") or "").strip(),
+                    int(load_level),
+                    added[:6],
+                    len(mastered_points),
+                    g_nodes,
+                    g_edges,
+                    graph_visual_block,
+                )
+            except Exception as e:
+                logger.warning("KNOWLEDGE_GRAPH_UPDATE log failed: %s", e)
 
         # 保留/回写知识图谱（结构拓扑目前不在这里改变，只更新掌握点列表）
         # 确保knowledge_graph总是被保留，即使是空图谱

@@ -74,7 +74,7 @@
                 </span>
                 <span class="text-[10px] text-gray-400 opacity-0 group-hover/item:opacity-100 transition-opacity">Click to fill</span>
               </div>
-              <p class="text-sm text-gray-700 line-clamp-2 leading-snug">{{ s.content }}</p>
+              <p class="text-sm text-gray-700 leading-snug break-words whitespace-pre-wrap">{{ s.content }}</p>
             </button>
           </div>
         </div>

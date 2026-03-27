@@ -1223,15 +1223,18 @@ const syncPersona = async () => {
   flex: 1;
   min-width: 0;
   height: 30px;
-  border: 1px solid #cfdaf8;
+  border: 1px solid #383f4a;
   border-radius: 7px;
   padding: 0 8px;
   font-size: 11px;
+  color: #1f2937;
+  background-color: #ffffff;
 }
 
 .preview-chat-input:focus {
   outline: none;
-  border-color: #8095ca;
+  border-color: #5f77b2;
+  box-shadow: 0 0 0 1px #5f77b2;
 }
 
 .preview-chat-submit {
