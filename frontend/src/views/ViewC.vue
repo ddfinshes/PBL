@@ -46,6 +46,16 @@
                 class="image-item-vertical"
                 @click="previewImage(img)"
               >
+                <button
+                  v-if="img.filename"
+                  class="delete-image-btn"
+                  title="Delete image"
+                  @click.stop="deleteImage(img)"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5">
+                    <path d="M18 6L6 18M6 6l12 12"></path>
+                  </svg>
+                </button>
                 <img 
                   :src="img.src" 
                   @error="handleImageError(idx, currentIndex)"
@@ -195,6 +205,7 @@ const currentIndex = ref(0)
 const showTeacherGuide = ref(true)
 const failedImages = ref(new Set())
 const existingImages = ref(new Set())  // 存储实际存在的图片列表
+const deletedImages = ref(new Map())   // caseName -> Set<filename> 格式，按案例隔离删除记录
 // 编辑状态：{ sceneIdx, qIdx, text }
 const editingQuestion = ref(null)
 const isSaving = ref(false)
@@ -231,6 +242,11 @@ const currentImages = computed(() => {
     if (failedImages.value.has(`${currentIndex.value}_${idx}`)) {
       return false
     }
+    // 本地已删除的图片立即隐藏（按案例隔离）
+    const caseDeletedSet = getCaseDeletedImages()
+    if (img.filename && caseDeletedSet.has(img.filename)) {
+      return false
+    }
     // 如果有实际图片列表且是URL图片，检查是否存在
     if (existingImages.value.size > 0 && img.filename) {
       return existingImages.value.has(img.filename)
@@ -242,6 +258,14 @@ const currentImages = computed(() => {
 
 // --- 方法 ---
 const renderMarkdown = (text) => text ? md.render(text) : ''
+
+/**
+ * 获取当前案例的已删除图片集合
+ */
+const getCaseDeletedImages = () => {
+  if (!props.caseData?.case_title) return new Set()
+  return deletedImages.value.get(props.caseData.case_title) || new Set()
+}
 
 /**
  * 获取案例文件夹中实际存在的图片列表
@@ -275,6 +299,49 @@ const prevScene = () => {
 
 const previewImage = (img) => {
   window.open(img.src, '_blank')
+}
+
+const deleteImage = async (img) => {
+  if (!img?.filename || !props.caseData?.case_title) {
+    alert('当前图片不支持删除')
+    return
+  }
+
+  const confirmed = window.confirm(`Delete image ${img.filename}?`)
+  if (!confirmed) return
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/delete-case-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caseName: props.caseData.case_title,
+        filename: img.filename
+      })
+    })
+
+    const result = await response.json()
+    if (!response.ok || result.status !== 'success') {
+      throw new Error(result.detail || result.message || '删除失败')
+    }
+
+    // 添加到该案例的已删除图片集合
+    const caseName = props.caseData.case_title
+    if (!deletedImages.value.has(caseName)) {
+      deletedImages.value.set(caseName, new Set())
+    }
+    deletedImages.value.get(caseName).add(img.filename)
+    existingImages.value.delete(img.filename)
+
+    if (Array.isArray(result.images)) {
+      existingImages.value = new Set(result.images)
+    }
+
+    console.log(`✓ 图片已删除: ${img.filename}`)
+  } catch (error) {
+    console.error('Delete image error:', error)
+    alert(`删除图片失败: ${error.message}`)
+  }
 }
 
 const handleImageError = (imgIdx, sceneIdx) => {
@@ -503,6 +570,8 @@ watch(() => props.caseData, (newData) => {
   console.log('Case Data Changed, resetting scene to 0.');
   currentIndex.value = 0;
   failedImages.value.clear();
+  // 不清空 deletedImages，因为是 Map 格式按案例隔离，新案例的删除记录会被保留，
+  // 若同一案例重新上传，已删除的文件也不会再显示
   
   // 获取案例的实际图片列表
   fetchExistingImages();
@@ -920,6 +989,7 @@ watch(currentIndex, (newIdx) => {
   gap: 12px;
 }
 .image-item-vertical {
+  position: relative;
   border-radius: 8px;
   overflow: hidden;
   cursor: zoom-in;
@@ -927,6 +997,34 @@ watch(currentIndex, (newIdx) => {
   border: 1px solid #d1d5db;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
+
+.delete-image-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(255, 255, 255, 0.9);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.image-item-vertical:hover .delete-image-btn {
+  opacity: 1;
+}
+
+.delete-image-btn:hover {
+  background: #fee2e2;
+}
+
 .image-item-vertical img {
   width: 100%;
   display: block;

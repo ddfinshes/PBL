@@ -18,7 +18,7 @@
     <div v-if="showSummaryModal" class="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-8">
       <div class="bg-white border border-gray-300 rounded-2xl w-full max-w-2xl max-h-[80%] flex flex-col shadow-2xl">
         <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h4 class="text-gray-800 font-bold">教师引导策略分析（Scaffolding Strategy Analysis）</h4>
+          <h4 class="text-gray-800 font-bold">Teacher Scaffolding Strategy Analysis</h4>
           <button @click="showSummaryModal = false" class="text-gray-400 hover:text-white">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -31,29 +31,29 @@
           </div>
           <div v-else-if="currentSummaryParts.problem_space || currentSummaryParts.predicted_difficulties || currentSummaryParts.intervention_action" class="space-y-4">
             <div class="space-y-2">
-              <label class="text-xs text-blue-600 font-medium uppercase tracking-wider">明确问题空间（Problem Space）</label>
+              <label class="text-xs text-blue-600 font-medium uppercase tracking-wider">Define Problem Space</label>
               <textarea 
                 v-model="currentSummaryParts.problem_space"
                 class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-blue-200 focus:border-blue-400 outline-none text-sm leading-relaxed"
-                placeholder="核心概念、学科知识和21世纪技能..."
+                placeholder="Core concepts, subject knowledge, and 21st century skills..."
               ></textarea>
             </div>
             
             <div class="space-y-2">
-              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">预测困难点（Predicted Difficulties）</label>
+              <label class="text-xs text-[#EF4444] font-medium uppercase tracking-wider">Predict Learning Difficulties</label>
               <textarea 
                 v-model="currentSummaryParts.predicted_difficulties"
                 class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-red-200 focus:border-red-400 outline-none text-sm leading-relaxed"
-                placeholder="学生可能出现的困难情景..."
+                placeholder="Potential student difficulty scenarios..."
               ></textarea>
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs text-green-600 font-medium uppercase tracking-wider">引导的Action（Intervention Action）</label>
+              <label class="text-xs text-green-600 font-medium uppercase tracking-wider">Intervention Action</label>
               <textarea 
                 v-model="currentSummaryParts.intervention_action"
                 class="w-full h-24 bg-gray-50 text-gray-800 p-3 rounded-xl border border-green-200 focus:border-green-400 outline-none text-sm leading-relaxed"
-                placeholder="教师引导的目的和具体行为..."
+                placeholder="Teacher intervention purpose and specific behavior..."
               ></textarea>
             </div>
           </div>
@@ -101,22 +101,22 @@ const svgWrapper = ref(null);
 // Store knowledge coverage data
 const knowledgeCoverageMap = ref(new Map()); // nodeId -> { totalPoints, coveredPoints, ratio, score, details, pointScores }
 
-// 追踪节点的前驱关系，用于累积覆盖率
+// Track node ancestor relationships for cumulative coverage calculation
 const nodeAncestorMap = ref(new Map()); // nodeId -> parentNodeId
 
-// 【修复】避免直接清空覆盖率导致UI闪烁，改为延迟清空或保留
-// 当问题真的改变时，在下一次覆盖率数据到达时再进行合并
+// Fix: Avoid clearing coverage directly to prevent UI flickering
+// Only merge when coverage data actually arrives for new question
 watch(activeQuestionInfo, () => {
-  // 不直接清空，而是标记需要重新映射
-  // remapCoverageFromQuestionCache 会自动处理新旧数据的合并
+  // Mark for remapping rather than clearing directly
+  // remapCoverageFromQuestionCache handles automatic merging of old/new data
   nodeAncestorMap.value = new Map();
   
-  // 【新增】当切换问题时，重置已评估的节点跟踪，这样新问题的所有节点都会重新计算覆盖率
+  // When switching questions, reset evaluated node tracking so all nodes recalculate coverage
   lastEvaluatedNodeIds.value = new Set();
   console.debug('[ViewD] activeQuestionInfo changed, reset coverage evaluation state');
 }, { deep: true });
 
-// --- 总结功能相关状态 ---
+// --- Summary modal related state ---
 const showSummaryModal = ref(false);
 const summaryLoading = ref(false);
 const currentSummaryParts = ref({
@@ -128,7 +128,7 @@ const summaryInterventionId = ref('');
 const isHighlightingFlags = ref(false);
 
 const openSummaryModal = async (node) => {
-  // 1. 优先从本地/归档缓存中获取
+  // 1. Prioritize loading from local/archived cache
   const targetId = node.interventionId || node.turnsList?.[0]?.id || node.id;
   summaryInterventionId.value = targetId;
 
@@ -140,7 +140,7 @@ const openSummaryModal = async (node) => {
     return;
   }
 
-  // 2. 如果没有缓存，则清空并调用后端接口
+  // 2. If no cache, clear and call backend API
   currentSummaryParts.value = { problem_space: '', predicted_difficulties: '', intervention_action: '' };
   showSummaryModal.value = true;
   summaryLoading.value = true;
@@ -157,7 +157,7 @@ const openSummaryModal = async (node) => {
     }
   } catch (err) {
     console.error('Failed to generate summary:', err);
-    currentSummaryParts.value = { problem_space: '生成失败', predicted_difficulties: '生成失败', intervention_action: '生成失败' };
+    currentSummaryParts.value = { problem_space: 'Failed to generate', predicted_difficulties: 'Failed to generate', intervention_action: 'Failed to generate' };
   } finally {
     summaryLoading.value = false;
   }
@@ -186,7 +186,7 @@ const saveSummary = async () => {
   }
 };
 
-// 评估知识覆盖度
+// Evaluate knowledge coverage
 const evaluateKnowledgeCoverage = async (caseInfo, discussionContent, nodeId) => {
   try {
     const response = await axios.post(
@@ -210,10 +210,10 @@ const evaluateKnowledgeCoverage = async (caseInfo, discussionContent, nodeId) =>
         updatedAt: Date.now()
       };
       
-      // 存储到本地的 knowledgeCoverageMap
+      // Store to local knowledgeCoverageMap
       knowledgeCoverageMap.value.set(nodeId, coverageData);
       
-      // 同时尝试更新全局的 knowledgeCoverageByQuestion（用于与 ViewE 同步）
+      // Also try to update global knowledgeCoverageByQuestion (for sync with ViewE)
       if (knowledgeCoverageByQuestion !== undefined && knowledgeCoverageByQuestion !== null) {
         const key = `${caseInfo.sceneIndex}_${caseInfo.questionIndex}`;
         const node = graphData.value?.nodes?.find(n => n.id === nodeId);
@@ -236,7 +236,7 @@ const evaluateKnowledgeCoverage = async (caseInfo, discussionContent, nodeId) =>
   return 0;
 };
 
-// 为某个节点评估知识覆盖度
+// Evaluate knowledge coverage for a specific node
 const evaluateCoverageForNode = async (nodeId) => {
   try {
     const node = graphData.value.nodes.find(n => n.id === nodeId);
@@ -244,14 +244,14 @@ const evaluateCoverageForNode = async (nodeId) => {
       return;
     }
 
-    // 收集该节点关联的所有消息的讨论内容
+    // Collect discussion content from all messages associated with this node
     const nodeMsgIds = new Set(node.turnsList.map(t => t.id));
     const questionMessages = messages.value.filter(m => 
       m.sceneIndex === activeQuestionInfo.value.sceneIndex && 
       m.questionIndex === activeQuestionInfo.value.questionIndex
     );
     
-    // 从节点的最后一条消息开始，向上溯源到根，收集完整的讨论路径
+    // Starting from the leaf message of node, trace upward to root to collect full discussion path
     let leafMsg = null;
     for (let i = questionMessages.length - 1; i >= 0; i--) {
       const msg = questionMessages[i];
@@ -265,7 +265,7 @@ const evaluateCoverageForNode = async (nodeId) => {
       return;
     }
 
-    // 收集从根到当前节点的所有讨论内容
+    // Collect all discussion content from root to current node
     const discussionParts = [];
     let curr = leafMsg;
     let safety = 0;
@@ -286,7 +286,7 @@ const evaluateCoverageForNode = async (nodeId) => {
       return;
     }
 
-    // 调用评估函数
+    // Call evaluation function
     await evaluateKnowledgeCoverage(
       {
         caseName: activeQuestionInfo.value.caseName,
@@ -329,7 +329,7 @@ const mainPathSet = computed(() => {
     m.questionIndex === activeQuestionInfo.value.questionIndex
   );
 
-  // 1. 建立节点之间的父子关系逻辑
+  // 1. Establish parent-child relationships between nodes
   const nodeParentMap = {};
   graphLinks.forEach(l => {
     const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
@@ -337,7 +337,7 @@ const mainPathSet = computed(() => {
     nodeParentMap[targetId] = sourceId;
   });
 
-  // 2. 查找当前活跃消息所在的 nodeId
+  // 2. Find the nodeId where current active message is located
   const findNodeForMsg = (msgId) => {
      const foundNode = graphData.value.nodes.find(n => n.turnsList.some(t => t.id === msgId));
      return foundNode ? foundNode.id : null;
@@ -347,7 +347,7 @@ const mainPathSet = computed(() => {
   if (selectedTopic.value) {
     anchorNodeKey = selectedTopic.value;
   } else if (activeMessageId.value) {
-    // 确保 activeMessageId 在当前问题的消息列表中
+    // Ensure activeMessageId is in current question's message list
     if (questionMessages.find(m => m.id === activeMessageId.value)) {
       anchorNodeKey = findNodeForMsg(activeMessageId.value);
     }
@@ -355,7 +355,7 @@ const mainPathSet = computed(() => {
 
   if (!anchorNodeKey) return path;
 
-  // 3. 向上溯源祖先
+  // 3. Trace ancestors
   let curr = anchorNodeKey;
   let safety = 0;
   while (curr && safety < 1000) {

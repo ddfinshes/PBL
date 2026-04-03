@@ -43,6 +43,32 @@
               <div class="agent-mini-name" :style="{ backgroundColor: agent.cardColor || '#CEDCFB' }">
                 {{ agent.name }}
               </div>
+              <div class="agent-mini-metrics">
+                <div class="mini-metric-block">
+                  <div class="mini-metric-label">Self<br/>Efficiency</div>
+                  <div class="mini-metric-track">
+                    <div
+                      class="mini-metric-fill"
+                      :style="{
+                        height: getAgentMetricVisual(agent).selfHeight,
+                        backgroundColor: getAgentMetricVisual(agent).selfColor
+                      }"
+                    />
+                  </div>
+                </div>
+                <div class="mini-metric-block">
+                  <div class="mini-metric-track">
+                    <div
+                      class="mini-metric-fill"
+                      :style="{
+                        height: getAgentMetricVisual(agent).loadHeight,
+                        backgroundColor: getAgentMetricVisual(agent).loadColor
+                      }"
+                    />
+                  </div>
+                  <div class="mini-metric-label">Cognitive<br/>Load</div>
+                </div>
+              </div>
               <div v-if="agent.tags?.length" class="agent-mini-tags">
                 <span 
                   v-for="(tag, idx) in agent.tags" 
@@ -89,31 +115,21 @@
         <ViewF :active-context="activeContext" />
       </div>
 
-      <!-- Right Column: ViewE + ViewG (two rows) -->
+      <!-- Right Column: ViewE -->
       <div class="right-column">
-        <div class="right-top-row">
-          <ViewE
-            style="height: 100%;"
-            :case-data="caseResult"
-            :objective-evaluation-map="objectiveEvaluationMap"
-            :discussion-end-map="discussionEndByQuestion"
-          />
-        </div>
-
-        <div class="right-bottom-row">
-          <ViewG
-            style="height: 100%;"
-            :objective-evaluation-map="objectiveEvaluationMap"
-            :discussion-end-map="discussionEndByQuestion"
-          />
-        </div>
+        <ViewE
+          style="height: 100%;"
+          :case-data="caseResult"
+          :objective-evaluation-map="objectiveEvaluationMap"
+          :discussion-end-map="discussionEndByQuestion"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, provide } from 'vue';
+import { ref, computed, provide } from 'vue';
 import axios from 'axios';
 import ViewA from './views/ViewA.vue';
 import ViewB from './views/ViewB.vue';
@@ -121,7 +137,6 @@ import ViewC from './views/ViewC.vue';
 import ViewD from './views/ViewD.vue';
 import ViewE from './views/ViewE.vue';
 import ViewF from './views/ViewF.vue';
-import ViewG from './views/ViewG.vue';
 import { usePBLSocket } from './composables/usePBLSocket.js';
 
 const sessionId = `pbl-session-${Date.now()}`;
@@ -251,7 +266,7 @@ const agents = ref([]);
 provide('agentList', agents);
 
 const handleDataReady = (payload) => {
-  console.log('父组件收到数据:', payload);
+  console.log('Parent component received data:', payload);
   
   if (payload) {
     caseResult.value = payload.structure;
@@ -266,7 +281,7 @@ const handleDataReady = (payload) => {
 };
 
 const handleInspectQuestion = (payload) => {
-  console.log('父组件监听到问题查看:', payload);
+  console.log('Parent component detected question inspection:', payload);
   
   activeQuestionInfo.value = { 
     sceneIndex: payload.sceneIndex, 
@@ -281,6 +296,93 @@ const handleInspectQuestion = (payload) => {
       question: payload.data.question
     };
   }
+};
+
+const STATE_COLOR_SEVERE = '#FFABAB';
+const STATE_COLOR_MEDIUM = '#FFEDD5';
+const STATE_COLOR_NORMAL = '#E3FCE7';
+
+const activeQuestionKey = computed(() => {
+  const sceneIndex = Number(activeQuestionInfo.value?.sceneIndex ?? -1);
+  const questionIndex = Number(activeQuestionInfo.value?.questionIndex ?? -1);
+  if (sceneIndex < 0 || questionIndex < 0) return null;
+  return `${sceneIndex}_${questionIndex}`;
+});
+
+const activeAgentStateSnapshot = computed(() => {
+  const allSnapshots = agentStateByQuestion.value || {};
+  const key = activeQuestionKey.value;
+  if (key && allSnapshots[key]) return allSnapshots[key];
+
+  const latest = Object.values(allSnapshots)
+    .filter((item) => item && typeof item === 'object')
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))[0];
+  return latest || {};
+});
+
+const normalizeKey = (raw) => String(raw || '').trim().toLowerCase();
+
+const buildCandidateAgentKeys = (agent) => {
+  const id = String(agent?.id || '').trim();
+  const name = String(agent?.name || '').trim();
+  const prefixedId = id.startsWith('agent-') ? id.slice(6) : id;
+  return [id, prefixedId, name]
+    .map(normalizeKey)
+    .filter(Boolean);
+};
+
+const readRuntimeMetric = (stateMap, agent) => {
+  if (!stateMap || typeof stateMap !== 'object') return null;
+  const entries = Object.entries(stateMap);
+  if (!entries.length) return null;
+
+  const candidates = buildCandidateAgentKeys(agent);
+  if (!candidates.length) return null;
+
+  const hit = entries.find(([k]) => candidates.includes(normalizeKey(k)));
+  return hit ? Number(hit[1]) : null;
+};
+
+const clampMetric = (value, fallback = 6) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(9, Math.round(n)));
+};
+
+const selfEfficacyColor = (value) => {
+  const level = clampMetric(value, 6);
+  if (level <= 4) return STATE_COLOR_SEVERE;
+  if (level <= 6) return STATE_COLOR_MEDIUM;
+  return STATE_COLOR_NORMAL;
+};
+
+const cognitiveLoadColor = (value) => {
+  const level = clampMetric(value, 6);
+  if (level >= 8) return STATE_COLOR_SEVERE;
+  if (level >= 5) return STATE_COLOR_MEDIUM;
+  return STATE_COLOR_NORMAL;
+};
+
+const barHeightPercent = (value) => {
+  const level = clampMetric(value, 6);
+  return `${Math.round((level / 9) * 100)}%`;
+};
+
+const getAgentMetricVisual = (agent) => {
+  const snapshot = activeAgentStateSnapshot.value || {};
+  const selfRaw = readRuntimeMetric(snapshot.self_efficacy, agent);
+  const loadRaw = readRuntimeMetric(snapshot.cognitive_load, agent);
+  const selfLevel = clampMetric(selfRaw, 6);
+  const loadLevel = clampMetric(loadRaw, 6);
+
+  return {
+    selfLevel,
+    loadLevel,
+    selfColor: selfEfficacyColor(selfLevel),
+    loadColor: cognitiveLoadColor(loadLevel),
+    selfHeight: barHeightPercent(selfLevel),
+    loadHeight: barHeightPercent(loadLevel),
+  };
 };
 
 
@@ -312,7 +414,7 @@ html, body {
   overflow: hidden;
 }
 
-/* 统一字体大小单位，利于自适应 */
+/* Unified font sizing for responsive design */
 body {
   font-size: 14px;
 }
@@ -341,7 +443,7 @@ body {
 }
 
 .left-column.collapsed {
-  flex: 0 0 130px;
+  flex: 0 0 160px;
 }
 
 .left-column-header {
@@ -449,15 +551,15 @@ body {
 .agent-list-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .agent-mini-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px;
+  gap: 3px;
+  padding: 4px;
   border: 2px solid;
   border-radius: 4px;
   cursor: pointer;
@@ -470,39 +572,84 @@ body {
 }
 
 .agent-mini-avatar {
-  width: 60px;
-  height: 60px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .agent-mini-name {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   color: #000000;
-  padding: 3px 6px;
+  padding: 2px 6px;
   border-radius: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90px;
+  max-width: 100px;
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.1;
+}
+
+.agent-mini-metrics {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.mini-metric-block {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.mini-metric-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: #111111;
+  line-height: 1;
+  text-align: center;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.mini-metric-track {
+  width: 12px;
+  height: 32px;
+  border-radius: 6px;
+  background: #e7e7ea;
+  overflow: hidden;
+  position: relative;
+}
+
+.mini-metric-fill {
+  width: 100%;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  border-radius: 6px;
+  transition: height 0.3s ease, background-color 0.3s ease;
 }
 
 .agent-mini-tags {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .mini-tag-pill {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
-  padding: 2px 8px;
+  padding: 2px 6px;
   background: rgba(128, 149, 202, 0.2);
   color: #2c3e50;
   border: 1px solid rgba(128, 149, 202, 0.4);
@@ -537,16 +684,6 @@ body {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-}
-
-.right-top-row {
-  flex: 1.8;
-  min-height: 0;
-}
-
-.right-bottom-row {
-  flex: 1.6;
-  min-height: 0;
 }
 
 /* 2K and below: slightly increase first-column share to avoid panel overlap at browser zoom */

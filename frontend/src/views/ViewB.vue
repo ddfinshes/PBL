@@ -4,7 +4,7 @@
     <!-- Scrollable Area for Cards -->
     <div class="view-b-scroll-area flex-1 overflow-y-auto p-2 custom-scrollbar">
       <div class="view-b-content-wrapper w-full relative">
-        <!-- 占位元素，用于撑开容器高度，使绝对定位的卡片堆叠有滚动空间 -->
+        <!-- Placeholder element to expand container height for stacked cards scrolling space -->
         <div :style="{ height: stackHeight + 'px' }" class="stack-spacer transition-all duration-500"></div>
 
         <!-- Stacking Agent Cards -->
@@ -41,7 +41,7 @@
                       <p>{{ msg.content }}</p>
                     </div>
                     <div v-if="!getConfigChatMessages(agent).length" class="preview-chat-empty">
-                      例如：帮我设置一个好学生，性格腼腆不爱发言。
+                      For example: Set up a good student with a shy personality who doesn't like to speak.
                     </div>
                   </div>
 
@@ -50,7 +50,7 @@
                       v-model="chatInstructionByAgent[agent.id]"
                       class="preview-chat-input"
                       :disabled="Boolean(chatSubmittingByAgent[agent.id])"
-                      placeholder="继续用自然语言描述该 Agent..."
+                      placeholder="Continue describing this Agent in natural language..."
                       @keyup.enter="submitAgentConfigInstruction(agent)"
                     />
                     <button
@@ -66,7 +66,7 @@
                     {{ chatErrorByAgent[agent.id] }}
                   </div>
                   <div v-if="getConfigUnresolvedFields(agent).length" class="preview-chat-warning">
-                    仍有字段未解析（左侧对应模块已标红）：可手动调，或继续补充描述。
+                    Some fields remain unparsed (corresponding modules on the left are marked red): you can adjust manually or continue to supplement the description.
                   </div>
                 </section>
 
@@ -109,12 +109,12 @@
 
                 <div class="preview-bubble after">
                   <div class="bubble-tag">After Adjustment</div>
-                  <p>{{ previewLoadingByAgent[agent.id] ? '正在根据当前参数生成预览...' : getAgentPreview(agent).after_text }}</p>
+                  <p>{{ previewLoadingByAgent[agent.id] ? 'Generating preview based on current parameters...' : getAgentPreview(agent).after_text }}</p>
                 </div>
 
                 <div class="preview-description-box">
                   <div class="description-tag">Behavior Description</div>
-                  <p>{{ previewLoadingByAgent[agent.id] ? '正在生成该 Agent 的行为描述...' : getAgentPreview(agent).behavior_description }}</p>
+                  <p>{{ previewLoadingByAgent[agent.id] ? 'Generating behavior description for this Agent...' : getAgentPreview(agent).behavior_description }}</p>
                 </div>
               </aside>
             </div>
@@ -472,11 +472,11 @@ const submitAgentConfigInstruction = async (agent) => {
       ? response.data.unresolved_fields
       : [];
 
-    appendConfigChatMessage(agent, 'assistant', response.data.assistant_message || '已尝试更新可解析配置。');
+    appendConfigChatMessage(agent, 'assistant', response.data.assistant_message || 'Attempted to update parsable configuration.');
   } catch (error) {
-    const message = error?.message || '解析失败，请稍后重试。';
+    const message = error?.message || 'Parsing failed, please try again later.';
     chatErrorByAgent.value[agent.id] = message;
-    appendConfigChatMessage(agent, 'assistant', `解析失败：${message}`);
+    appendConfigChatMessage(agent, 'assistant', `Parsing failed: ${message}`);
   } finally {
     chatSubmittingByAgent.value[agent.id] = false;
   }
@@ -487,10 +487,10 @@ const getAgentPreview = (agent) => {
   const preview = key ? previewByAgent.value[key] : null;
   if (preview) return preview;
   return {
-    before_text: `针对“${firstQuestionText.value}”，将基于基础配置进行对照分析。`,
-    after_text: '请调整参数后查看实时生成的风格化回答。',
+    before_text: `“${firstQuestionText.value}”，A comparative analysis will be conducted based on the basic configuration.`,
+    after_text: 'Click the "Preview" button to generate a preview answer.',
     action_display: '',
-    behavior_description: '系统将根据当前参数自动生成该 Agent 的行为描述。'
+    behavior_description: 'The system will generate an Agent behavior description based on the current parameters.'
   };
 };
 
@@ -538,11 +538,10 @@ const requestAgentPreview = async (agent) => {
 
     if (previewRes?.data?.status === 'success') {
       const afterText = String(previewRes.data.after_text || '').trim();
-      const beforeText = previousAfterText || previousBeforeText || String(previewRes.data.before_text || '').trim();
       previewByAgent.value = {
         ...previewByAgent.value,
         [agent.id]: {
-          before_text: beforeText,
+          before_text: '',
           after_text: afterText,
           action_display: previewRes.data.action_display || '',
           behavior_description: String(previewRes.data.behavior_description || '').trim() || '该 Agent 的行为描述生成失败，请重试。'
@@ -804,8 +803,8 @@ watch(agents, () => {
 
 const STACK_HEADER_HEIGHT = 85; 
 const EXPANDED_CARD_HEIGHT = 900; 
-const VISIBLE_GAP_UP = 30;    // 上方堆叠露出的高度
-const VISIBLE_GAP_DOWN = 15;  // 下方堆叠露出的高度（更紧凑）
+const VISIBLE_GAP_UP = 30;    // Top stack exposed height
+const VISIBLE_GAP_DOWN = 15;  // Bottom stack exposed height (more compact)
 
 const stackHeight = computed(() => {
   const count = agents.value.length;
@@ -815,7 +814,7 @@ const stackHeight = computed(() => {
     return (count - 1) * STACK_HEADER_HEIGHT + EXPANDED_CARD_HEIGHT;
   }
   
-  // 展开模式下：上方占位 + 展开高度 + 下方占位
+  // Expanded mode: space above + expanded height + space below
   return (count - 1) * VISIBLE_GAP_UP + EXPANDED_CARD_HEIGHT + 50;
 });
 
@@ -827,7 +826,7 @@ const getCardStyle = (index) => {
   let opacity = 1;
 
   if (activeIndex.value === null) {
-    // 列表模式：保持等宽间距
+    // List mode: maintain uniform spacing
     translateY = index * (STACK_HEADER_HEIGHT + 20);
     zIndex = index;
   } else {
@@ -871,20 +870,20 @@ const getCardStyle = (index) => {
   };
 };
 
-// 监听案例标题变化：只有当教案切换时，才自动更新所有 Agent 的待分类知识点
+// Listen for case title changes: auto-update unclassified knowledge when curriculum switches
 watch(() => props.caseTitle, (newTitle, oldTitle) => {
   if (newTitle && newTitle !== oldTitle) {
     agents.value.forEach(agent => {
       agent.unclassifiedKnowledge = [...props.theoreticalKnowledge];
       
-      // 清空已分类的，因为新案例的知识点完全不同
+      // Clear classified knowledge because new cases have completely different knowledge points
       agent.classifiedKnowledge = {
         competent: [],
         novice: [],
         layman: []
       };
     });
-    // ElMessage.success('已加载新案例知识背景库');
+    // ElMessage.success('New case knowledge base loaded');
   }
 }, { immediate: true });
 
@@ -908,10 +907,10 @@ const renameKnowledgeGlobal = (oldName, newName) => {
 const addNewKnowledgeGlobal = (name) => {
   if (!name) return;
 
-  // 1. 更新后端 Case JSON
+  // 1. Update backend Case JSON
   if (addKnowledge) addKnowledge(name);
 
-  // 2. 添加到所有 Agent 的 unclassified (如果不存在)
+  // 2. Add to all Agents' unclassified (if not exists)
   agents.value.forEach(agent => {
     if (!agent.unclassifiedKnowledge.includes(name)) {
       agent.unclassifiedKnowledge.push(name);
@@ -923,10 +922,10 @@ const addNewKnowledgeGlobal = (name) => {
 const deleteKnowledgeGlobal = (name) => {
   if (!name) return;
 
-  // 1. 更新后端 Case JSON
+  // 1. Update backend Case JSON
   if (deleteKnowledge) deleteKnowledge(name);
 
-  // 2. 从所有 Agent 的列表中移除
+  // 2. Remove from all Agents' lists
   agents.value.forEach(agent => {
     agent.unclassifiedKnowledge = agent.unclassifiedKnowledge.filter(n => n !== name);
     for (const key in agent.classifiedKnowledge) {
@@ -935,7 +934,7 @@ const deleteKnowledgeGlobal = (name) => {
   });
 };
 
-// 提供给 AgentCard 使用
+// Provide for AgentCard use
 provide('knowledgeActions', {
   renameKnowledge: renameKnowledgeGlobal,
   addKnowledge: addNewKnowledgeGlobal,
@@ -944,7 +943,7 @@ provide('knowledgeActions', {
 
 const addAgent = () => {
   agents.value.push(createDefaultAgent(agents.value.length));
-  // 抽出新卡片：使其成为 active
+  // Expand new card: make it active
   setTimeout(() => {
     activeIndex.value = agents.value.length - 1;
   }, 100);
@@ -957,12 +956,12 @@ const deleteAgent = (index) => {
       activeIndex.value = Math.max(0, agents.value.length - 1);
     }
   } else {
-    ElMessage.warning('请至少保留一个 Agent');
+    ElMessage.warning('Please keep at least one Agent');
   }
 };
 
 const handleGlobalMouseDown = (e) => {
-  // 点击背景折叠卡片
+  // Click background to collapse card
   const isBackground = e.target.classList.contains('view-b-content-wrapper') || 
                        e.target.classList.contains('view-b-container') ||
                        e.target.classList.contains('view-b-scroll-area');

@@ -82,7 +82,7 @@
               <span class="dot"></span>
               <span class="dot"></span>
             </div>
-            <span class="thinking-text">学生正在思考...</span>
+            <span class="thinking-text">Students are thinking...</span>
           </div>
         </div>
       </div>

@@ -93,7 +93,7 @@
     <!-- Main Content Container -->
     <div class="card-content-wrapper">
       <section class="panel-section knowledge-panel">
-        <h3 class="panel-title" :class="{ 'field-warning': hasUnresolvedPrefix('knowledge_background') }">Knowledge Base</h3>
+        <h3 class="panel-title" :class="{ 'field-warning': hasUnresolvedPrefix('knowledge_background') }">{{ panelTitles.knowledge }}</h3>
         
 
         <div class="panel-body row-layout" :class="{ 'warning-outline': hasUnresolvedPrefix('knowledge_background') }">
@@ -213,7 +213,7 @@
       </section>
 
       <section class="panel-section plasticity-panel">
-        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('plasticity') }">Learning Plasticity</h3>
+        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('plasticity') }">{{ panelTitles.plasticity }}</h3>
         <div class="plasticity-inline-options">
           <button
             v-for="lv in ['low', 'medium', 'high']"
@@ -232,7 +232,7 @@
       <section class="panel-section traits-panel">
         <div class="radar-grid">
           <div class="radar-card" :class="{ 'warning-outline': hasUnresolvedPrefix('learning_styles') }">
-            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('learning_styles') }">Learning Style</div>
+            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('learning_styles') }">{{ radarTitles.learning }}</div>
             <svg
               ref="learningRadarRef"
               class="radar-svg"
@@ -278,7 +278,7 @@
           </div>
 
           <div class="radar-card" :class="{ 'warning-outline': hasUnresolvedPrefix('personality') }">
-            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('personality') }">Personality</div>
+            <div class="radar-card-title" :class="{ 'field-warning': hasUnresolvedPrefix('personality') }">{{ radarTitles.personality }}</div>
             <svg
               ref="personalityRadarRef"
               class="radar-svg"
@@ -327,7 +327,7 @@
 
       <!-- Cognitive Tendency Section -->
       <section class="panel-section cognitive-panel">
-        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('cognitive_orientation') }">Cognitive Orientation</h3>
+        <h3 class="panel-title" :class="{ 'field-warning': isFieldUnresolved('cognitive_orientation') }">{{ panelTitles.cognitive }}</h3>
         <div class="cognitive-choice-grid">
           <div
             v-for="item in cognitiveChoices"
@@ -726,6 +726,20 @@ const plasticityTranslations = {
   'low': 'low',
   'medium': 'medium',
   'high': 'high'
+};
+
+// Language support: English and Chinese
+const currentLang = 'en'; // Can be changed to 'zh' for Chinese
+
+const panelTitles = {
+  knowledge: currentLang === 'zh' ? '知识背景' : 'Knowledge Base',
+  plasticity: currentLang === 'zh' ? '学习可塑性' : 'Learning Plasticity',
+  cognitive: currentLang === 'zh' ? '认知倾向' : 'Cognitive Orientation'
+};
+
+const radarTitles = {
+  learning: currentLang === 'zh' ? '学习风格' : 'Learning Style',
+  personality: currentLang === 'zh' ? '人格特质' : 'Personality'
 };
 
 const vFocus = {

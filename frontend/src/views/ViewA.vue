@@ -150,20 +150,20 @@ const validateAndSelectFile = (file) => {
   uploadedFile.value = null
   
   if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-    errorMessage.value = '只支持PDF格式的文件'
+    errorMessage.value = 'Only PDF format files are supported'
     return
   }
   
   const maxSize = 100 * 1024 * 1024 // 50MB
   if (file.size > maxSize) {
-    errorMessage.value = '文件大小不能超过 50MB'
+    errorMessage.value = 'File size cannot exceed 50MB'
     return
   }
 
   selectedFile.value = file
 }
 
-// 第一步：上传文件
+// Step 1: Upload file
 const uploadFile = async () => {
   if (!selectedFile.value) return
 
@@ -187,20 +187,20 @@ const uploadFile = async () => {
     xhr.addEventListener('load', () => {
       isUploading.value = false
       if (xhr.status === 200) {
-        // 上传成功，拿到文件名，开始解析
+        // File uploaded successfully, got filename, starting parse
         const response = JSON.parse(xhr.responseText)
-        console.log('文件上传成功，准备解析:', response.file_name)
+        console.log('File uploaded successfully, preparing to parse:', response.file_name)
         startParsing(response.file_name)
       } else {
         const response = JSON.parse(xhr.responseText)
-        errorMessage.value = response.detail || '上传失败'
-        selectedFile.value = null // 重置状态允许重试
+        errorMessage.value = response.detail || 'Upload failed'
+        selectedFile.value = null // Reset state to allow retry
       }
     })
 
     xhr.addEventListener('error', () => {
       isUploading.value = false
-      errorMessage.value = '网络连接失败，请检查后端服务'
+      errorMessage.value = 'Network connection failed, please check backend service'
       selectedFile.value = null
     })
 
@@ -213,7 +213,7 @@ const uploadFile = async () => {
   }
 }
 
-// 第二步：请求后端解析 (这是之前缺失的逻辑)
+// Step 2: Request backend to parse (this was missing logic before)
 const startParsing = async (filename) => {
   isParsing.value = true
   

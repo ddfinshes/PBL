@@ -8,8 +8,8 @@
           <div class="absolute inset-0 border-4 border-[#8095CA] border-t-transparent rounded-full animate-spin"></div>
         </div>
         <div class="text-center">
-          <h3 class="text-lg font-bold text-gray-800">正在生成干预策略...</h3>
-          <p class="text-sm text-gray-500">正在调用 LLM 并行分析讨论背景</p>
+          <h3 class="text-lg font-bold text-gray-800">Generating Intervention Strategy...</h3>
+          <p class="text-sm text-gray-500">Calling LLM for parallel discussion analysis</p>
         </div>
       </div>
     </div>
@@ -169,7 +169,7 @@ const generateSuggestions = async () => {
   const aMsgId = activeMessageId?.value || activeMessageId;
 
   if (!sId || !aMsgId) {
-    alert(`会话或消息上下文不完整。\nsessionId: ${sId}\nactiveMessageId: ${aMsgId}\n请确保讨论已开始或消息已加载。`)
+    alert(`Session or message context is incomplete.\nsessionId: ${sId}\nactiveMessageId: ${aMsgId}\nPlease ensure discussion has started and messages are loaded.`)
     return
   }
 
@@ -190,11 +190,11 @@ const generateSuggestions = async () => {
       suggestions.value = response.data.suggestions
     } else {
       console.error('Failed to generate suggestions:', response.data.message)
-      alert('生成建议失败: ' + (response.data.message || '未知错误'))
+      alert('Failed to generate suggestions: ' + (response.data.message || 'Unknown error'))
     }
   } catch (err) {
     console.error('Error calling suggestions API:', err)
-    alert('请求失败，请检查后端服务是否正常运行。')
+    alert('Request failed. Please check if the backend service is running properly.')
   } finally {
     isGenerating.value = false
   }
@@ -207,10 +207,10 @@ const applySuggestion = (content) => {
 
 const getTypeColor = (type) => {
   switch (type) {
-    case '提问': return 'bg-blue-100 text-blue-600'
-    case '解释': return 'bg-purple-100 text-purple-600'
-    case '回答': return 'bg-green-100 text-green-600'
-    case '点评': return 'bg-amber-100 text-amber-600'
+    case 'Questioning': return 'bg-blue-100 text-blue-600'
+    case 'Explanation': return 'bg-purple-100 text-purple-600'
+    case 'Answer': return 'bg-green-100 text-green-600'
+    case 'Comment': return 'bg-amber-100 text-amber-600'
     default: return 'bg-gray-100 text-gray-600'
   }
 }

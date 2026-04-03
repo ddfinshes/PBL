@@ -33,6 +33,10 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
 
   const getQuestionKey = (sceneIndex, questionIndex) => `${Number(sceneIndex ?? -1)}_${Number(questionIndex ?? -1)}`;
 
+  const isNonEmptyObject = (value) => {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0;
+  };
+
   const cacheStableTopic = (sceneIndex, questionIndex, topic) => {
     if (!isStableTopic(topic)) return;
     const key = getQuestionKey(sceneIndex, questionIndex);
@@ -46,10 +50,22 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
     if (!Number.isFinite(sceneIndex) || !Number.isFinite(questionIndex)) return;
     if (!snapshot || typeof snapshot !== 'object') return;
     const key = `${sceneIndex}_${questionIndex}`;
+    const prev = agentStateByQuestion.value[key] || {};
+    const merged = { ...prev, ...snapshot };
+
+    // Do not let empty payload maps erase previously known runtime states.
+    ['knowledge_state', 'cognitive_load', 'self_efficacy', 'private_memory'].forEach((field) => {
+      const incoming = snapshot[field];
+      const existing = prev[field];
+      if (!isNonEmptyObject(incoming) && isNonEmptyObject(existing)) {
+        merged[field] = existing;
+      }
+    });
+
     agentStateByQuestion.value = {
       ...agentStateByQuestion.value,
       [key]: {
-        ...snapshot,
+        ...merged,
         updatedAt: Date.now()
       }
     };
@@ -131,122 +147,87 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
       }
       try {
 
-      if (data.type === 'history_sync' && data.messages) {
-        console.log('Synchronizing history from server:', data.messages.length);
+        if (data.type === 'history_sync' && data.messages) {
+          console.log('Synchronizing history from server:', data.messages.length);
 
-        // 1. 同步总结分析
-        if (data.intervention_summaries) {
-          interventionSummaries.value = { ...interventionSummaries.value, ...data.intervention_summaries };
-          console.log('Synchronized summaries:', Object.keys(data.intervention_summaries).length);
-        }
-
-        // 2. 合并历史消息，避免重复
-        const existingIds = new Set(messages.value.map(m => m.id));
-        const newMsgs = data.messages.filter(m => !existingIds.has(m.id)).map(m => ({
-          id: m.id,
-          parent_id: m.parent_id,
-          branch_id: m.branch_id || 'main',
-          agent: m.agent,
-          text: m.content,
-          summary: m.summary || m.content,
-          topic: m.topic || '历史记录',
-          timestamp: m.timestamp || Date.now(),
-          sceneIndex: m.scene_index,
-          questionIndex: m.question_index,
-          stateSnapshot: m.state_snapshot || null
-        }));
-
-        if (newMsgs.length > 0) {
-          messages.value = [...messages.value, ...newMsgs].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-          newMsgs.forEach((m) => {
-            applyAgentStateSnapshot(Number(m.sceneIndex), Number(m.questionIndex), m.stateSnapshot);
-          });
-          // 如果没有活跃 ID，则设为最后一条
-          if (!activeMessageId.value && messages.value.length > 0) {
-            activeMessageId.value = messages.value[messages.value.length - 1].id;
+          // 1. 同步总结分析
+          if (data.intervention_summaries) {
+            interventionSummaries.value = { ...interventionSummaries.value, ...data.intervention_summaries };
+            console.log('Synchronized summaries:', Object.keys(data.intervention_summaries).length);
           }
-        }
-      }
 
-      if (data.type === 'agent_output' && (data.node || data.agent) && data.content) {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        const qKey = getQuestionKey(sceneIndex, questionIndex);
-        const stableTopic = stableTopicByQuestion.value[qKey] || currentTopic.value;
-        const incomingTopic = isStableTopic(data.topic) ? data.topic : '';
-        const resolvedTopic = incomingTopic || (isStableTopic(stableTopic) ? stableTopic : 'Undefined');
+          // 2. 合并历史消息，避免重复
+          const existingIds = new Set(messages.value.map(m => m.id));
+          const newMsgs = data.messages.filter(m => !existingIds.has(m.id)).map(m => ({
+            id: m.id,
+            parent_id: m.parent_id,
+            branch_id: m.branch_id || 'main',
+            agent: m.agent,
+            text: m.content,
+            summary: m.summary || m.content,
+            topic: m.topic || '历史记录',
+            timestamp: m.timestamp || Date.now(),
+            sceneIndex: m.scene_index,
+            questionIndex: m.question_index,
+            stateSnapshot: m.state_snapshot || null
+          }));
 
-        const newMsg = {
-          id: data.id || (sessionId + Math.random()),
-          parent_id: data.parent_id,
-          branch_id: data.branch_id || 'main',
-          agent: data.agent || data.node,
-          text: data.content,
-          summary: data.summary || data.content,
-          topic: resolvedTopic,
-          timestamp: Date.now(),
-          sceneIndex: sceneIndex,
-          questionIndex: questionIndex,
-          stateSnapshot: data.state_snapshot || null
-        };
-        cacheStableTopic(sceneIndex, questionIndex, resolvedTopic);
-        messages.value.push(newMsg);
-        activeMessageId.value = newMsg.id;
-        applyAgentStateSnapshot(Number(newMsg.sceneIndex), Number(newMsg.questionIndex), newMsg.stateSnapshot);
-
-        // 即时消费后端同包返回的知识覆盖评估（与 summary 同步到达）
-        if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
-          const sceneIndex = Number(data.scene_index ?? -1);
-          const questionIndex = Number(data.question_index ?? -1);
-          const key = `${sceneIndex}_${questionIndex}`;
-          const leafId = String(data.id || '').trim();
-          if (leafId) {
-            const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
-            knowledgeCoverageByQuestion.value = {
-              ...knowledgeCoverageByQuestion.value,
-              [key]: {
-                ...prevByLeaf,
-                [leafId]: {
-                  ...data.knowledge_coverage,
-                  updatedAt: Date.now(),
-                },
-              },
-            };
-          }
-        }
-
-        // DOM 更新后自动滚动到底部
-        nextTick(() => {
-          onScrollToBottom();
-        });
-      }
-
-      // 【新增】处理异步消息更新（简化版本和知识覆盖/话题实效）
-      if (data.type === 'message_update' && data.id) {
-        const msgIdx = messages.value.findIndex(m => m.id === data.id);
-        if (msgIdx !== -1) {
-          // 更新消息的主题、summary和知识覆盖
-          if (data.topic) {
-            const msg = messages.value[msgIdx];
-            const sIdx = Number(data.scene_index ?? msg.sceneIndex ?? -1);
-            const qIdx = Number(data.question_index ?? msg.questionIndex ?? -1);
-            if (isStableTopic(data.topic)) {
-              messages.value[msgIdx].topic = data.topic;
-              cacheStableTopic(sIdx, qIdx, data.topic);
-              console.log(`[usePBLSocket] Real-time topic update for ${data.id}: ${data.topic}`);
+          if (newMsgs.length > 0) {
+            messages.value = [...messages.value, ...newMsgs].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            newMsgs.forEach((m) => {
+              applyAgentStateSnapshot(Number(m.sceneIndex), Number(m.questionIndex), m.stateSnapshot);
+            });
+            // 如果没有活跃 ID，则设为最后一条
+            if (!activeMessageId.value && messages.value.length > 0) {
+              activeMessageId.value = messages.value[messages.value.length - 1].id;
             }
           }
-          if (data.summary) {
-            messages.value[msgIdx].summary = data.summary;
-          }
-          if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
-            const msg = messages.value[msgIdx];
-            const sIdx = Number(data.scene_index ?? msg.sceneIndex ?? -1);
-            const qIdx = Number(data.question_index ?? msg.questionIndex ?? -1);
-            const key = `${sIdx}_${qIdx}`;
-            const leafId = String(data.id || '').trim();
+        }
 
-            if (leafId && sIdx !== -1) {
+        if (data.type === 'agent_output' && (data.node || data.agent) && data.content) {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const qKey = getQuestionKey(sceneIndex, questionIndex);
+          const stableTopic = stableTopicByQuestion.value[qKey] || currentTopic.value;
+          const incomingTopic = isStableTopic(data.topic) ? data.topic : '';
+          const resolvedTopic = incomingTopic || (isStableTopic(stableTopic) ? stableTopic : 'Undefined');
+
+          const newMsg = {
+            id: data.id || (sessionId + Math.random()),
+            parent_id: data.parent_id,
+            branch_id: data.branch_id || 'main',
+            agent: data.agent || data.node,
+            text: data.content,
+            summary: data.summary || data.content,
+            topic: resolvedTopic,
+            timestamp: Date.now(),
+            sceneIndex: sceneIndex,
+            questionIndex: questionIndex,
+            stateSnapshot: data.state_snapshot || null
+          };
+          cacheStableTopic(sceneIndex, questionIndex, resolvedTopic);
+          messages.value.push(newMsg);
+          activeMessageId.value = newMsg.id;
+          applyAgentStateSnapshot(Number(newMsg.sceneIndex), Number(newMsg.questionIndex), newMsg.stateSnapshot);
+
+          // Mirror coverage behavior: consume runtime state immediately from the same packet
+          // so UI bars can refresh without waiting for a separate knowledge_state_update event.
+          if (data.cognitive_load || data.self_efficacy || data.knowledge_state || data.private_memory) {
+            applyAgentStateSnapshot(sceneIndex, questionIndex, {
+              cognitive_load: data.cognitive_load,
+              self_efficacy: data.self_efficacy,
+              knowledge_state: data.knowledge_state,
+              private_memory: data.private_memory
+            });
+          }
+
+          // 即时消费后端同包返回的知识覆盖评估（与 summary 同步到达）
+          if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
+            const sceneIndex = Number(data.scene_index ?? -1);
+            const questionIndex = Number(data.question_index ?? -1);
+            const key = `${sceneIndex}_${questionIndex}`;
+            const leafId = String(data.id || '').trim();
+            if (leafId) {
               const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
               knowledgeCoverageByQuestion.value = {
                 ...knowledgeCoverageByQuestion.value,
@@ -258,150 +239,281 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
                   },
                 },
               };
-              console.log(`[usePBLSocket] Real-time coverage update for ${leafId}`);
+            }
+          }
+
+          // DOM 更新后自动滚动到底部
+          nextTick(() => {
+            onScrollToBottom();
+          });
+        }
+
+        // 【新增】处理异步消息更新（简化版本和知识覆盖/话题实效）
+        if (data.type === 'message_update' && data.id) {
+          const msgIdx = messages.value.findIndex(m => m.id === data.id);
+          if (msgIdx !== -1) {
+            // 更新消息的主题、summary和知识覆盖
+            if (data.topic) {
+              const msg = messages.value[msgIdx];
+              const sIdx = Number(data.scene_index ?? msg.sceneIndex ?? -1);
+              const qIdx = Number(data.question_index ?? msg.questionIndex ?? -1);
+              if (isStableTopic(data.topic)) {
+                messages.value[msgIdx].topic = data.topic;
+                cacheStableTopic(sIdx, qIdx, data.topic);
+                console.log(`[usePBLSocket] Real-time topic update for ${data.id}: ${data.topic}`);
+              }
+            }
+            if (data.summary) {
+              messages.value[msgIdx].summary = data.summary;
+            }
+            if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
+              const msg = messages.value[msgIdx];
+              const sIdx = Number(data.scene_index ?? msg.sceneIndex ?? -1);
+              const qIdx = Number(data.question_index ?? msg.questionIndex ?? -1);
+              const key = `${sIdx}_${qIdx}`;
+              const leafId = String(data.id || '').trim();
+
+              if (leafId && sIdx !== -1) {
+                const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
+                knowledgeCoverageByQuestion.value = {
+                  ...knowledgeCoverageByQuestion.value,
+                  [key]: {
+                    ...prevByLeaf,
+                    [leafId]: {
+                      ...data.knowledge_coverage,
+                      updatedAt: Date.now(),
+                    },
+                  },
+                };
+                console.log(`[usePBLSocket] Real-time coverage update for ${leafId}`);
+              }
             }
           }
         }
-      }
 
-      if (data.type === 'rollback_ack') {
-        activeMessageId.value = data.target_id;
-        console.log('Rollback successful, activeId set to:', data.target_id);
-      }
-
-      if (data.type === 'teacher_intervention_ack') {
-        console.log('Teacher intervention ack received, resetting topic.');
-        currentTopic.value = 'Undefined';
-        selectedTopic.value = null; // 教师干预后取消选中，以便看到最新的分支动态
-        selectedNodeLeafId.value = null;
-      }
-
-      if (data.type === 'topic_update' && data.topic) {
-        if (!isStableTopic(data.topic)) return;
-        console.log('Topic updated:', data.topic);
-        currentTopic.value = data.topic;
-        cacheStableTopic(data.scene_index, data.question_index, data.topic);
-
-        // 【分支关联】关联到当前最新的消息
-        if (data.id) {
-          const targetMsg = messages.value.find(m => m.id === data.id);
-          if (targetMsg) targetMsg.topic = data.topic;
+        if (data.type === 'rollback_ack') {
+          activeMessageId.value = data.target_id;
+          console.log('Rollback successful, activeId set to:', data.target_id);
         }
 
-        let hasChanged = false;
-        messages.value.forEach(msg => {
-          if (msg.topic === 'Undefined' || msg.topic === 'start_discussion' || !msg.topic) {
-            msg.topic = data.topic;
-            hasChanged = true;
-          }
-        });
-        if (hasChanged) {
-          messages.value = [...messages.value];
+        if (data.type === 'teacher_intervention_ack') {
+          console.log('Teacher intervention ack received, resetting topic.');
+          currentTopic.value = 'Undefined';
+          selectedTopic.value = null; // 教师干预后取消选中，以便看到最新的分支动态
+          selectedNodeLeafId.value = null;
         }
-      }
 
-      if (data.type === 'discussion_paused') {
-        isPaused.value = true;
-      } else if (data.type === 'discussion_resumed') {
-        isPaused.value = false;
-      }
+        if (data.type === 'topic_update' && data.topic) {
+          if (!isStableTopic(data.topic)) return;
+          console.log('Topic updated:', data.topic);
+          currentTopic.value = data.topic;
+          cacheStableTopic(data.scene_index, data.question_index, data.topic);
 
-      if (data.type === 'objective_update') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        const key = `${sceneIndex}_${questionIndex}`;
-        const incomingRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
-        console.log('[objective_update] recv', {
-          key,
-          rowCount: incomingRows.length,
-          triggerQuestion: data.trigger_question || '',
-          activeKey: `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`
-        });
-        const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
-        const round = {
-          id: `round-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
-          triggerQuestion: data.trigger_question || prev.triggerQuestion || '',
-          objectiveEvaluations: incomingRows,
-          achievedAll: incomingRows.length > 0 && incomingRows.every((item) => Boolean(item?.achieved)),
-          updatedAt: Date.now()
-        };
-
-        objectiveEvaluationMap.value = {
-          ...objectiveEvaluationMap.value,
-          [key]: {
-            triggerQuestion: round.triggerQuestion,
-            objectiveEvaluations: round.objectiveEvaluations,
-            achievedAll: round.achievedAll,
-            updatedAt: round.updatedAt,
-            rounds: [...(Array.isArray(prev.rounds) ? prev.rounds : []), round]
+          // 【分支关联】关联到当前最新的消息
+          if (data.id) {
+            const targetMsg = messages.value.find(m => m.id === data.id);
+            if (targetMsg) targetMsg.topic = data.topic;
           }
-        };
-        console.log('[objective_update] map keys', Object.keys(objectiveEvaluationMap.value));
-      }
 
-      if (data.type === 'objective_evaluation_update') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        const key = `${sceneIndex}_${questionIndex}`;
-        const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
-        const payloadRows = Array.isArray(data?.payload?.objective_evaluations) ? data.payload.objective_evaluations : [];
-        const directRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
-        const incomingRows = payloadRows.length > 0 ? payloadRows : directRows;
-        const achievedAll = (typeof data?.payload?.achieved_all === 'boolean')
-          ? Boolean(data.payload.achieved_all)
-          : Boolean(data.achieved_all);
-
-        objectiveEvaluationMap.value = {
-          ...objectiveEvaluationMap.value,
-          [key]: {
-            ...prev,
-            objectiveEvaluations: incomingRows,
-            achievedAll,
-            updatedAt: Date.now()
+          let hasChanged = false;
+          messages.value.forEach(msg => {
+            if (msg.topic === 'Undefined' || msg.topic === 'start_discussion' || !msg.topic) {
+              msg.topic = data.topic;
+              hasChanged = true;
+            }
+          });
+          if (hasChanged) {
+            messages.value = [...messages.value];
           }
-        };
-        console.log('[objective_evaluation_update] updated map', key);
-      }
+        }
 
-      if (data.type === 'discussion_end') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        const key = `${sceneIndex}_${questionIndex}`;
-        console.log('[discussion_end] recv', {
-          key,
-          achievedAll: Boolean(data.achieved_all),
-          objectiveCount: Array.isArray(data.objective_evaluations) ? data.objective_evaluations.length : 0
-        });
-        discussionEndByQuestion.value = {
-          ...discussionEndByQuestion.value,
-          [key]: {
-            reason: data.reason || 'unknown',
-            achievedAll: Boolean(data.achieved_all),
+        if (data.type === 'discussion_paused') {
+          isPaused.value = true;
+        } else if (data.type === 'discussion_resumed') {
+          isPaused.value = false;
+        }
+
+        if (data.type === 'objective_update') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const key = `${sceneIndex}_${questionIndex}`;
+          const incomingRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+          console.log('[objective_update] recv', {
+            key,
+            rowCount: incomingRows.length,
             triggerQuestion: data.trigger_question || '',
-            objectiveEvaluations: Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [],
+            activeKey: `${activeQuestionInfo.value.sceneIndex}_${activeQuestionInfo.value.questionIndex}`
+          });
+          const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
+          const round = {
+            id: `round-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+            triggerQuestion: data.trigger_question || prev.triggerQuestion || '',
+            objectiveEvaluations: incomingRows,
+            achievedAll: incomingRows.length > 0 && incomingRows.every((item) => Boolean(item?.achieved)),
             updatedAt: Date.now()
+          };
+
+          objectiveEvaluationMap.value = {
+            ...objectiveEvaluationMap.value,
+            [key]: {
+              triggerQuestion: round.triggerQuestion,
+              objectiveEvaluations: round.objectiveEvaluations,
+              achievedAll: round.achievedAll,
+              updatedAt: round.updatedAt,
+              rounds: [...(Array.isArray(prev.rounds) ? prev.rounds : []), round]
+            }
+          };
+          console.log('[objective_update] map keys', Object.keys(objectiveEvaluationMap.value));
+        }
+
+        if (data.type === 'objective_evaluation_update') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const key = `${sceneIndex}_${questionIndex}`;
+          const prev = objectiveEvaluationMap.value[key] || { rounds: [] };
+          const payloadRows = Array.isArray(data?.payload?.objective_evaluations) ? data.payload.objective_evaluations : [];
+          const directRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+          const incomingRows = payloadRows.length > 0 ? payloadRows : directRows;
+          const achievedAll = (typeof data?.payload?.achieved_all === 'boolean')
+            ? Boolean(data.payload.achieved_all)
+            : Boolean(data.achieved_all);
+
+          objectiveEvaluationMap.value = {
+            ...objectiveEvaluationMap.value,
+            [key]: {
+              ...prev,
+              objectiveEvaluations: incomingRows,
+              achievedAll,
+              updatedAt: Date.now()
+            }
+          };
+          console.log('[objective_evaluation_update] updated map', key);
+        }
+
+        if (data.type === 'discussion_end') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const key = `${sceneIndex}_${questionIndex}`;
+          console.log('[discussion_end] recv', {
+            key,
+            achievedAll: Boolean(data.achieved_all),
+            objectiveCount: Array.isArray(data.objective_evaluations) ? data.objective_evaluations.length : 0
+          });
+          discussionEndByQuestion.value = {
+            ...discussionEndByQuestion.value,
+            [key]: {
+              reason: data.reason || 'unknown',
+              achievedAll: Boolean(data.achieved_all),
+              triggerQuestion: data.trigger_question || '',
+              objectiveEvaluations: Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [],
+              updatedAt: Date.now()
+            }
+          };
+        }
+
+        if (data.type === 'state_restored') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const key = `${sceneIndex}_${questionIndex}`;
+          const restoredRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
+          const restoredAt = Date.now();
+
+          // 【新增】恢复该快照点对应的知识覆盖评估数据
+          if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
+            const leafId = activeMessageId.value;
+            if (leafId) {
+              const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
+              knowledgeCoverageByQuestion.value = {
+                ...knowledgeCoverageByQuestion.value,
+                [key]: {
+                  ...prevByLeaf,
+                  [leafId]: {
+                    ...data.knowledge_coverage,
+                    updatedAt: Date.now()
+                  }
+                }
+              };
+            }
           }
-        };
-      }
 
-      if (data.type === 'state_restored') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        const key = `${sceneIndex}_${questionIndex}`;
-        const restoredRows = Array.isArray(data.objective_evaluations) ? data.objective_evaluations : [];
-        const restoredAt = Date.now();
+          objectiveEvaluationMap.value = {
+            ...objectiveEvaluationMap.value,
+            [key]: {
+              triggerQuestion: data.trigger_question || '',
+              objectiveEvaluations: restoredRows,
+              achievedAll: Boolean(data.achieved_all),
+              updatedAt: restoredAt,
+              rounds: restoredRows.length > 0
+                ? [{
+                  id: `restore-${restoredAt}`,
+                  triggerQuestion: data.trigger_question || '',
+                  objectiveEvaluations: restoredRows,
+                  achievedAll: Boolean(data.achieved_all),
+                  updatedAt: restoredAt
+                }]
+                : []
+            }
+          };
 
-        // 【新增】恢复该快照点对应的知识覆盖评估数据
-        if (data.knowledge_coverage && typeof data.knowledge_coverage === 'object') {
-          const leafId = activeMessageId.value;
+          if (String(data.end_reason || '').trim()) {
+            discussionEndByQuestion.value = {
+              ...discussionEndByQuestion.value,
+              [key]: {
+                reason: data.end_reason,
+                achievedAll: Boolean(data.achieved_all),
+                triggerQuestion: data.trigger_question || '',
+                objectiveEvaluations: restoredRows,
+                updatedAt: restoredAt
+              }
+            };
+          } else {
+            // Restored state is not ended: clear stale end-state for this question.
+            const nextEndMap = { ...discussionEndByQuestion.value };
+            delete nextEndMap[key];
+            discussionEndByQuestion.value = nextEndMap;
+          }
+
+          applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
+
+          console.log('[state_restored] applied', {
+            key,
+            rowCount: restoredRows.length,
+            achievedAll: Boolean(data.achieved_all),
+            endReason: data.end_reason || ''
+          });
+        }
+
+        if (data.type === 'state_snapshot_update') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
+        }
+
+        if (data.type === 'knowledge_state_update') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          applyAgentStateSnapshot(sceneIndex, questionIndex, {
+            knowledge_state: data.knowledge_state,
+            cognitive_load: data.cognitive_load,
+            self_efficacy: data.self_efficacy,
+            private_memory: data.private_memory
+          });
+        }
+
+        if (data.type === 'knowledge_coverage_update') {
+          const sceneIndex = Number(data.scene_index ?? -1);
+          const questionIndex = Number(data.question_index ?? -1);
+          const key = `${sceneIndex}_${questionIndex}`;
+          const leafId = String(data.node_id || '').trim();
+          const coverage = data.coverage || {};
           if (leafId) {
-            const prevByLeaf = knowledgeCoverageByQuestion.value[key] || {};
+            const prev = knowledgeCoverageByQuestion.value[key] || {};
             knowledgeCoverageByQuestion.value = {
               ...knowledgeCoverageByQuestion.value,
               [key]: {
-                ...prevByLeaf,
+                ...prev,
                 [leafId]: {
-                  ...data.knowledge_coverage,
+                  ...coverage,
                   updatedAt: Date.now()
                 }
               }
@@ -409,105 +521,19 @@ export function usePBLSocket(sessionId, onScrollToBottom) {
           }
         }
 
-        objectiveEvaluationMap.value = {
-          ...objectiveEvaluationMap.value,
-          [key]: {
-            triggerQuestion: data.trigger_question || '',
-            objectiveEvaluations: restoredRows,
-            achievedAll: Boolean(data.achieved_all),
-            updatedAt: restoredAt,
-            rounds: restoredRows.length > 0
-              ? [{
-                id: `restore-${restoredAt}`,
-                triggerQuestion: data.trigger_question || '',
-                objectiveEvaluations: restoredRows,
-                achievedAll: Boolean(data.achieved_all),
-                updatedAt: restoredAt
-              }]
-              : []
-          }
-        };
-
-        if (String(data.end_reason || '').trim()) {
-          discussionEndByQuestion.value = {
-            ...discussionEndByQuestion.value,
-            [key]: {
-              reason: data.end_reason,
-              achievedAll: Boolean(data.achieved_all),
-              triggerQuestion: data.trigger_question || '',
-              objectiveEvaluations: restoredRows,
-              updatedAt: restoredAt
-            }
+        if (data.type === 'stage_update' && data.stage_name) {
+          // 翻译中文阶段名到英文
+          const stageNameCn = data.stage_name.split('】')[0].replace('【', '');
+          const stageMap = {
+            '问题识别': 'Problem Identification',
+            '知识激活': 'Knowledge Activation',
+            '诊断推理': 'Diagnostic Reasoning',
+            '治疗计划': 'Treatment Plan',
+            '总结反思': 'Summary & Reflection'
           };
-        } else {
-          // Restored state is not ended: clear stale end-state for this question.
-          const nextEndMap = { ...discussionEndByQuestion.value };
-          delete nextEndMap[key];
-          discussionEndByQuestion.value = nextEndMap;
+          discussionStage.value = stageMap[stageNameCn] || stageNameCn;
+          console.log('Stage updated:', data.stage_name);
         }
-
-        applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
-
-        console.log('[state_restored] applied', {
-          key,
-          rowCount: restoredRows.length,
-          achievedAll: Boolean(data.achieved_all),
-          endReason: data.end_reason || ''
-        });
-      }
-
-      if (data.type === 'state_snapshot_update') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        applyAgentStateSnapshot(sceneIndex, questionIndex, data.state_snapshot || null);
-      }
-
-      if (data.type === 'knowledge_state_update') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        applyAgentStateSnapshot(sceneIndex, questionIndex, {
-          ...(agentStateByQuestion.value[`${sceneIndex}_${questionIndex}`] || {}),
-          knowledge_state: data.knowledge_state || {},
-          cognitive_load: data.cognitive_load || {},
-          self_efficacy: data.self_efficacy || {},
-          private_memory: data.private_memory || {}
-        });
-      }
-
-      if (data.type === 'knowledge_coverage_update') {
-        const sceneIndex = Number(data.scene_index ?? -1);
-        const questionIndex = Number(data.question_index ?? -1);
-        const key = `${sceneIndex}_${questionIndex}`;
-        const leafId = String(data.node_id || '').trim();
-        const coverage = data.coverage || {};
-        if (leafId) {
-          const prev = knowledgeCoverageByQuestion.value[key] || {};
-          knowledgeCoverageByQuestion.value = {
-            ...knowledgeCoverageByQuestion.value,
-            [key]: {
-              ...prev,
-              [leafId]: {
-                ...coverage,
-                updatedAt: Date.now()
-              }
-            }
-          };
-        }
-      }
-
-      if (data.type === 'stage_update' && data.stage_name) {
-        // 翻译中文阶段名到英文
-        const stageNameCn = data.stage_name.split('】')[0].replace('【', '');
-        const stageMap = {
-          '问题识别': 'Problem Identification',
-          '知识激活': 'Knowledge Activation',
-          '诊断推理': 'Diagnostic Reasoning',
-          '治疗计划': 'Treatment Plan',
-          '总结反思': 'Summary & Reflection'
-        };
-        discussionStage.value = stageMap[stageNameCn] || stageNameCn;
-        console.log('Stage updated:', data.stage_name);
-      }
       } catch (err) {
         console.error('[usePBLSocket] Error handling websocket payload:', data, err);
       }

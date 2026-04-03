@@ -130,6 +130,11 @@ class DeleteKnowledgeRequest(BaseModel):
     knowledge_point: str
 
 
+class DeleteCaseImageRequest(BaseModel):
+    caseName: str
+    filename: str
+
+
 class DeleteQuestionRequest(BaseModel):
     caseName: str
     sceneIndex: int
@@ -789,6 +794,80 @@ def api_get_case_images(case_name: str):
     except Exception as e:
         logger.error(f"获取案例图片列表失败: {e}")
         return {"detail": str(e)}, 500
+
+
+@app_fastapi.post("/api/delete-case-image")
+async def api_delete_case_image(request: DeleteCaseImageRequest):
+    """删除案例图片文件并返回该案例剩余图片列表。幂等操作：文件不存在也返回成功。"""
+    try:
+        case_name = str(request.caseName or "").strip()
+        filename = Path(str(request.filename or "")).name
+        if not case_name or not filename:
+            return {"status": "error", "detail": "参数不完整"}, 400
+
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+        if Path(filename).suffix.lower() not in image_extensions:
+            return {"status": "error", "detail": "不支持的图片格式"}, 400
+
+        # 优先按前端传入 caseName 定位；若与文件夹名不一致，再尝试 case json 对应文件夹名。
+        candidate_dirs = [CASES_DATA_DIR / case_name / "img"]
+        resolved_case_path = resolve_case_json_path(case_name)
+        if resolved_case_path:
+            alt_dir = CASES_DATA_DIR / resolved_case_path.stem / "img"
+            if alt_dir not in candidate_dirs:
+                candidate_dirs.append(alt_dir)
+
+        target_path = None
+        target_dir = None
+        for folder in candidate_dirs:
+            candidate = folder / filename
+            if candidate.exists() and candidate.is_file():
+                target_path = candidate
+                target_dir = folder
+                break
+
+        if target_path is None:
+            # 兜底：在所有案例目录中按文件名查找。
+            for candidate in CASES_DATA_DIR.glob(f"*/img/{filename}"):
+                if candidate.exists() and candidate.is_file():
+                    target_path = candidate
+                    target_dir = candidate.parent
+                    break
+
+        # 如果找到文件，执行删除
+        if target_path is not None:
+            try:
+                target_path.unlink(missing_ok=False)
+                logger.info(f"✓ 已删除图片: {target_path}")
+            except FileNotFoundError:
+                # 文件在查找后但删除前被移除，这不是错误
+                logger.info(f"⚠ 图片在删除时已不存在: {filename}")
+        else:
+            # 文件本来就不存在，也认为是成功（幂等删除）
+            logger.info(f"⚠ 删除请求的图片不存在: {filename} (可能已被删除)")
+
+        # 获取该案例剩余的图片
+        remaining_images = []
+        # 按优先级确定目标目录
+        img_dir = None
+        for folder in candidate_dirs:
+            if folder.exists():
+                img_dir = folder
+                break
+
+        if img_dir and img_dir.exists():
+            for fp in sorted(img_dir.iterdir()):
+                if fp.is_file() and fp.suffix.lower() in image_extensions:
+                    remaining_images.append(fp.name)
+
+        return {
+            "status": "success",
+            "deleted": filename,
+            "images": remaining_images,
+        }
+    except Exception as e:
+        logger.error(f"删除案例图片失败: {e}", exc_info=True)
+        return {"status": "error", "detail": str(e)}, 500
 
 
 @app_fastapi.post("/api/set-active-scene")
@@ -2024,10 +2103,10 @@ async def api_generate_intervention_suggestions(request: InterventionStrategyReq
 
         # 2. 定义四种类型及其 Prompt
         types = [
-            {"type": "提问", "desc": "最常见，推进整个讨论的流程"},
-            {"type": "解释", "desc": "解释自己提问的意图等"},
-            {"type": "回答", "desc": "扮演病人回答，需要提示LLM生成的策略包含“我现在要扮演病人请你回答我”"},
-            {"type": "点评", "desc": "one of my favorite questions"}
+            {"type": "Questioning", "desc": "Most common. Move forward the entire discussion process"},
+            {"type": "Explanation", "desc": "Explain the intention behind your question, etc."},
+            {"type": "Answer", "desc": "Act as the patient answering questions"},
+            {"type": "Comment", "desc": "Provide assessment or feedback on student responses"}
         ]
 
         # 3. 并行调用 (Qwen-3-Max)
@@ -2039,17 +2118,17 @@ async def api_generate_intervention_suggestions(request: InterventionStrategyReq
         )
 
         async def generate_one(t_info):
-            prompt = f"""你是一名资深的医学 PBL 导师（或者是参与 PBL 讨论的标准化病人/家属）。当前讨论背景（最近的消息在最后）如下：
+            prompt = f"""You are a senior medical PBL teacher (or a standardized patient/family member participating in PBL discussions). The current discussion background (most recent messages at the end) is as follows:
 {discussion_history}
 
-请根据当前讨论进度，生成一条建议的教师/导师干预内容。
-类型：{t_info['type']} ({t_info['desc']})
+Based on the current discussion progress, generate a suggested teacher/mentor intervention.
+Type: {t_info['type']} ({t_info['desc']})
 
-要求：
-1. 语言专业、亲切，符合医学教育场景。
-2. 简明扼要，直接输出干预内容，不要包含任何前缀（如“教师建议内容：”）。
-3. 如果是“回答”类型且当前没有待答复的问题，可以提供一条关于病情的补充信息。
-4. 确保与上述讨论上下文紧密相关。
+Requirements:
+1. Professional and warm language that fits the medical education scenario.
+2. Concise and direct output of intervention content. Do not include any prefix (such as "Teacher suggestion:").
+3. If it's the "Answer" type and there are no pending questions to respond to, you can provide supplementary information about the patient's condition.
+4. Ensure close relevance to the above discussion context.
 """
             msg = HumanMessage(content=prompt)
             # 注意：ainvoke 是异步的

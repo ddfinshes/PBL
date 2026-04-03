@@ -471,39 +471,39 @@ async def evaluate_progressive_coverage(
         pid = kp["id"]
         # 显式转换确保数值正确注入
         prev_s = float(prev_scores.get(pid, 0.0))
-        kp_list_str.append(f"""- 知识点ID: {pid}
-  知识点名称: {kp['point']}
-  知识点解释: {kp['explanation']}
-  【关键参照】该点历史最高得分 (previous_score): {prev_s}""")
+        kp_list_str.append(f"""- Knowledge Point ID: {pid}
+  Knowledge Point Name: {kp['point']}
+  Knowledge Point Explanation: {kp['explanation']}
+  [Key Reference] This point's historical maximum score (previous_score): {prev_s}""")
 
     knowledge_points_str = "\n\n".join(kp_list_str)
 
-    prompt = f"""你是医学PBL评估专家。请分析讨论内容并评分。
+    prompt = f"""You are a medical PBL assessment expert. Please analyze the discussion content and provide scores.
 
-【核心规则：严禁分数倒退】
-本次评估是增量的。每个知识点都有一个 `previous_score`。
-1. **你给出的 `coverage_score` 绝对不能小于该点的 `previous_score`。**
-2. 如果当前讨论没有提供比此前更深入的证据，**必须**直接返回该点的 `previous_score`。
-3. 即使学生后续表现变差，已达成的知识点得分也严禁下调。
+[Core Rule: Scores Must Not Decrease]
+This assessment is incremental. Each knowledge point has a `previous_score`.
+1. **Your `coverage_score` must NOT be less than that point's `previous_score` under any circumstances.**
+2. If the current discussion does not provide deeper evidence than before, **you MUST** directly return that point's `previous_score`.
+3. Even if students perform worse later, already-achieved knowledge point scores are strictly forbidden from decreasing.
 
-【评分标准】
-- 0.0: 未涉及
-- 0.3: 初步提及概念
-- 0.6: 解释机制或原理（有因果过程）
-- 1.0: 结合临床或推理应用
+[Scoring Standards]
+- 0.0: Not covered
+- 0.3: Initial mention of concept
+- 0.6: Explanation of mechanism or principle (with causal process)
+- 1.0: Application combined with clinical context or reasoning
 
-【评估上下文】
-- 对话轮数: {message_count}
-- 评估模式: 【{strictness_level}】模式
+[Assessment Context]
+- Dialogue Rounds: {message_count}
+- Assessment Mode: [{strictness_level}] Mode
 
-【待评估知识点列表】
+[Knowledge Points to Evaluate]
 {knowledge_points_str}
 
-【讨论内容】
+[Discussion Content]
 {discussion_content}
 
-【输出要求】
-请仅返回 JSON：
+[Output Requirements]
+Return ONLY JSON:
 {{
   "point_scores": [
     {{
