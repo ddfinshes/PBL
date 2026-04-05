@@ -516,9 +516,11 @@ async def _objectives_achieved_by_llm(
             continue
         ov = teacher_overrides.get(cleaned)
         if ov is True:
-            override_lines.append(f"- {cleaned}: Teacher marked=Achieved (evaluation can be more lenient)")
+            override_lines.append(
+                f"- {cleaned}: Teacher marked=Achieved (evaluation can be more lenient)")
         elif ov is False:
-            override_lines.append(f"- {cleaned}: Teacher marked=Not Achieved (evaluation must be more careful)")
+            override_lines.append(
+                f"- {cleaned}: Teacher marked=Not Achieved (evaluation must be more careful)")
     override_hint = "\n".join(override_lines) if override_lines else "None"
 
     judge_prompt = (

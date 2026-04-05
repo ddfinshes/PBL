@@ -2103,8 +2103,10 @@ async def api_generate_intervention_suggestions(request: InterventionStrategyReq
 
         # 2. 定义四种类型及其 Prompt
         types = [
-            {"type": "Questioning", "desc": "Most common. Move forward the entire discussion process"},
-            {"type": "Explanation", "desc": "Explain the intention behind your question, etc."},
+            {"type": "Questioning",
+                "desc": "Most common. Move forward the entire discussion process"},
+            {"type": "Explanation",
+                "desc": "Explain the intention behind your question, etc."},
             {"type": "Answer", "desc": "Act as the patient answering questions"},
             {"type": "Comment", "desc": "Provide assessment or feedback on student responses"}
         ]
